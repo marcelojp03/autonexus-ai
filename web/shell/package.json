@@ -1,0 +1,28 @@
+{
+  "name": "@autonexus/shell",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0",
+    "pnpm": "12.6.0"
+  },
+  "scripts": {
+    "stage:mfs": "node scripts/stage-mfs.mjs",
+    "predev": "node scripts/stage-mfs.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/stage-mfs.mjs",
+    "build": "tsc && vite build",
+    "typecheck": "tsc",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "single-spa": "6.0.3"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vite": "8.3.5"
+  }
+}

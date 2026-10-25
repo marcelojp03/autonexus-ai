@@ -1,0 +1,68 @@
+# Secretos y datos locales
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+# Dependencias y compilación
+node_modules/
+dist/
+build/
+target/
+vendor/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.dart_tool/
+.flutter-plugins*
+coverage/
+# Herramientas y SO
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+# Datos/artefactos locales
+data/
+datasets/
+ml/artifacts/*
+!ml/artifacts/README.md
+
+# Cachés y artefactos de desarrollo/verificación (regenerables)
+.angular/
+.cache/
+.pnpm-store/
+.npm/
+.gradle/
+.turbo/
+out-tsc/
+test-results/
+playwright-report/
+.playwright-cli/
+/output/
+.scaffold-temp/
+.worktrees/
+
+# Datos, volúmenes, respaldos y secretos locales
+pgdata/
+postgres-data/
+/backups/
+/infra/compose/.local/
+/infra/compose/secrets/
+*.dump
+*.backup
+.pgpass
+.pg_service.conf
+.envrc
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+
+# Los lockfiles y Maven Wrapper se versionan; no ignorar *.lock ni *.jar globalmente.
+# Estas excepciones también conservan ejemplos de entorno en subdirectorios.
+!**/.env.example
+!**/.env.*.example

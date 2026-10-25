@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#001529" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>AutoNexus · Demostración</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header class="shell-header">
+    <span class="brand">AutoNexus <span>Gestión del taller</span></span>
+    <nav aria-label="Módulos">
+      <a href="/employees" data-module="employees" data-shell-link>Empleados</a>
+      <a href="/operations" data-module="operations" data-shell-link>Operaciones</a>
+    </nav>
+  </header>
+  <aside class="demo-banner"><strong>Modo demostración</strong> · Keycloak / CU01 pendiente. Sin autenticación real ni operaciones de negocio.</aside>
+  <nav class="demo-nav" aria-label="Páginas de demostración">
+    <a href="/employees/widgets" data-page="widgets" data-shell-link>Widgets</a>
+    <a href="/employees/dashboard/v1" data-page="dashboard/v1" data-shell-link>Panel demo</a>
+  </nav>
+  <main id="main" tabindex="-1">
+    <p id="load-status" role="status" aria-live="polite"></p>
+    <section id="route-error" hidden><h1>Ruta no encontrada</h1><p>Selecciona Empleados u Operaciones para continuar.</p></section>
+    <section id="mf-employees" aria-label="Demostración de Empleados" hidden></section>
+    <section id="mf-operations" aria-label="Demostración de Operaciones" hidden></section>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
