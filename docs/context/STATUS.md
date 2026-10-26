@@ -1,6 +1,8 @@
 # Estado comprobado
 
-## CU03 backend propietario — implementado y verificado; revisión independiente pendiente
+## CU03 backend propietario — entregado localmente y revisado; BFF/interfaz pendientes
+
+Cierre2026-10-26: revisión integral y re-revisiones afectadas conformes hasta código281b9ee. C1 y observaciones de consistencia cerrados, cero críticos pendientes. Especificación delivered con70unitarias/42HTTP,9grupos funcionales finales y15grupos previos de identidad/recuperación reales, todosPASS; CU01 root13etapas/SQLPASS. Los párrafos posteriores que dicen pendiente revisión describen etapas históricas del recorrido, no el dictamen final. No se acredita CU02 ni CU03 web completo; no hubo push ni merge CU03 a main.
 
 Fecha2026-10-26. Rama feat/cu03-employees, worktree .worktrees/cu03-employees, base CU01 b8d8079 e incorporación de main89bc8e1. Contratos REST/GraphQL/autenticación publicados antes de implementar en12f44e6. Especificación aprobada docs/compose/spec/cu03-employees.md y decisión007. Sin push ni merge CU03 a main; no se tocaron AGENTS ni se reasignó el BFF del participante2.
 

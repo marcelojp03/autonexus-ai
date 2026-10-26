@@ -1,6 +1,6 @@
 ---
 feature: cu03-employees
-status: in-progress
+status: delivered
 updated: 2026-10-26
 source: feat/cu03-employees
 ---
@@ -8,6 +8,12 @@ source: feat/cu03-employees
 # CU03 — Gestionar empleados e integración previa CU01
 
 ## Report
+
+**What was built** — CU01 consolidado localmente en main89bc8e1 con runtime de raíz, ownership estricto y privados/volúmenes conservados. Backend propietario CU03 en feat/cu03-employees: consulta, alta, modificación, desactivación sin borrado, historial, cargo/especialidades, validaciones, duplicados, versiones e idempotencia. PostgreSQL exclusivo de Empleados con migraciones versionadas. Autorización servidor administrador y cuenta IdP opcional por cliente técnico dedicado, con identidad estable y recuperación explícita no atómica. Contratos REST/GraphQL/auth publicados tempranamente y actualizados. BFF/UI integrados y CU02 siguen pendientes; cuenta sin rol/credencial no tiene acceso operativo.
+
+**Verification** — Frozen/build PASS; pnpm test70/8archivos y pnpm test:e2e --no-file-parallelism42/3archivos PASS (unidades/HTTP con dobles explícitos), pnpm lint0errores/0advertencias y pnpm exec tsc --noEmit exit0. Matriz PostgreSQL/Keycloak real15grupos/exit0: persistencia, migración/no-op,401/403, duplicados/concurrencia, desactivación/historia, cuenta opcional, pérdida de respuesta/confirmación SQL, ownership, bloqueo, sesión SQL perdida/escritura tardía y caída/restauración IdP. Tras ajuste final solo de email, funcional real9grupos/exit0 con Unicode rechazado y ASCII/punycode válidos; no se repitieron áreas no afectadas por rutina. CU01 root13etapas/exit0,0errores inesperados/recursos y2x403 intencionales; aislamiento SQL1Ops/2Empl PASS. OpenAPI3.1/referencias y sintaxis SDL PASS, no BFF ejecutable.
+
+**Review** — Integral b8d8079..8af992d; afectada 8af992d..5e1f5cc y final 5e1f5cc..281b9ee. C1 email y observaciones documentales cerrados con regresiones; cumplimiento/corrección/consistencia conformes, cero críticos pendientes. Código final revisado281b9eeb9412c96177f2f2b3a601c6ca5b4381fc. Este cierre es documental y no cambia código probado. Logs/limitaciones en STATUS y README. Sin push ni merge CU03 a main; ramas/worktrees conservados.
 
 ## [S1] Problem
 
@@ -66,7 +72,7 @@ CU02 completo, elevación de roles, inicializar BFF ajeno, CRUD web sin BFF, jor
 - [x] T2: Implementar dominio, migraciones y REST autorizado — acceptance: PostgreSQL real confirma CRUD sin borrado, historial, duplicados, validaciones, autorización y concurrencia (depends: T1; covers: S2.2, S2.3).
 - [x] T3: Implementar identidad opcional y recuperación — acceptance: Keycloak real y fallos controlados confirman subject estable, pending/retry/conflict y ausencia de duplicados (depends: T2; covers: S2.4).
 - [x] T4: Mantener alineados los contratos tempranos del participante 2 — acceptance: contratos publicados en 12f44e6 antes de implementación; comprobar coherencia con REST final y BFF/interfaz pendientes explícitos (covers: S2.5).
-- [ ] T5: Verificar regresión, revisar y cerrar commits locales — acceptance: evidencia observada, cero críticos abiertos y documentación actualizada sin push (depends: T4; covers: S2.6).
+- [x] T5: Verificar regresión, revisar y cerrar commits locales — acceptance: evidencia observada, cero críticos abiertos y documentación actualizada sin push (depends: T4; covers: S2.6).
 
 ## Journey log
 
