@@ -1,5 +1,9 @@
 # MF01 Empleados
 
+## Runtime vigente de CU01 integrado
+
+Ejecutar esta aplicación desde su carpeta en la raíz principal autonexus-ai. CU01 ya está en main b8d8079; las referencias a .worktrees/cu01-keycloak en la evidencia posterior son históricas. Ambos Compose se administran desde infra/compose e infra/keycloak de raíz, conservando privados y volúmenes. Ubicaciones, comandos y límites: docs/decisions/006-cu01-main-runtime.md y scripts/cu01/README.md (rutas desde la raíz). No se hizo push ni se eliminaron ramas/worktrees.
+
 ## CU01 — modos explícitos
 
 La misma aplicación conserva Angular core 22.2.3, CLI/build 22.2.4, Delon 22.1.1, single-spa-angular 22.0.1 y single-spa 6.0.3, con @angular/build:application. Se añade únicamente keycloak-js **26.2.4 exacto**; el lockfile conserva las versiones anteriores.

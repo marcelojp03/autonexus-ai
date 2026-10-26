@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { spawnSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { normalizeWorkspacePath } from './workspace-path.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const project = 'autonexus-keycloak-dev';
@@ -44,7 +45,7 @@ function ownership(requireBoth = true) {
   if (requireBoth) assert.equal(ids.length, 2, 'Expected exactly two owned containers');
   for (const id of ids) {
     const labels = JSON.parse(command('docker', ['inspect', '--format', '{{json .Config.Labels}}', id]));
-    const normalize = s => s.replaceAll('\\', '/').replace(/\/$/, '').toLowerCase();
+    const normalize = normalizeWorkspacePath;
     assert.equal(normalize(labels['com.docker.compose.project.working_dir']), normalize(root), 'Workspace ownership mismatch');
     assert.ok(['postgres', 'keycloak'].includes(labels['com.docker.compose.service']));
   }

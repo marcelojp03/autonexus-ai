@@ -1,5 +1,9 @@
 # Keycloak local CU01
 
+## Propietario vigente
+
+Tras la integración local de CU01 en main, administrar esta infraestructura desde infra/keycloak de la raíz principal autonexus-ai. Las referencias al worktree más abajo son históricas. Ambos contenedores tienen labels/config/bind de raíz y reutilizan autonexus-keycloak-dev_idp-postgres-data; .env y fixtures privados conservan sus bytes. No ejecutar inicializadores para regenerar secretos. Ver docs/decisions/006-cu01-main-runtime.md y scripts/cu01/verify-main-runtime.mjs. La normalización de separadores Windows no permite otra ubicación: se conserva la comparación de ruta completa.
+
 Infraestructura ejecutable aprobada por docs/compose/spec/cu01-keycloak.md (S2/S5) y contracts/auth/README.md. Solo identidad local; la semilla **no implementa CU02** ni CRUD de empleados. No se acredita SSO de aplicaciones con estas comprobaciones.
 
 ## Aislamiento y propietario runtime
