@@ -130,7 +130,11 @@ function validEmail(email: string): boolean {
 export function fields(value: unknown): EmployeeFields {
   const v = object(value);
   only(v, fieldNames);
-  const email = text(v.email, 254).toLowerCase();
+  const emailInput = text(v.email, 254);
+  for (const character of emailInput) {
+    if (character.codePointAt(0)! > 0x7f) invalid();
+  }
+  const email = emailInput.toLowerCase();
   if (!validEmail(email)) invalid();
   const phone = text(v.phone, 25);
   if (phone.length < 7 || !/^[0-9+(). -]+$/.test(phone) || !/[0-9]/.test(phone))

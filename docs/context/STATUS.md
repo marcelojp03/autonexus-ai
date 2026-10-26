@@ -13,11 +13,11 @@ Transacción local empleado/historial/intención/resultado; IdP fuera de transac
 | Verificación observada | Resultado |
 | --- | --- |
 | Empleados frozen/build | PASS, lockfile/versiones conservados; build final exit0 |
-| Unitarias finales | PASS67/8archivos; incluye40CU01/base y27CU03; texto/Unicode rojo→verde y protección identidad propia |
+| Unitarias finales | PASS70/8archivos; incluye40CU01/base y30CU03; texto/Unicode rojo→verde y protección identidad propia |
 | HTTP final, sin paralelismo entre archivos | PASS42/3archivos;32CU01/base+10CU03; RSA sintético/repositorio falso explícitos |
 | Lint/tipos final | PASS exit0;0errores/0advertencias de lint |
 | Matriz PostgreSQL+Keycloak real | PASS15grupos: persistencia, migración/no-op,401/403, duplicados/versión/historial, desactivación, cuenta opcional/sin reactivación por edición, respuesta perdida/reinicio/retry, ownership ajeno, fallo SQL posterior al remoto, lock entre conexiones, pérdida de sesión SQL con respuesta tardía/reparación y caída/restauración IdP real |
-| Funcional real previa al amendment de revisión | PASS8grupos/exit0, incluido duplicado concurrente; no repite caída/recuperación no afectadas |
+| Funcional final del límite ASCII | PASS9grupos/exit0, incluidos Unicode rechazado antes de case folding, mayúsculas ASCII, duplicado concurrente y cuenta deshabilitada; no repite recuperación no afectada |
 | Contratos finales | OpenAPI3.1/referencias y sintaxis SDL PASS; no resolvers/BFF ejecutables |
 | Regresión CU01 desde raíz tras cambios IdP | PASS13etapas/exit0,0errores inesperados/recursos fallidos y2x403 intencionales; SQL aislamientoPASS, versiones1/2 |
 
@@ -197,3 +197,5 @@ No se ha integrado ni probado una plataforma AutoNexus completa ni todos sus CU.
 ## Próxima actualización
 
 Registrar fecha, rama/commit, cambios implementados, verificaciones reales, bloqueos y siguiente paso. No reemplazar pendientes por porcentajes estimados sin evidencia.
+
+C1 residual en re-revisión5e1f5cc: U+212A se convertía en k antes de verificar ASCII. Dos regresiones en rojo; control de alfabeto movido antes de toLowerCase, preservando trim/espacios. Ronda posterior70unitarias/42HTTP PASS, dominio final27/27, build/tipos exit0 y lint0advertencias. Funcional real final9grupos/exit0 incluye ambos casos Unicode en HTTP; no se repitieron outage/sesiónSQL no afectados (15grupos anteriores conformes). Referencia al log histórico ausente corregida sin fabricar artefactos. Pendiente confirmación independiente de este último límite.

@@ -41,7 +41,7 @@ No copiar secretos a comandos/URLs ni volver a init-env. Ambos Compose siguen ba
 
 ### Verificación reproducible
 
-Evidencia observada al preparar revisión: build PASS,67unitarias y42HTTP PASS, tipos/lint exit0 con0advertencias. Matriz final real de PostgreSQL/Keycloak PASS15grupos, incluidos email inválido, duplicado concurrente, no reactivación por edición y pérdida de sesión SQL con respuesta tardía/reparación. OpenAPI/sintaxis SDL PASS; CU01 desde raíz repitió13etapas y aislamientoSQL1/2migraciones. Estado de revisión/cierre: STATUS y especificación, no inferirlo del número de tests.
+Evidencia observada al preparar revisión: build PASS,70unitarias y42HTTP PASS, tipos/lint exit0 con0advertencias. Matriz final real de PostgreSQL/Keycloak PASS15grupos, incluidos email inválido, duplicado concurrente, no reactivación por edición y pérdida de sesión SQL con respuesta tardía/reparación. OpenAPI/sintaxis SDL PASS; CU01 desde raíz repitió13etapas y aislamientoSQL1/2migraciones. Estado de revisión/cierre: STATUS y especificación, no inferirlo del número de tests.
 
 ~~~powershell
 # Desde este servicio, sin conexiones SQL/IdP para las unidades/HTTP con dobles:
@@ -268,4 +268,6 @@ En feat/cu01-keycloak el código/binario se ejecuta desde .worktrees/cu01-keyclo
 
 Amendment de revisión: email dot-atom ASCII/DNS-punycode (local64, etiquetas1–63 sin guiones extremos, total254). Una edición laboral no reactiva una identidad deshabilitada: failed/IDP_ACCOUNT_DISABLED requiere acción autorizada separada en IdP. El mismo operationId sigue siendo replay; un retry nuevo reconcilia también desde synced (última confirmación), sin otra versión laboral. La prueba de pérdida de sesión termina solo la conexión SQL que posee el lock del empleado sintético; no detiene PostgreSQL ni toca conexiones ajenas.
 
-Si se interrumpe el verificador: node scripts/verify-cu03-real.mjs --cleanup-only inspecciona únicamente registros activos CU03 con documento C03-UUID/email UUID@example.invalid y snapshot inicial Synthetic/CU03, y los desactiva mediante API autorizada; no borra. La espera de restauración IdP está acotada a300s y exige Dockerhealthy+discovery. El primer intento con presupuesto anterior agotó espera (arranque observado118s), no se presenta como PASS; real-timeout.log conserva ese intento y real.log/real.exit acreditan la ronda posterior.
+Si se interrumpe el verificador: node scripts/verify-cu03-real.mjs --cleanup-only inspecciona únicamente registros activos CU03 con documento C03-UUID/email UUID@example.invalid y snapshot inicial Synthetic/CU03, y los desactiva mediante API autorizada; no borra. La espera de restauración IdP está acotada a300s y exige Dockerhealthy+discovery. El primer intento con presupuesto anterior agotó espera (arranque observado118s), no se presenta como PASS; el log histórico agotado no quedó conservado y no se acredita como PASS; real.log/real.exit acreditan la ronda posterior.
+
+Cierre de límite ASCII: se comprueba el alfabeto antes de toLowerCase. U+212A en local/dominio es rechazado sin convertir silenciosamente la dirección; mayúsculas ASCII y punycode continúan válidos. Evidencia: red2→dominio27/27; ronda70unitarias/42HTTP y funcional real9grupos PASS después del ajuste.

@@ -254,6 +254,8 @@ try {
       { firstName: String.fromCharCode(0) },
       { firstName: String.fromCharCode(0xd800) },
       { email: 'bad' },
+      { email: String.fromCharCode(0x212a) + '@example.com' },
+      { email: 'ana@' + String.fromCharCode(0x212a) + '.example' },
       { email: 'ana@-example.com' },
       { email: 'ana@example..com' },
       { email: '.ana@example.com' },

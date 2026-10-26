@@ -11,6 +11,17 @@ const input = {
   specialties: ['Motor'],
 };
 describe('CU03 public business rules', () => {
+  it.each([
+    String.fromCharCode(0x212a) + '@example.com',
+    'ana@' + String.fromCharCode(0x212a) + '.example',
+  ])('rejects non-ASCII before case folding %s', (email) => {
+    expect(() => fields({ ...input, email })).toThrow();
+  });
+  it('normalizes ASCII uppercase without rejecting punycode', () => {
+    expect(
+      fields({ ...input, email: 'ANA+WORK@XN--BCHER-KVA.EXAMPLE' }).email,
+    ).toBe('ana+work@xn--bcher-kva.example');
+  });
   it('explicit retry reconciles last-confirmed state without another business version', () => {
     const c = command('create', null, {
       ...input,
