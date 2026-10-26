@@ -1,0 +1,125 @@
+# Proposed CU03 web contract, not an executable BFF. All root operations AND
+# employee/history fields require administrador on the server. See auth/employees.md.
+# REST validation applies unchanged; input null is invalid even for optional access.
+"""UUID string; parse and serialize canonical lowercase hyphenated UUID on the server."""
+scalar UUID
+"""Valid calendar date YYYY-MM-DD, not future (server UTC date)."""
+scalar Date
+"""RFC 3339 timestamp serialized in UTC with Z."""
+scalar DateTime
+
+enum EmployeeStatus { active inactive }
+enum EmployeeAccessStatus { not_requested pending synced failed conflict }
+enum EmployeeHistoryAction { created updated deactivated }
+enum EmployeeAccessErrorCode {
+  IDP_UNAVAILABLE
+  IDP_TIMEOUT
+  IDP_FORBIDDEN
+  IDP_OWNERSHIP_CONFLICT
+  IDP_RESPONSE_INVALID
+  IDP_CONFIRMATION_FAILED
+}
+
+type EmployeeAccess {
+  requested: Boolean!
+  status: EmployeeAccessStatus!
+  subject: String
+  attempts: Int!
+  errorCode: EmployeeAccessErrorCode
+}
+
+type Employee {
+  id: UUID!
+  firstName: String!
+  lastName: String!
+  document: String!
+  email: String!
+  phone: String!
+  jobTitle: String!
+  startDate: Date!
+  specialties: [String!]!
+  status: EmployeeStatus!
+  version: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  access: EmployeeAccess!
+}
+
+type EmployeePage {
+  items: [Employee!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+
+type EmployeeHistoryEntry {
+  id: UUID!
+  employeeId: UUID!
+  operationId: UUID!
+  action: EmployeeHistoryAction!
+  actorSubject: String!
+  occurredAt: DateTime!
+  version: Int!
+  snapshot: Employee!
+}
+
+type EmployeeHistoryPage {
+  items: [EmployeeHistoryEntry!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+
+type EmployeeMutationResult {
+  employee: Employee!
+  replayed: Boolean!
+}
+
+input EmployeeAccessInput {
+  requested: Boolean!
+}
+
+input CreateEmployeeInput {
+  operationId: UUID!
+  firstName: String!
+  lastName: String!
+  document: String!
+  email: String!
+  phone: String!
+  jobTitle: String!
+  startDate: Date!
+  specialties: [String!]!
+  access: EmployeeAccessInput
+}
+
+input UpdateEmployeeInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  firstName: String!
+  lastName: String!
+  document: String!
+  email: String!
+  phone: String!
+  jobTitle: String!
+  startDate: Date!
+  specialties: [String!]!
+  access: EmployeeAccessInput
+}
+
+input EmployeeCommandInput {
+  operationId: UUID!
+  expectedVersion: Int!
+}
+
+type Query {
+  employees(limit: Int = 20, offset: Int = 0, status: EmployeeStatus, search: String): EmployeePage!
+  employee(id: UUID!): Employee!
+  employeeHistory(id: UUID!, limit: Int = 20, offset: Int = 0): EmployeeHistoryPage!
+}
+
+type Mutation {
+  createEmployee(input: CreateEmployeeInput!): EmployeeMutationResult!
+  updateEmployee(id: UUID!, input: UpdateEmployeeInput!): EmployeeMutationResult!
+  deactivateEmployee(id: UUID!, input: EmployeeCommandInput!): EmployeeMutationResult!
+  retryEmployeeAccess(id: UUID!, input: EmployeeCommandInput!): EmployeeMutationResult!
+}
