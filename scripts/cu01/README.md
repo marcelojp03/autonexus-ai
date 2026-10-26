@@ -73,6 +73,7 @@ Desde la raíz de este worktree, con Node 22.22.3 y los runtimes ya arrancados p
 ```sh
 node --check scripts/verify-cu01-browser.mjs
 node --test scripts/service-env-contract.test.mjs
+node scripts/verify-cu01-bfcache.mjs --synthetic-events
 node scripts/verify-cu01-api.mjs
 # Esperar a que termine antes de iniciar navegador; prueba expiración real (~65s).
 node scripts/verify-cu01-browser.mjs
@@ -98,3 +99,5 @@ Dependencias de selectores: Keycloak `#username`, `#password`, `#kc-login` y ale
 El contrato PowerShell se prueba con copias temporales del helper y archivos sintéticos derivados de .env.example, sin leer/modificar .env reales ni conectar a una base. Confirma las tres claves OIDC públicas, rechazo de claves desconocidas y ausencia de valores privados en la salida. El helper de CU01 acepta esas claves opcionales; las credenciales preservadas no se regeneran.
 
 La opción --reuse-captures exige ambos PNG existentes y no acredita una revisión visual nueva: solo se usa para repetir comportamiento cuando la interfaz no cambió. Los resultados globales y la revisión independiente se registran en ../../docs/context/STATUS.md.
+
+La prueba BFCache --synthetic-events no usa credenciales ni SDK ficticio: despacha los eventos persistidos, observa recarga de documento y comprueba que Ingresar llega al IdP real. Es una regresión de ciclo de vida, no evidencia de cache nativo. Sin flag intenta un round trip nativo; en este entorno fue denegado (masked) y no se declara PASS. pageshow inicial y navegación SPA no deben recargar; el recorrido SSO principal verifica el mismo timeOrigin entre módulos.

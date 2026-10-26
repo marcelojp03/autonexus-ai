@@ -63,6 +63,8 @@ Se admite acceso a los **contenedores y diagnósticos técnicos** a cualquiera d
 - Access token local60s para prueba; reloj tolerado5s en APIs; refresh central periódico y antes de diagnósticos, con cola del SDK para evitar carreras. Renovación real contra token endpoint, no modificación artificial de exp. Si renovar falla: borrar estado cliente, desmontar módulos, bloquear peticiones y mostrar recuperación segura; no fallback a demo/offline ni loops de redirección.
 - Logout global mediante endpoint OIDC del IdP y POST soportado por el adapter, sin JWTs en querystring de logout. Invalidar inmediatamente el puerto/estado visible, desmontar consumidores y limpiar tokens/timer sin disparar un nuevo login requerido. No usar localStorage.clear().
 
+- pagehide destruye el propietario del Shell. Ante pageshow.persisted, recargar únicamente ese documento restaurado para crear un propietario nuevo y reevaluar SSO; no reconstruir tokens ni conservar el propietario destruido. No afecta navegación SPA ni pageshow inicial. Regresión de eventos persistidos en Chromium con recarga real y retorno al IdP; no confundir esa simulación explícita con un hit nativo BFCache si el navegador lo deniega.
+
 ### Standalone y demo explícitos
 
 - Entradas standalone OIDC propias con sus clientes4201/4202 y configuración de desarrollo explícita. Son sesiones de cliente independientes solo cuando se ejecutan fuera del Shell; no compiten al montar integrado.
@@ -105,7 +107,8 @@ CU02 funcional, CRUD empleados/clientes/órdenes, Saga, permisos empresariales p
 - [x] T2: Sesión única Shell y helper browser — acceptance: código+PKCE, retorno validado, memoria/refresh/logout real y SessionPort sin exponer tokens a MFs; pruebas de límites (covers: S3; depends: T0).
 - [x] T3: Adaptar ambos Angular integrado/standalone/demo explícito — acceptance: una sesión en integrado, OIDC independiente configurado, ningún fallback demo ni JWT en Delon/storage; builds y pruebas (covers: S3; depends: T2).
 - [x] T4: Proteger Operaciones y Empleados — acceptance: firma/iss/aud/exp/roles validados,401/403 genéricos, salud real preservada y recursos técnicos sin CRUD (covers: S4; depends: T0).
-- [x] T5: Verificación real de CU01 y regresión — acceptance: navegador y APIs cumplen escenarios, refresh/logout/expiración observados y datos/ownership/puertos conservados (covers: S2,S3,S4,S5; depends: T2,T3,T4,T7,T8).
+- [x] T5: Verificación real de CU01 y regresión — acceptance: navegador y APIs cumplen escenarios, refresh/logout/expiración observados y datos/ownership/puertos conservados (covers: S2,S3,S4,S5; depends: T2,T3,T4,T7,T8,T9).
 - [ ] T6: Revisión independiente y cierre local — acceptance: cero críticos pendientes, contratos/docs/STATUS/resultados y spec delivered con rango revisado; sin merge/push automático (covers: S5; depends: T5).
 - [x] T7: Corregir emisión G2 tardía sin cambiar framework — acceptance: regresión demuestra el fallo original y luego ausencia de emisión/error tras destroy, mantiene notificación viva/nueva instancia, parche reproducible en ambos lockfiles y navegación rápida sin errores Angular (covers: S3,S5; depends: T0).
 - [x] T8: Alinear allowlist del cargador de entorno con los ejemplos CU01 — acceptance: operaciones/empleados cargan las tres claves públicas OIDC desde fixtures sintéticos, claves desconocidas se rechazan y valores privados no se imprimen; tres pruebas PASS, sin modificar .env reales (covers: S2,S4,S5; depends: T0).
+- [x] T9: Recuperar propietario al restaurar BFCache — acceptance: eventos persistidos reproducen el propietario muerto antes del fix y después producen documento nuevo/login al IdP;15 unidades/build Shell y repetición SSO real12 etapas PASS; limitación nativa masked registrada (covers: S3,S5; depends: T2).

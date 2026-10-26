@@ -133,4 +133,7 @@ session.subscribe(() => {
 await owner.start();
 renderNavigation();
 start({ urlRerouteOnly: true });
+// A cached document resumes without evaluating this module again. pagehide has
+// disposed its session owner; reload only BFCache restores to obtain a fresh one.
+window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 window.addEventListener('pagehide', () => owner.dispose(), { once: true });

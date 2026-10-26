@@ -82,6 +82,14 @@ Solo el CSS del Shell vive globalmente en el documento. Los Angular montan su CS
 
 El AGENTS original se conserva. Actualmente el proyecto usa el monorepositorio raíz; las referencias anteriores a ausencia de Git son históricas. Las pruebas históricas no acreditan CU01/SSO, offline ni todo el catálogo demo.
 
-## Verificación de este cambio CU01
+## Verificación aislada de CU01 — histórica, antes de la integración global
 
-En el worktree cu01-keycloak se ejecutaron con Node22.22.3/pnpm12.6.0 exactos: add keycloak-js@26.2.4 --save-exact, install --frozen-lockfile, test, run typecheck y exec vite build, todos con exit0. Las pruebas de sesión usan SDK/fetch falsos y no acreditan SSO. exec vite build compila únicamente el Shell, sin ejecutar prebuild ni stagear builds Angular viejos. La construcción final run build (staging de MFs nuevos), el ejercicio visual/responsive/teclado y SSO real quedan para el principal después de reconstruir ambos Angular. No se arrancaron ni detuvieron servidores en esta tarea. El puerto4200 preexistente no constituye evidencia de las fuentes nuevas.
+En la verificación aislada se ejecutaron con Node22.22.3/pnpm12.6.0 exactos: add keycloak-js@26.2.4 --save-exact, install --frozen-lockfile, test, run typecheck y exec vite build, todos con exit0. Las pruebas de sesión usan SDK/fetch falsos y no acreditan SSO. Esa fase no stageó ni inició el runtime global.
+
+El principal completó después run build con staging de ambos Angular finales y comparación de hashes,15 unidades y el recorrido real descrito en STATUS: Code/PKCE, navegación sin otro documento/login, reload, refresh, standalone, logout, roles y demo. Las respuestas403 deliberadas se distinguen de errores inesperados. Se comprobó la ausencia de tokens persistidos y se corrigió la emisión G2 tras desmontaje, sin silenciar console.error. Guía conjunta: ../../scripts/cu01/README.md.
+
+## Recuperación de BFCache
+
+pagehide invalida y destruye el propietario de sesión. Una restauración BFCache no reevalúa el módulo: pageshow con persisted=true fuerza por ello una recarga del mismo destino, creando un propietario nuevo y reevaluando SSO. No afecta cambios SPA entre módulos ni pageshow inicial. Así no se conserva una sesión ya destruida o identidad obsoleta al volver desde otro documento.
+
+Regresión: scripts/verify-cu01-bfcache.mjs desde la raíz. --synthetic-events reproduce explícitamente PageTransitionEvent.persisted en Chromium y verifica recarga efectiva y navegación posterior al IdP; no simula SDK ni credenciales. El intento de BFCache nativo no fue elegible (notRestoredReasons=masked), por lo que no se acredita un hit nativo del cache en este entorno. El recorrido SSO principal es real e independiente de esta prueba de eventos.
