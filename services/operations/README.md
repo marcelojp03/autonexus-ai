@@ -12,7 +12,6 @@ Base técnica S2/T1, sin CU de negocio: no hay CRUD, autenticación, GraphQL, Sa
 
 Generado con Spring Initializr oficial en TEMP propio, no encima de esta carpeta. Descarga HTTP200 y extracción mediante PowerShell:
 
-
 ```powershell
 $tmp = Join-Path $env:TEMP 'autonexus-operations-initializr'
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
@@ -27,7 +26,6 @@ Versiones reales: Boot parent 4.1.2; Java/javac Oracle 21.0.8; Wrapper 3.3.4 (on
 ## Entorno y comandos (PowerShell)
 
 Todos los comandos siguientes se ejecutan desde la raíz absoluta del servicio:
-
 
 ```powershell
 Set-Location 'C:/UAGRM/Ingenieria de Software 2/segundo parcial/autonexus-ai/.worktrees/backend-foundation/services/operations'
@@ -51,7 +49,6 @@ Valores por defecto de aplicación: DB_HOST=127.0.0.1, DB_PORT=55432, DB_NAME=au
 
 Con PostgreSQL propio ya preparado y variables privadas cargadas en este proceso, ejecutar desde esta misma carpeta:
 
-
 ```powershell
 if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) { throw 'DB_PASSWORD requerido' }
 $defaults = @{ DB_HOST='127.0.0.1'; DB_PORT='55432'; DB_NAME='autonexus_operations'; DB_USER='autonexus_operations' }
@@ -74,7 +71,6 @@ try {
 El comando termina, no levanta un servidor; no es un modo migrate-only improvisado. Plugin y driver están alineados al BOM. V1__create_operations_schema.sql crea únicamente schema operations. Historial **public.flyway_schema_history** dentro de la base autonexus_operations. No se configura operations como schema por defecto de Flyway: debe existir por V1, no por creación implícita. clean está deshabilitado en el plugin. Repetir migrate debe validar y no aplicar nuevas versiones. Flyway de arranque permanece habilitado con la misma ubicación/historial.
 
 ### Ejecutar y comprobar (requiere base real)
-
 
 ```powershell
 ./mvnw.cmd spring-boot:run
@@ -102,7 +98,7 @@ El comando reproducible de build es ./mvnw.cmd -B clean verify (sin credenciales
 
 Comprobado el 2026-10-25: --version código 0; clean verify código 0, 12 pruebas sin fallos/errores/omitidas y JAR ejecutable empaquetado. help:describe -Dplugin=org.flywaydb:flyway-maven-plugin:12.4.0 -Dgoal=migrate -Ddetail=true código 0 (solo metadatos; no migra). git diff --check sin errores y hash AGENTS preservado. Advertencia conservada: auto-attach del agente Mockito/Byte Buddy en Java 21; no afecta las 12 pruebas.
 
-Intentos previos no finales: descarga inicial de Wrapper y primer build excedieron el timeout de la herramienta; dos launchers Node no iniciaron la verificación y un launcher PowerShell separado no dejó resultado; la repetición directa con caché terminó en código 0. flyway:help falló código 1 porque ese plugin no tiene goal help; se sustituyó por help:describe. La comprobación adicional de arranque sin contraseña no llegó a ejecutarse por permiso de herramienta, por lo que no se acredita. Ningún servidor se dejó ejecutando.
+Intentos previos no finales: descarga inicial de Wrapper y primer build excedieron el timeout de la herramienta; dos launchers Node no iniciaron la verificación y un launcher PowerShell separado no dejó resultado; la repetición directa con caché terminó en código 0. flyway:help falló código 1 porque ese plugin no tiene goal help; se sustituyó por help:describe. La comprobación adicional de arranque sin contraseña no llegó a ejecutarse por permiso de herramienta, por lo que no se acredita. La verificación unitaria inicial no dejó servidores activos; el estado integrado final se indica a continuación.
 
 ## Verificación integrada final
 
@@ -113,4 +109,4 @@ Realizada en el worktree feat/backend-foundation, con Node 22.22.3, JDK 21.0.8 y
 - El usuario conecta a su base y recibe42501 al intentar Empleados, postgres otemplate1; sin privilegios elevados.
 - Shell y MFs previos siguen funcionando. No se modificaron fuentes ni versiones frontend.
 
-Comandos de infraestructura y verificación: [infra/compose](../../infra/compose/README.md). Logs locales ignorados: `../../output/backend-foundation/operations-build.log`, migraciones y `health-outage.log`. La revisión independiente está pendiente antes del cierre definitivo. Avisos no bloqueantes: metadata de feeds auxiliares Flyway401 y Mockito/Byte Buddy; no se añadieron credenciales para esos feeds ni se ocultaron advertencias.
+Comandos de infraestructura y verificación: [infra/compose](../../infra/compose/README.md). Logs locales ignorados: `../../output/backend-foundation/operations-build.log`, migraciones y `health-outage.log`. Revisión independiente completada: cumplimiento/corrección/consistencia conformes, sin críticos. Tras la pausa planificada de revisión, el servicio se reactivó con live/ready200. Avisos no bloqueantes: metadata de feeds auxiliares Flyway401 y Mockito/Byte Buddy; no se añadieron credenciales para esos feeds ni se ocultaron advertencias.

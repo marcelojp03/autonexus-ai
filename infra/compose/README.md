@@ -102,3 +102,7 @@ Logs locales ignorados: `../../output/backend-foundation/`. No publicar logs de 
 Una instancia por este nombre/puerto en el host. Si un puerto está ocupado, elegir otro en configuración antes de arrancar; nunca matar procesos ajenos. Al mover el workspace o integrar una rama, conservar/trasladar de forma privada la configuración que corresponde al volumen existente, no regenerar passwords sobre él. Las etiquetas de ownership ligan las pruebas de caída al workspace propietario.
 
 Para una pausa normal, `docker compose --env-file .env stop postgres` conserva datos; `start postgres` los restablece. No se documenta un reset destructivo como paso normal. Los servidores de otros proyectos se dejan intactos. PWA, BFF, Keycloak, CU01, CRUD y Saga quedan pendientes.
+
+## Cierre de revisión
+
+Revisión independiente de7bc80a7..6027fce aprobada en cumplimiento/corrección/consistencia, sin críticos. La comparación de PID/StartTime durante caída la realizó el principal; verify-health no la captura automáticamente. Tras pausar los procesos propios para la revisión, PostgreSQL y ambos servicios se reactivaron: healthy y live/ready200; frontends4200/4201/4202HTTP200. No hubo merge/push automático ni cambios de negocio.

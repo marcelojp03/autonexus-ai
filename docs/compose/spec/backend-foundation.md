@@ -1,14 +1,47 @@
 ---
 feature: backend-foundation
-status: in-progress
+status: delivered
 updated: 2026-10-25
 branch: feat/backend-foundation
-commits: ""
+commits: "7bc80a7..6027fce"
 ---
 
 # Base backend de Operaciones y Empleados
 
 ## Report
+
+**What was built** — Dos bases técnicas generadas oficialmente y separadas por propietario: Operaciones Spring Boot4.1.2/JDK21 y Empleados Nest12.2/Node22.22.3. Manifiestos y fuentes directamente en sus carpetas, Wrapper/lockfile, migraciones de schemas propios y casos/puertos puros con adaptadores de disponibilidad. No hay dominio ficticio, CRUD, autenticación ni Saga.
+
+PostgreSQL17.11 propio de Compose, dos bases/roles aislados y tres configuraciones privadas generadas sin imprimirlas ni sobrescribirlas. Liveness independiente de DB; readiness con SELECT1 real, timeout y200UP/503DOWN. README/decisión004/STATUS documentan límites, versiones y comandos.
+
+**Verification** — Ejecutada con JDK21.0.8 y Node22.22.3/pnpm12.6.0 en sus directorios. Evidencia local ignorada en output/backend-foundation; las pruebas con fakes no se usan para acreditar PostgreSQL real.
+
+| Comando / comprobación                                                          | Resultado observado                                                                                            |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Initializr starter.zip / NestCLI12.0.10                                         | Oficiales, raíces directas, sin Git por app y AGENTS intactos                                                  |
+| Ops ./mvnw.cmd -B clean verify                                                  | PASS,12tests sin fallos/errores/omitidas y JAR ejecutable                                                      |
+| Empleados install --frozen-lockfile / build                                     | PASS, sin nueva resolución / compilación correcta                                                              |
+| Empleados test / test:e2e / lint                                                | PASS,13unitarias+3HTTP;0errores/warnings de lint                                                               |
+| init-env.mjs y segunda invocación                                               | PASS,3envGitignored; rechaza overwrite,3buffers sin cambios                                                    |
+| docker compose config --quiet / up --detach --wait                              | PASS, PostgreSQL17.11 propio healthy en55432                                                                   |
+| Flyway12.4.0:migrate, primera y segunda                                         | PASS, V1 aplicada y segunda no-op                                                                              |
+| TypeORM migration:run -d dist/infrastructure/postgres/data-source.js, dos veces | PASS,1migración y luego sin pendientes                                                                         |
+| verify-databases.mjs --require-migrations                                       | PASS,1historial por servicio, conexión propia,3denegaciones42501 por rol y sin privilegios elevados            |
+| verify-health.mjs con DB real, tras último cambio                               | PASS, ambos readiness200→503→200 y liveness200; DB restaurada en finally                                       |
+| Identidad de procesos durante caída                                             | Comparación del principal: mismos PID/hora de inicio; el script por sí solo no captura esa identidad           |
+| Navegador frontend y diffweb                                                    | PASS,navegación sin reload,recarga,login de ambos standalone,0erroresJS/recursos;fuentes/versiones sin cambios |
+| git diff --cached --check / exclusión de.env                                    | PASS; sin datos privados, builds o dependencias en índice                                                      |
+| Revisión independiente del rango7bc80a7..6027fce                                | Cumplimiento/corrección/consistencia conformes;0críticos                                                       |
+
+Después de revisión se reactivaron solo PostgreSQL y backend propios. Comprobación final: ambos live/readyHTTP200 con cuerpo solo status; PostgreSQL healthy; frontend4200/4201/4202HTTP200. La parada planificada para revisión no forma parte de la prueba de caída: esa recuperación se produjo sin reiniciar las aplicaciones. No se hizo merge ni push.
+
+**Journey log**
+
+1. Se preparó un único monorepo main7bc80a7, retirando a la Papelera los .git de NG-ALAIN ajenos con autorización; el trabajo backend vive en feat/backend-foundation.
+2. Se evitó el PATH global Java8/javac23/Node22.14: JDK21 y Node22.22.3 por proceso. El Wrapper oficial fijó Maven3.10.0; Boot4.1 usa el paquete health.contributor.
+3. CLI Nest12 genera ESM/TypeScript6/Vitest4/Oxlint, no Jest. Los paquetes/peers reales determinaron la configuración; no se supusieron versiones anteriores.
+4. Un test de contexto aislado evidenció dos casos de password no validados; el control temprano pasó los tres checks. No se leyó .env ni se repitió el arranque sin credenciales bloqueado al actor.
+5. PostgreSQL real acreditó migraciones/aislamiento y recuperación. Se conservan avisos no bloqueantes de feeds auxiliares Maven401 y Mockito; la observación de trazabilidad de PID queda documentada, sin fingir una aserción automática del script.
 
 ## [S1] Problema
 
@@ -68,8 +101,8 @@ Keycloak/SSO, CU01, CRUD de empleados, clientes/órdenes/agenda, Saga CU15, BFF 
 
 ## Tasks
 
-- [ ] T1: Generar y configurar MS01 con Wrapper, migración y salud — acceptance: raíz correcta, AGENTS preservado, build/pruebas unitarias pasan y adaptador SQL/indicador de readiness configurados sin éxito fijo (covers: S2).
-- [ ] T2: Generar y configurar MS02 con lockfile, migración y salud — acceptance: raíz correcta, Node22.22, AGENTS preservado, build/pruebas unitarias pasan y adaptador SQL/respuesta503 implementados sin éxito fijo (covers: S2).
-- [ ] T3: Preparar Compose, credenciales locales y aislamiento — acceptance: un servidor propio, dos bases/roles y conexiones ajenas rechazadas sin exponer secretos (covers: S2).
-- [ ] T4: Verificar integración, caída/recuperación y frontend — acceptance: migraciones/historial reales e idempotentes, comandos observados, readiness200→503→200 y liveness200 sin reinicio; Shell/MFs sin regresión (covers: S2; depends: T1,T2,T3).
-- [ ] T5: Revisar y cerrar documentación/commits locales — acceptance: revisión independiente con tres conclusiones, críticos resueltos, README/decisión004/STATUS/evidencia actualizados y documento entregado sin merge/push automático (covers: S2; depends: T4).
+- [x] T1: Generar y configurar MS01 con Wrapper, migración y salud — acceptance: raíz correcta, AGENTS preservado, build/pruebas unitarias pasan y adaptador SQL/indicador de readiness configurados sin éxito fijo (covers: S2).
+- [x] T2: Generar y configurar MS02 con lockfile, migración y salud — acceptance: raíz correcta, Node22.22, AGENTS preservado, build/pruebas unitarias pasan y adaptador SQL/respuesta503 implementados sin éxito fijo (covers: S2).
+- [x] T3: Preparar Compose, credenciales locales y aislamiento — acceptance: un servidor propio, dos bases/roles y conexiones ajenas rechazadas sin exponer secretos (covers: S2).
+- [x] T4: Verificar integración, caída/recuperación y frontend — acceptance: migraciones/historial reales e idempotentes, comandos observados, readiness200→503→200 y liveness200 sin reinicio; Shell/MFs sin regresión (covers: S2; depends: T1,T2,T3).
+- [x] T5: Revisar y cerrar documentación/commits locales — acceptance: revisión independiente con tres conclusiones, críticos resueltos, README/decisión004/STATUS/evidencia actualizados y documento entregado sin merge/push automático (covers: S2; depends: T4).
