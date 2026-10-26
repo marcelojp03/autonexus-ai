@@ -1,5 +1,9 @@
 # MS02 Empleados
 
+## Runtime vigente de CU01 integrado
+
+Ejecutar esta aplicación desde su carpeta en la raíz principal autonexus-ai. CU01 ya está en main b8d8079; las referencias a .worktrees/cu01-keycloak en la evidencia posterior son históricas. Ambos Compose se administran desde infra/compose e infra/keycloak de raíz, conservando privados y volúmenes. Ubicaciones, comandos y límites: docs/decisions/006-cu01-main-runtime.md y scripts/cu01/README.md (rutas desde la raíz). No se hizo push ni se eliminaron ramas/worktrees.
+
 Tecnología: NestJS. Persistencia: PostgreSQL propia. Responsabilidad: Bloque 1.
 Alcance funcional previsto: empleados, especialidades, jornadas, disponibilidad, reservas de horario y asignaciones.
 

@@ -1,5 +1,17 @@
 # Estado comprobado
 
+## CU01 integrado: runtime definitivo verificado (2026-10-26)
+
+La inspección inicial encontró main y feat/cu01-keycloak ya en b8d8079, divergencia0/0 y worktrees limpios. b8d8079 es hijo de86d81af y exclusivamente documental; código revisado1963ce3..86d81af. No se repitió un merge. Se preservan ramas/worktrees, sin push. Los apartados CU01 anteriores que sitúan main en1963ce3 son históricos.
+
+Las seis aplicaciones se ejecutan ahora desde sus carpetas de raíz (rutas absolutas de artefactos verificadas). PostgreSQL empresarial conserva ownership infra/compose de raíz; IdP fue recreado con ownership/config/bind infra/keycloak de raíz sobre el MISMO volumen nombrado. Configuraciones privadas IdP/servicios comparadas byte a byte con worktree, sin regenerar secretos ni reinicializar bases. Ambos volúmenes existentes y tres contenedores healthy. Ver decisión006.
+
+Builds afectados desde raíz PASS con exit0: Operaciones package -DskipTests, Empleados frozen/build, Angular OIDC/integrados y demo Empleados, Shell frozen/build/staging. No se repitieron suites completas CU01 por rutina. Regresión ownership Windows: red con separadores dobles, green1/1 y comparación completa de ubicaciones. manage.mjs verify PASS con IdP real. verify-main-runtime.mjs PASS en ownership/volúmenes/privados/readinessSQL/401.
+
+Smoke real terminado desde raíz: browser13 etapas PASS/exit0, loginPKCE, navegación sin nuevo documento/login, reloadSSO, refreshreal, APIs200/403, standalone, logout, sin rol y demo;0 pageErrors/errores inesperados/recursos fallidos,2x403 intencionales. PostgreSQL17.11: aislamientoPASS,3rechazos por rol y1migración por servicio, exit0. Evidencia: output/cu01-main-integration/{browser-main.log,browser-main.exit,postgres-main.log,postgres-main.exit} y builds *.exit.
+
+Límite honesto: el auxiliar de traslado se interrumpió después de recrear IdP y no retuvo el snapshot previo de IDs. No se acredita otra comparación automática antes/después de todos los IDs; sí volumen nombrado existente, bytes privados idénticos, configuración/cuentas y autenticación reales conservadas. Una sesión auxiliar falló por SQLite bloqueado del harness; el principal retomó y verificó sin repetir recreaciones.
+
 Fecha: 2026-10-26. Los apartados anteriores de base/composición conservan fechas y resultados históricos.
 
 ## Preparado

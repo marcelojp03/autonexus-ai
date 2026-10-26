@@ -1,5 +1,11 @@
 # Verificación real de navegador CU01
 
+## Ubicación vigente tras integración local
+
+CU01 ya está en main b8d8079 (igual a feat/cu01-keycloak). El runtime fue trasladado a la raíz principal: ejecutar servicios, web y ambos Compose desde sus carpetas de esa raíz. PostgreSQL empresarial se administra desde infra/compose; Keycloak/PostgreSQL IdP desde infra/keycloak. No administrar estos contenedores desde los worktrees históricos. Se conservan secretos, volúmenes, ramas y worktrees, sin push. La descripción posterior del worktree es histórica; los comandos de ejecución/verificación se aplican ahora desde raíz. Detalles, límites y tabla de aplicaciones en docs/decisions/006-cu01-main-runtime.md.
+
+Comprobación no mutante desde raíz: node scripts/cu01/verify-main-runtime.mjs. Smoke afectado: pwsh -NoProfile -File scripts/cu01/run-main-smoke.ps1; esperar salida y códigos en output/cu01-main-integration/{browser-main,postgres-main}.exit. No repetir init-env ni bootstrap para trasladar un runtime existente. El script start-main-runtime.ps1 se usó para el cambio controlado de procesos propios; valida todos los propietarios antes de detener ninguno y conserva los ya ubicados en main.
+
 ## Ejecutar el conjunto local
 
 CU01 vive en la rama feat/cu01-keycloak, worktree .worktrees/cu01-keycloak. main conserva la base backend integrada en1963ce3; no contiene por ello esta autenticación. No arrancar simultáneamente las versiones main/CU01 en los mismos puertos ni detener procesos de otro proyecto para liberarlos.
