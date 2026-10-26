@@ -1,5 +1,7 @@
 # MF01 Empleados
 
+CU03 dispone de backend propietario y contratos en feat/cu03-employees, pero el BFF del participante2 todavía no está generado. Por eso estas vistas conservan NG-ALAIN y sus demos: no son CRUD empresarial ni integración CU03 web. No se agregó conexión directa a REST empresarial. Consultar contracts/graphql/employees.graphql y contracts/auth/employees.md desde raíz para la integración futura.
+
 ## Runtime vigente de CU01 integrado
 
 Ejecutar esta aplicación desde su carpeta en la raíz principal autonexus-ai. CU01 ya está en main b8d8079; las referencias a .worktrees/cu01-keycloak en la evidencia posterior son históricas. Ambos Compose se administran desde infra/compose e infra/keycloak de raíz, conservando privados y volúmenes. Ubicaciones, comandos y límites: docs/decisions/006-cu01-main-runtime.md y scripts/cu01/README.md (rutas desde la raíz). No se hizo push ni se eliminaron ramas/worktrees.

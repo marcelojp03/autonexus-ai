@@ -1,6 +1,6 @@
 ---
 feature: cu03-employees
-status: designed
+status: in-progress
 updated: 2026-10-26
 source: feat/cu03-employees
 ---
@@ -59,12 +59,14 @@ CU02 completo, elevación de roles, inicializar BFF ajeno, CRUD web sin BFF, jor
 
 ## Tasks
 
-- [ ] T1: Verificar CU01 y fijar runtime de raíz — acceptance: ownership/rutas documentados, secretos/volúmenes conservados y smoke real PASS (covers: S2.1).
-- [ ] T2: Implementar dominio, migraciones y REST autorizado — acceptance: PostgreSQL real confirma CRUD sin borrado, historial, duplicados, validaciones, autorización y concurrencia (depends: T1; covers: S2.2, S2.3).
-- [ ] T3: Implementar identidad opcional y recuperación — acceptance: Keycloak real y fallos controlados confirman subject estable, pending/retry/conflict y ausencia de duplicados (depends: T2; covers: S2.4).
-- [ ] T4: Publicar contratos tempranos para participante 2 y mantenerlos alineados — acceptance: OpenAPI, SDL y autenticación definidos antes del cierre de implementación, coherentes con REST final, con BFF/interfaz pendientes explícitos (covers: S2.5).
+- [x] T1: Verificar CU01 y fijar runtime de raíz — acceptance: ownership/rutas documentados, secretos/volúmenes conservados y smoke real PASS (covers: S2.1).
+- [x] T2: Implementar dominio, migraciones y REST autorizado — acceptance: PostgreSQL real confirma CRUD sin borrado, historial, duplicados, validaciones, autorización y concurrencia (depends: T1; covers: S2.2, S2.3).
+- [x] T3: Implementar identidad opcional y recuperación — acceptance: Keycloak real y fallos controlados confirman subject estable, pending/retry/conflict y ausencia de duplicados (depends: T2; covers: S2.4).
+- [x] T4: Mantener alineados los contratos tempranos del participante 2 — acceptance: contratos publicados en 12f44e6 antes de implementación; comprobar coherencia con REST final y BFF/interfaz pendientes explícitos (covers: S2.5).
 - [ ] T5: Verificar regresión, revisar y cerrar commits locales — acceptance: evidencia observada, cero críticos abiertos y documentación actualizada sin push (depends: T4; covers: S2.6).
 
 ## Journey log
+
+Evidencia previa a revisión: main89bc8e1 conserva CU01 y su runtime; contratos tempranos12f44e6. Empleados frozen/build PASS,55unitarias+42HTTP PASS, lint/tipos exit0 con0advertencias. Matriz real12grupos incluyó pérdidas remota/local, ownership y caída/restauración IdP; luego8grupos funcionales del código final sin repetir recuperación no afectada. Regresión CU01 desde raíz13etapas exit0 y aislamientoSQL1/2migraciones. OpenAPI3.1/sintaxis SDL PASS. Logs en output/cu03-employees del worktree y output/cu01-main-integration de raíz. Revisión independiente aún pendiente; no se marca delivered por pruebas propias.
 
 2026-10-26: diseño aprobado mediante Question; usuario exige identidad técnica dedicada (no bootstrap habitual), contratos tempranos y límite explícito de cuenta sin acceso operativo. No requiere nuevas confirmaciones para decisiones técnicas rutinarias.

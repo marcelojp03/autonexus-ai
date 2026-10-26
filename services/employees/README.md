@@ -1,5 +1,60 @@
 # MS02 Empleados
 
+## CU03 — backend funcional en feat/cu03-employees
+
+Consulta paginada/detalle/historial, alta, PUT completo y desactivación sin borrado; datos personales/laborales, cargo y especialidades. Documento/email únicos incluso inactivos, validaciones y control de versión. Todas las acciones requieren administrador en servidor usando JWT CU01. Cargo/especialidad no asignan roles. No hay BFF ejecutable y no se modificó el frontend para consumir REST empresarial: esta entrega no acredita CU02 ni CU03 web completo.
+
+Contratos desde raíz: contracts/rest/employees.openapi.yaml, contracts/graphql/employees.graphql (propuesta), contracts/auth/employees.md. Especificación: docs/compose/spec/cu03-employees.md; decisiones006/007. Publicados tempranamente en12f44e6 y alineados durante pruebas, sin push. Los apartados posteriores de base/CU01 son evidencia histórica.
+
+### Persistencia y recuperación
+
+Migración1793023200000 agrega tablas en schema employees: employee_records, employee_history, employee_operations e identity_intents. Agregado JSONB en PostgreSQL con constraints/índices únicos, sin ORM compartido ni bases ajenas. Dos migraciones propietarias tras CU03; repetir run es no-op. Sin synchronize ni migraciones automáticas al arrancar. No ejecutar down destructivo para borrar historia.
+
+Empleado+historial+intención+resultado idempotente tienen una transacción SQL local. Keycloak se procesa después del commit, fuera de la transacción. Respuesta de mutación conserva snapshot guardado (puede pending); GET detalle muestra resultado actual. Replay idéntico no repite efectos; mismo operationId con otra acción/actor/contenido da409. expectedVersion evita sobrescrituras. Retry no cambia versión empresarial y recupera intenciones durables tras reinicio; no hay worker automático.
+
+Sin access.requested no se contacta IdP. Cliente técnico confidencial autonexus-employees-admin con client_credentials y manage-users explícito; no cuenta personal ni bootstrap habitual. Credenciales solo en archivo backend privado indicado por EMPLOYEES_IDP_CLIENT_FILE. Ausente/inválido permite guardar datos, pero acceso queda failed/pending con código seguro, nunca synced ficticio. Provisión de infraestructura separada conserva secretos CU01. manage-users es realm-wide en IdP: las restricciones employeeId/username/subject son del adaptador y no equivalen a permisos finos por registro en Keycloak.
+
+Username determinista employee-UUID, employeeId admin-only y subject estable. Error/timeout no revierte empleado ni confirma rechazo remoto. Reintento recupera creación con respuesta perdida y fallo de confirmación SQL; cuenta ajena produce conflict sin modificarla. Lock de sesión por empleado serializa mutación/sync sin transacción abierta durante red. Contención503 antes del guardado admite retry mismo operationId. Desactivar conserva historia y solicita deshabilitar cuenta. Cuenta creada sin roles empresariales ni credencial habilitada todavía NO tiene acceso operativo al taller; synced no implementa CU02 ni login listo. JWT previo puede seguir válido hasta exp+5s.
+
+### Ejecutar CU03 sin desplazar CU01
+
+Desde services/employees del worktree CU03, con Node22.22.3 y pnpm12.6.0 fijados en las secciones históricas:
+
+~~~powershell
+$node = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'
+$pnpm = 'C:/Users/marcelo/AppData/Local/node/corepack/v1/pnpm/12.6.0/bin/pnpm.mjs'
+$env:Path = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3;' + $env:Path
+$runtimeRoot = Split-Path (& git rev-parse --path-format=absolute --git-common-dir)
+. (Join-Path $runtimeRoot 'infra/compose/scripts/load-service-env.ps1') -Service employees
+$env:EMPLOYEES_IDP_CLIENT_FILE = Join-Path $runtimeRoot 'infra/keycloak/.local/employees-client.json'
+# Una vez por infraestructura; repetición conserva cliente/secreto/fixtures:
+& $node ../../infra/keycloak/scripts/provision-employees-client.mjs
+& $node $pnpm install --frozen-lockfile
+& $node $pnpm build
+& $node $pnpm migration:run
+# Instancia manual de rama, sin ocupar3002 de CU01:
+$env:PORT = '3003'
+& $node dist/main.js
+~~~
+
+No copiar secretos a comandos/URLs ni volver a init-env. Ambos Compose siguen bajo raíz principal. El verificador real carga privados en memoria desde esa raíz y levanta una instancia efímera; la cierra al terminar. No deja un CU03 web o una API3003 permanente por inferencia.
+
+### Verificación reproducible
+
+Evidencia observada al preparar revisión: build PASS,55unitarias y42HTTP PASS, tipos/lint exit0 con0advertencias. Matriz real de PostgreSQL/Keycloak PASS12grupos; después del ajuste final de validación se repitieron8grupos funcionales, incluido duplicado concurrente, sin repetir la caída IdP no afectada. OpenAPI/sintaxis SDL PASS; CU01 desde raíz repitió13etapas y aislamientoSQL1/2migraciones. Estado de revisión/cierre: STATUS y especificación, no inferirlo del número de tests.
+
+~~~powershell
+# Desde este servicio, sin conexiones SQL/IdP para las unidades/HTTP con dobles:
+pwsh -NoProfile -File scripts/verify-local.ps1
+# Con IdP/SQL propios activos; migración y API reales, puerto efímero:
+& $node scripts/verify-cu03-real.mjs --skip-recovery
+# Matriz completa: incluye parada/restauración controlada SOLO del Keycloak propio,
+# pérdida de respuesta tras HTTP real y trigger temporal de fallo SQL con finally:
+& $node scripts/verify-cu03-real.mjs
+~~~
+
+Logs/códigos ignorados: output/cu03-employees de la raíz del worktree. El launcher en background no acredita éxito; esperar código de salida y resumen final. Fixture synthetics example.invalid se conservan/desactivan para probar historia, sin borrar empleados, bases ni cuentas ajenas. Triggers/funciones temporales de fallo se retiran en finally. La pérdida de respuesta y confirmación SQL son fallos inyectados sobre adaptadores/SQL reales; no se presentan como una caída espontánea del IdP. La prueba de caída sí detiene/restaura el contenedor real con ownership comprobado.
+
 ## Runtime vigente de CU01 integrado
 
 Ejecutar esta aplicación desde su carpeta en la raíz principal autonexus-ai. CU01 ya está en main b8d8079; las referencias a .worktrees/cu01-keycloak en la evidencia posterior son históricas. Ambos Compose se administran desde infra/compose e infra/keycloak de raíz, conservando privados y volúmenes. Ubicaciones, comandos y límites: docs/decisions/006-cu01-main-runtime.md y scripts/cu01/README.md (rutas desde la raíz). No se hizo push ni se eliminaron ramas/worktrees.

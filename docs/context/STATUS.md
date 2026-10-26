@@ -1,5 +1,32 @@
 # Estado comprobado
 
+## CU03 backend propietario — implementado y verificado; revisión independiente pendiente
+
+Fecha2026-10-26. Rama feat/cu03-employees, worktree .worktrees/cu03-employees, base CU01 b8d8079 e incorporación de main89bc8e1. Contratos REST/GraphQL/autenticación publicados antes de implementar en12f44e6. Especificación aprobada docs/compose/spec/cu03-employees.md y decisión007. Sin push ni merge CU03 a main; no se tocaron AGENTS ni se reasignó el BFF del participante2.
+
+Backend real de consulta/listado/historial, alta, modificación y desactivación sin borrado. Datos personales/laborales, cargo y especialidades; duplicados incluso inactivos, control de versión, auditoría e idempotencia ligada a actor/acción/destino/contenido. Siete endpoints autorizan administrador usando sesión CU01; cargo/especialidades no son roles. Persistencia exclusivamente PostgreSQL de Empleados: migración1793023200000 y cuatro tablas propias; Empleados ahora tiene2migraciones y Operaciones conserva1. No synchronize ni reinicialización de bases.
+
+Cuenta Keycloak opcional con UUID empresarial/employeeId admin-only y subject estable. Cliente confidencial técnico autonexus-employees-admin con client_credentials, manage-users y scope explícitos; backend no usa bootstrap/personales. Su secreto nuevo se guarda por separado y se conservan los privados CU01. manage-users tiene alcance realm-wide; ownership por empleado se limita en adaptador, no es FGAP del IdP. Sin roles empresariales ni credencial habilitada la cuenta no tiene acceso operativo; synced no acredita CU02.
+
+Transacción local empleado/historial/intención/resultado; IdP fuera de transacción, lock de sesión compartido por mutación/sync. Estado laboral separado de pending/synced/failed/conflict. Retry explícito recupera tras reinicio y éxito remoto con respuesta o confirmación SQL perdida, sin duplicar cuentas. Ownership incompatible no modifica cuenta ajena. No worker automático ni transacción atómica PostgreSQL+Keycloak.
+
+| Verificación observada | Resultado |
+| --- | --- |
+| Empleados frozen/build | PASS, lockfile/versiones conservados; build final exit0 |
+| Unitarias finales | PASS55/8archivos; incluye40CU01/base y15CU03; texto/Unicode rojo→verde y protección identidad propia |
+| HTTP final, sin paralelismo entre archivos | PASS42/3archivos;32CU01/base+10CU03; RSA sintético/repositorio falso explícitos |
+| Lint/tipos final | PASS exit0;0errores/0advertencias de lint |
+| Matriz PostgreSQL+Keycloak real | PASS12grupos: persistencia, migración/no-op,401/403, duplicados/versión/historial, desactivación, cuenta opcional, respuesta perdida/reinicio/retry, ownership ajeno, fallo SQL posterior al remoto, lock entre conexiones y caída/restauración IdP real |
+| Funcional real posterior a validación final | PASS8grupos/exit0, incluido duplicado concurrente; no repite caída/recuperación no afectadas |
+| Contratos finales | OpenAPI3.1/referencias y sintaxis SDL PASS; no resolvers/BFF ejecutables |
+| Regresión CU01 desde raíz tras cambios IdP | PASS13etapas/exit0,0errores inesperados/recursos fallidos y2x403 intencionales; SQL aislamientoPASS, versiones1/2 |
+
+Evidencia local ignorada en output/cu03-employees del worktree: {build,test,test-e2e,lint,types}.{log,exit}, real.log/real.exit y functional-final.log. CU01: output/cu01-main-integration de raíz. Dos fallos iniciales de verificadores no acreditados: fixture documento41caracteres excedía40 y comparación entre representaciones IdP distintas; corregidos sin relajar reglas. Compilación inicial corrigió API real de QueryRunner sin genéricos; HTTP añadió probe falso explícito y ejecución secuencial, sin añadir secretos ni ocultar tests. Los PASS anteriores son ejecuciones posteriores observadas, no esos intentos.
+
+Aplicaciones CU01 y ambos Compose permanecen en raíz. CU03 real se ejecutó desde el worktree con Nest en puerto efímero y se cerró al terminar; no hay proceso CU03 permanente acreditado. README explica PORT3003 manual para conservar CU01 en3002. Los registros de prueba son sintéticos, se conservan y desactivan; no se borran empleados/historia. Triggers temporales de fallo se retiran en finally; IdP propio restaurado.
+
+BFF sigue siendo carpeta reservada, sin aplicación. Se entregan contratos al participante2; mf-employees conserva NG-ALAIN/demos y NO llama REST empresarial. No acreditar interfaz integrada, CU03 web completo, CU02, jornadas, agenda, Saga, otros servicios, Kubernetes ni producción. El cierre compose-next sigue sujeto a revisión independiente; fallos SQLite del sistema de agentes impidieron delegaciones de implementación y no se sustituyen por revisión propia.
+
 ## CU01 integrado: runtime definitivo verificado (2026-10-26)
 
 La inspección inicial encontró main y feat/cu01-keycloak ya en b8d8079, divergencia0/0 y worktrees limpios. b8d8079 es hijo de86d81af y exclusivamente documental; código revisado1963ce3..86d81af. No se repitió un merge. Se preservan ramas/worktrees, sin push. Los apartados CU01 anteriores que sitúan main en1963ce3 son históricos.
