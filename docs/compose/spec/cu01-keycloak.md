@@ -1,14 +1,47 @@
 ---
 feature: cu01-keycloak
-status: in-progress
+status: delivered
 updated: 2026-10-26
 branch: feat/cu01-keycloak
-commits: ""
+commits: "1963ce3..86d81af"
 ---
 
 # CU01 web — Keycloak, sesión compartida y APIs protegidas
 
 ## Report
+
+**What was built** — CU01 web local con Keycloak26.8.1/PostgreSQL17.11 propio, clientes públicos Code+PKCE S256 y cinco roles técnicos. Shell administra una única sesión/renovación en memoria y entrega SessionPort sin JWT a los Angular integrados. Standalone tiene propietario explícito y demo dedicado sin acceso a APIs protegidas. Operaciones y Empleados validan firma/issuer/audiencia/exp y aplican roles en recursos técnicos, manteniendo salud SQL real. No se implementan CU02, CRUD, BFF, Saga, Flutter/offline ni producción.
+
+La base quedó previamente integrada en main1963ce3; CU01 permanece en feat/cu01-keycloak y su worktree, sin push/merge automático. Las credenciales/volumen de aplicación se conservaron y el IdP está aislado. Se corrigieron la emisión G2 tardía con parche pnpm fijado, la allowlist del cargador y la recuperación del propietario ante pageshow.persisted. Revisión integral1963ce3..0a8bd2f y re-revisión0a8bd2f..86d81af: conformes en especificación/corrección/consistencia, C1/NC1 cerrados y cero críticos pendientes. El rango excluye este commit documental de cierre.
+
+**Verification** — comandos desde la aplicación/directorio correspondiente, con Node22.22.3/pnpm12.6.0/JDK21.0.8 seleccionados por proceso:
+
+| Comando / alcance | Resultado observado |
+| --- | --- |
+| Operaciones ./mvnw.cmd -B clean verify | PASS46 tests, JAR empaquetado; RSA/JWKS/MVC sintéticos diferenciados de integración |
+| Empleados frozen/build/test/test:e2e/lint/tsc | PASS40 unitarias+32 HTTP; lint0 errores/advertencias |
+| Angular ambos: frozen, test:session, app/spec types, test:chart-lifecycle | PASS2 política+6 G2 cada app; cuatro comprobaciones de tipos; regresión G2 red→green sin ocultar rechazos |
+| Angular ambos: build:integrated, build, build:demo | PASS6 builds finales con parche, secuenciales; avisos budgets/CommonJS conservados |
+| Shell pnpm test / run build | PASS15 pruebas y tsc/staging/Vite; hashes de main.js coinciden con Angular final |
+| IdP node --test scripts/config.test.mjs / manage verify, verify-idempotency, verify-persistence | PASS6 tests, metadata/PKCE/roles/clientes reales; mismos bytes privados e IDs tras reprovisión/restart |
+| node --test scripts/service-env-contract.test.mjs | PASS3 casos con fixtures temporales, sin .env reales |
+| node scripts/verify-cu01-api.mjs | PASS10 grupos reales, incluido rechazo IDtoken/firma alterada, refresh y access JWT200 tras logout→401 después de exp+tolerancia |
+| node scripts/verify-cu01-browser.mjs --demo-url http://127.0.0.1:4203 --reuse-captures | PASS12 etapas;0 pageErrors/errores inesperados/recursos/PKCE inválido/tokenFailures;2x403 deliberados aparte; SSO/refresh/logout/standalone/demo reales |
+| node scripts/verify-cu01-bfcache.mjs --synthetic-events | Red sin propietario nuevo→green con recarga real/login al IdP; son eventos persistidos simulados, no hit BFCache nativo |
+| Verificadores de base/health desde infra/compose de main | PASSaislamiento,3x42501 por rol,1 migración por servicio; live200 y ready200→503→200 con mismos PID dentro del ensayo |
+| Auditoría de staging / diff / revisión |0 valores privados/AGENTS modificados; diff sin errores; dos revisores secuenciales con runtimes propios pausados |
+
+Artefactos sanitizados en output/cu01-keycloak y PNG en output/playwright; datos privados del IdP solo en .env/.local ignorados. Desktop1440/mobile390 se verificaron y enmascararon antes; las repeticiones funcionales reusaron esas capturas al no cambiar presentación. BFCache nativo fue denegado con masked y no se acredita. ESLint global Angular adicional excedió el timeout y no se informa PASS. Estos límites no se sustituyen por pruebas sintéticas presentadas como integración.
+
+Tras las revisiones se reactivaron los seis procesos propios y tres contenedores conservando datos/configuración. Smoke final: live/ready200, protegidos anónimos401, issuer real correcto, web4200–4203 HTTP200, assets JavaScript200 e inexistente404; final-smoke.json PASS/exit0. Verificación de bases repetida: mismo aislamiento y una migración por servicio. Los PID comparados durante caída no se confunden con los procesos nuevos de la pausa/reanudación de revisión.
+
+**Journey log**
+
+- El fast-forward de backend-foundation y la ubicación de ownership de PostgreSQL se verificaron separadamente de CU01; no regenerar secretos al cambiar de workspace.
+- La automatización mantiene credenciales/tokens en RAM. Se usó Playwright ordinario porque el sandbox CLI no permite leer privadamente el fixture, sin registrar OAuth ni añadir hooks de producción.
+- El navegador detectó una continuación G2 después de destroy; se reprodujo con el servicio real y se fijó mediante parche versionado, sin upgrade ni supresión de errores.
+- La revisión encontró BFCache: pagehide no implica documento perdido definitivamente. La recuperación fuerza documento nuevo solo ante persisted y declara el límite del test nativo.
+- Logout no revoca JWT offline de inmediato: la prueba real separó refresh rechazado, access aún válido y posterior expiración401.
 
 ## [S1] Problema y precondiciones
 
@@ -108,7 +141,7 @@ CU02 funcional, CRUD empleados/clientes/órdenes, Saga, permisos empresariales p
 - [x] T3: Adaptar ambos Angular integrado/standalone/demo explícito — acceptance: una sesión en integrado, OIDC independiente configurado, ningún fallback demo ni JWT en Delon/storage; builds y pruebas (covers: S3; depends: T2).
 - [x] T4: Proteger Operaciones y Empleados — acceptance: firma/iss/aud/exp/roles validados,401/403 genéricos, salud real preservada y recursos técnicos sin CRUD (covers: S4; depends: T0).
 - [x] T5: Verificación real de CU01 y regresión — acceptance: navegador y APIs cumplen escenarios, refresh/logout/expiración observados y datos/ownership/puertos conservados (covers: S2,S3,S4,S5; depends: T2,T3,T4,T7,T8,T9).
-- [ ] T6: Revisión independiente y cierre local — acceptance: cero críticos pendientes, contratos/docs/STATUS/resultados y spec delivered con rango revisado; sin merge/push automático (covers: S5; depends: T5).
+- [x] T6: Revisión independiente y cierre local — acceptance: cero críticos pendientes, contratos/docs/STATUS/resultados y spec delivered con rango revisado; sin merge/push automático (covers: S5; depends: T5).
 - [x] T7: Corregir emisión G2 tardía sin cambiar framework — acceptance: regresión demuestra el fallo original y luego ausencia de emisión/error tras destroy, mantiene notificación viva/nueva instancia, parche reproducible en ambos lockfiles y navegación rápida sin errores Angular (covers: S3,S5; depends: T0).
 - [x] T8: Alinear allowlist del cargador de entorno con los ejemplos CU01 — acceptance: operaciones/empleados cargan las tres claves públicas OIDC desde fixtures sintéticos, claves desconocidas se rechazan y valores privados no se imprimen; tres pruebas PASS, sin modificar .env reales (covers: S2,S4,S5; depends: T0).
 - [x] T9: Recuperar propietario al restaurar BFCache — acceptance: eventos persistidos reproducen el propietario muerto antes del fix y después producen documento nuevo/login al IdP;15 unidades/build Shell y repetición SSO real12 etapas PASS; limitación nativa masked registrada (covers: S3,S5; depends: T2).

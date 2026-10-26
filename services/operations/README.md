@@ -148,3 +148,7 @@ Comandos de infraestructura y verificación: [infra/compose](../../infra/compose
 ## Ubicación definitiva de la base integrada
 
 Backend-foundation fue integrado por fast-forward a main3bbf499 por instrucción de Marcelo. Esta carpeta principal es ahora la ubicación runtime; las configuraciones privadas se copiaron sin cambiar sus bytes/credenciales, y el volumen e historial se conservaron. Recompilación y comprobación real desde la raíz PASS; ver output/backend-main-integration y STATUS. El worktree anterior sigue existiendo, pero no administra el contenedor actual; su verificador rechaza ownership desactualizado. No se hizo push.
+
+## Cierre integrado CU01 web
+
+En feat/cu01-keycloak el código/binario se ejecuta desde .worktrees/cu01-keycloak; el párrafo anterior describe la base histórica de main. PostgreSQL conserva su propietario en infra/compose de la raíz y las configuraciones privadas copiadas mantienen sus bytes. Build46 tests, API con tokens reales de Keycloak y salud SQL/outage PASS. La revisión integral y la re-revisión cerraron los hallazgos sin críticos pendientes; el runtime se reactivó con live/ready200 y protegido anónimo401. No es CRUD, CU02 ni BFF. Comandos conjuntos, evidencia y límites en ../../scripts/cu01/README.md y ../../docs/context/STATUS.md. No se integró CU01 en main ni se hizo push automático.
