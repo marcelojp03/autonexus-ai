@@ -106,3 +106,9 @@ Para una pausa normal, `docker compose --env-file .env stop postgres` conserva d
 ## Cierre de revisión
 
 Revisión independiente de7bc80a7..6027fce aprobada en cumplimiento/corrección/consistencia, sin críticos. La comparación de PID/StartTime durante caída la realizó el principal; verify-health no la captura automáticamente. Tras pausar los procesos propios para la revisión, PostgreSQL y ambos servicios se reactivaron: healthy y live/ready200; frontends4200/4201/4202HTTP200. No hubo merge/push automático ni cambios de negocio.
+
+## Runtime trasladado a main
+
+Por instrucción de Marcelo, la ejecución de esta base se trasladó de .worktrees/backend-foundation a la raíz principal tras el fast-forward a3bbf499. No ejecutar init-env para regenerar secretos: se copiaron los tres archivos privados con exclusión Git y comparación de bytes. Se recreó solo el contenedor propio para actualizar bind/config/working_dir; el volumen autonexus-backend-dev_postgres-data y sus usuarios/historiales permanecieron intactos.
+
+Se verificó desde esta raíz aislamiento, una migración por servicio y caída/restauración200→503→200 sin reiniciar apps. El verificador del worktree anterior se niega a parar el PostgreSQL por ownership distinto, comportamiento esperado; administrar con los scripts de esta ubicación definitiva. No se eliminaron worktree, rama o volumen y no se hizo push.

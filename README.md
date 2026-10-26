@@ -4,7 +4,7 @@ Segundo parcial de Ingeniería de Software II · UAGRM · Entrega: 10 de noviemb
 
 ## Estado
 
-Monorepositorio de AutoNexus AI. El Shell y los microfrontends Angular de Empleados y Operaciones están integrados y verificados localmente. La base técnica backend de Operaciones y Empleados está generada y verificada con PostgreSQL real en feat/backend-foundation, con revisión independiente satisfactoria; las funciones de negocio, Keycloak y CU01 real siguen pendientes. Consultar `docs/context/STATUS.md` para evidencia y límites.
+Monorepositorio de AutoNexus AI. El Shell y los microfrontends Angular de Empleados y Operaciones están integrados y verificados localmente. La base técnica backend de Operaciones y Empleados está generada y verificada con PostgreSQL real integrada localmente en main por fast-forward, con revisión independiente satisfactoria; las funciones de negocio, Keycloak y CU01 real siguen pendientes. Consultar `docs/context/STATUS.md` para evidencia y límites.
 
 ## Primeros pasos
 
@@ -45,7 +45,7 @@ Monorepositorio de AutoNexus AI. El Shell y los microfrontends Angular de Emplea
 
 ## Trabajo en equipo
 
-La raíz Git única es `autonexus-ai`. Remoto: https://github.com/marcelojp03/autonexus-ai.git. Las carpetas `.git` de NG-ALAIN copiadas en ambos Angular fueron retiradas con autorización de Marcelo y enviadas a la Papelera; los archivos y cambios de las aplicaciones permanecen intactos. Ver `docs/decisions/003-monorepositorio-git.md`. No se ha hecho push desde esta preparación.
+La raíz Git única es `autonexus-ai`. Remoto: https://github.com/marcelojp03/autonexus-ai.git. Las carpetas `.git` de NG-ALAIN copiadas en ambos Angular fueron retiradas con autorización de Marcelo y enviadas a la Papelera; los archivos y cambios de las aplicaciones permanecen intactos. Ver `docs/decisions/003-monorepositorio-git.md`. No se ha hecho push desde esta preparación. Backend-foundation está integrado en main y el runtime usa esta raíz; el worktree anterior se conserva.
 
 Usar ramas breves por tarea/CU y revisar cambios antes de integrar en main. Los archivos de contexto se versionan con el código. Las decisiones funcionales se registran en Notion; mantener sus copias locales sincronizadas y reportar discrepancias.
 Notion: https://app.notion.com/p/4032585d73c181a4acc5f95647d44de4?pvs=204

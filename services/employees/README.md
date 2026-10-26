@@ -39,7 +39,7 @@ Se conservaron los rangos TypeScript/Vitest y herramientas compatibles del gener
 Ejecutar desde **la raíz de este servicio**, no desde la raíz del monorepo. Node global 22.14 y pnpm global 11 no se usan.
 
 ```powershell
-Set-Location 'C:/UAGRM/Ingenieria de Software 2/segundo parcial/autonexus-ai/.worktrees/backend-foundation/services/employees'
+Set-Location 'C:/UAGRM/Ingenieria de Software 2/segundo parcial/autonexus-ai/services/employees'
 $env:PATH = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3;' + $env:PATH
 $node = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'
 $pnpm = 'C:/Users/marcelo/AppData/Local/node/corepack/v1/pnpm/12.6.0/bin/pnpm.mjs'
@@ -128,3 +128,7 @@ La verificación principal repitió frozen/build,13pruebas unitarias+3 HTTP y li
 El proceso Node 22.22.3 real sirve127.0.0.1:3002. Liveness/readiness200UP; PostgreSQL detenido→live200/ready503DOWN; PostgreSQL restaurado→live200/ready200UP, mismo PID/hora de inicio, sin reiniciar Node. Los cuerpos contienen exclusivamente status. El rol conecta a su base y recibe42501 para Operaciones, postgres ytemplate1, sin privilegios elevados.
 
 Scripts y comandos en [infra/compose](../../infra/compose/README.md). Logs ignorados en `../../output/backend-foundation/`, incluidos build/tests, migraciones, aislamiento y health-outage. Revisión independiente concluida sin críticos; después se reactivó el servicio con live/ready200; ningún CU de negocio, Keycloak, CRUD o Saga se acredita por esta base técnica.
+
+## Ubicación definitiva de la base integrada
+
+Backend-foundation fue integrado por fast-forward a main3bbf499 por instrucción de Marcelo. Esta carpeta principal es ahora la ubicación runtime; las configuraciones privadas se copiaron sin cambiar sus bytes/credenciales, y el volumen e historial se conservaron. Recompilación y comprobación real desde la raíz PASS; ver output/backend-main-integration y STATUS. El worktree anterior sigue existiendo, pero no administra el contenedor actual; su verificador rechaza ownership desactualizado. No se hizo push.

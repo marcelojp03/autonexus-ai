@@ -28,7 +28,7 @@ Versiones reales: Boot parent 4.1.2; Java/javac Oracle 21.0.8; Wrapper 3.3.4 (on
 Todos los comandos siguientes se ejecutan desde la raíz absoluta del servicio:
 
 ```powershell
-Set-Location 'C:/UAGRM/Ingenieria de Software 2/segundo parcial/autonexus-ai/.worktrees/backend-foundation/services/operations'
+Set-Location 'C:/UAGRM/Ingenieria de Software 2/segundo parcial/autonexus-ai/services/operations'
 $env:JAVA_HOME = 'C:/Program Files/Java/jdk-21'
 $env:PATH = "$env:JAVA_HOME/bin;$env:PATH"
 ./mvnw.cmd --version
@@ -110,3 +110,7 @@ Realizada en el worktree feat/backend-foundation, con Node 22.22.3, JDK 21.0.8 y
 - Shell y MFs previos siguen funcionando. No se modificaron fuentes ni versiones frontend.
 
 Comandos de infraestructura y verificación: [infra/compose](../../infra/compose/README.md). Logs locales ignorados: `../../output/backend-foundation/operations-build.log`, migraciones y `health-outage.log`. Revisión independiente completada: cumplimiento/corrección/consistencia conformes, sin críticos. Tras la pausa planificada de revisión, el servicio se reactivó con live/ready200. Avisos no bloqueantes: metadata de feeds auxiliares Flyway401 y Mockito/Byte Buddy; no se añadieron credenciales para esos feeds ni se ocultaron advertencias.
+
+## Ubicación definitiva de la base integrada
+
+Backend-foundation fue integrado por fast-forward a main3bbf499 por instrucción de Marcelo. Esta carpeta principal es ahora la ubicación runtime; las configuraciones privadas se copiaron sin cambiar sus bytes/credenciales, y el volumen e historial se conservaron. Recompilación y comprobación real desde la raíz PASS; ver output/backend-main-integration y STATUS. El worktree anterior sigue existiendo, pero no administra el contenedor actual; su verificador rechaza ownership desactualizado. No se hizo push.

@@ -97,6 +97,12 @@ Mismos PID/hora de inicio Java/Node durante caída/restauración. El verificador
 
 README por servicio/infra con comandos reales para configurar, instalar, compilar, migrar, ejecutar y verificar. Evidencia local ignorada: output/backend-foundation (build/tests, migraciones, aislamiento, health-outage, frontend-browser). Revisión independiente de7bc80a7..6027fce: cumplimiento, corrección y consistencia conformes;0críticos. Se reactivaron después los procesos propios: PostgreSQL healthy, Ops8081/Empleados3002live/ready200 y frontends4200/4201/4202HTTP200. El script no compara PID automáticamente: la identidad durante caída fue comprobada por el principal. Especificación delivered con evidencia y tareas completas; cierre Git local sin merge/push automático.
 
+## Integración local de backend-foundation en main
+
+El 2026-10-25, por instrucción de Marcelo, main avanzó por fast-forward de7bc80a7 a3bbf499; feat/backend-foundation y su worktree se conservaron, sin push. Las tres configuraciones privadas se copiaron a la carpeta principal con creación exclusiva/comparación byte a byte, sin regenerar contraseñas. Se recompiló allí: Maven12tests PASS; Empleados frozen/build,13unitarias+3HTTP PASS. Los primeros intentos de consola excedieron60s y no se acreditan; verificaciones desacopladas terminaron con exit0.
+
+El contenedor PostgreSQL propio fue recreado para que bind/config/ownership apunten a infra/compose de la raíz principal. Se comprobó el mismo volumen autonexus-backend-dev_postgres-data, credenciales conservadas y una migración por servicio. El verificador de raíz pasó caída/restauración200→503→200 con mismos PID/hora de inicio; el verificador del worktree anterior rechazó ownership antes de mutar. La ejecución definitiva de esta base está en la raíz; el worktree se conserva como fuente histórica, no como dueño runtime. Evidencia local: output/backend-main-integration. CU01/Keycloak siguen pendientes de la siguiente rama.
+
 ## Pendiente
 
 - Identificar participantes 2 y 3 por nombre.
