@@ -29,3 +29,9 @@ Timeout no confirma rechazo. Username employee-UUID + employeeId + subject estab
 REST funcional de propietario; OpenAPI y SDL/operaciones GraphQL propuestos versionados antes de implementación. El BFF del participante2 sigue sin generar: debe validar sesión/permiso y propagar bearer autorizado con audiencia Empleados; su audiencia propia/exchange requieren acuerdo. No se inicializa su aplicación ni se conecta mf-employees directamente a REST. NG-ALAIN y demos se conservan.
 
 El runtime CU01 permanece en raíz. CU03 se verifica con Nest real en puerto efímero desde el worktree, contra PostgreSQL/Keycloak propietarios de raíz; no debe administrar Compose desde esa copia. Para una instancia manual simultánea se documenta PORT3003 loopback, manteniendo CU01 en3002. Esto no acredita BFF ni interfaz integrada.
+
+## Amendment de revisión
+
+Email de contacto: dot-atom ASCII y dominio DNS/punycode; local<=64, etiquetas DNS1–63 sin guiones extremos y total254, sin lookup DNS ni SMTPUTF8/mailbox entre comillas. Ocho inválidos reproducidos en rojo y regla corregida.
+
+No reactivar identidades existentes por editar datos laborales: las escrituras posteriores a creación solo conservan enabled u ordenan false. Cuenta ya deshabilitada→failed/IDP_ACCOUNT_DISABLED, sin habilitar; acción autorizada IdP separada, sin implementar CU02. synced expresa última confirmación, no una foto remota continua. Un nuevo comando retry siempre reconcilia datos deseados vigentes sin otra versión laboral, incluso desde synced; el mismo operationId sigue siendo replay sin efectos. Una sesión/lock SQL perdido no puede garantizar el orden absoluto de perfiles remotos: la deshabilitación es monotónica en este adaptador y la reparación explícita resuelve una escritura tardía, sin prometer transacción distribuida.

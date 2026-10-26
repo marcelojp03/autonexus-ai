@@ -10,7 +10,7 @@ Contratos desde raíz: contracts/rest/employees.openapi.yaml, contracts/graphql/
 
 Migración1793023200000 agrega tablas en schema employees: employee_records, employee_history, employee_operations e identity_intents. Agregado JSONB en PostgreSQL con constraints/índices únicos, sin ORM compartido ni bases ajenas. Dos migraciones propietarias tras CU03; repetir run es no-op. Sin synchronize ni migraciones automáticas al arrancar. No ejecutar down destructivo para borrar historia.
 
-Empleado+historial+intención+resultado idempotente tienen una transacción SQL local. Keycloak se procesa después del commit, fuera de la transacción. Respuesta de mutación conserva snapshot guardado (puede pending); GET detalle muestra resultado actual. Replay idéntico no repite efectos; mismo operationId con otra acción/actor/contenido da409. expectedVersion evita sobrescrituras. Retry no cambia versión empresarial y recupera intenciones durables tras reinicio; no hay worker automático.
+Empleado+historial+intención+resultado idempotente tienen una transacción SQL local. Keycloak se procesa después del commit, fuera de la transacción. Respuesta de mutación conserva snapshot guardado (puede pending); GET detalle muestra resultado actual. Replay idéntico no repite efectos; mismo operationId con otra acción/actor/contenido da409. expectedVersion evita sobrescrituras. Retry no cambia versión empresarial y reconcilia el estado vigente (incluso desde la última confirmación synced) tras reinicio o escritura incierta; no hay worker automático.
 
 Sin access.requested no se contacta IdP. Cliente técnico confidencial autonexus-employees-admin con client_credentials y manage-users explícito; no cuenta personal ni bootstrap habitual. Credenciales solo en archivo backend privado indicado por EMPLOYEES_IDP_CLIENT_FILE. Ausente/inválido permite guardar datos, pero acceso queda failed/pending con código seguro, nunca synced ficticio. Provisión de infraestructura separada conserva secretos CU01. manage-users es realm-wide en IdP: las restricciones employeeId/username/subject son del adaptador y no equivalen a permisos finos por registro en Keycloak.
 
@@ -41,7 +41,7 @@ No copiar secretos a comandos/URLs ni volver a init-env. Ambos Compose siguen ba
 
 ### Verificación reproducible
 
-Evidencia observada al preparar revisión: build PASS,55unitarias y42HTTP PASS, tipos/lint exit0 con0advertencias. Matriz real de PostgreSQL/Keycloak PASS12grupos; después del ajuste final de validación se repitieron8grupos funcionales, incluido duplicado concurrente, sin repetir la caída IdP no afectada. OpenAPI/sintaxis SDL PASS; CU01 desde raíz repitió13etapas y aislamientoSQL1/2migraciones. Estado de revisión/cierre: STATUS y especificación, no inferirlo del número de tests.
+Evidencia observada al preparar revisión: build PASS,67unitarias y42HTTP PASS, tipos/lint exit0 con0advertencias. Matriz final real de PostgreSQL/Keycloak PASS15grupos, incluidos email inválido, duplicado concurrente, no reactivación por edición y pérdida de sesión SQL con respuesta tardía/reparación. OpenAPI/sintaxis SDL PASS; CU01 desde raíz repitió13etapas y aislamientoSQL1/2migraciones. Estado de revisión/cierre: STATUS y especificación, no inferirlo del número de tests.
 
 ~~~powershell
 # Desde este servicio, sin conexiones SQL/IdP para las unidades/HTTP con dobles:
@@ -53,7 +53,7 @@ pwsh -NoProfile -File scripts/verify-local.ps1
 & $node scripts/verify-cu03-real.mjs
 ~~~
 
-Logs/códigos ignorados: output/cu03-employees de la raíz del worktree. El launcher en background no acredita éxito; esperar código de salida y resumen final. Fixture synthetics example.invalid se conservan/desactivan para probar historia, sin borrar empleados, bases ni cuentas ajenas. Triggers/funciones temporales de fallo se retiran en finally. La pérdida de respuesta y confirmación SQL son fallos inyectados sobre adaptadores/SQL reales; no se presentan como una caída espontánea del IdP. La prueba de caída sí detiene/restaura el contenedor real con ownership comprobado.
+Logs/códigos ignorados: output/cu03-employees de la raíz del worktree. El launcher en background no acredita éxito; esperar código de salida y resumen final. Los registros sintéticos example.invalid se conservan/desactivan para probar historia, sin borrar empleados, bases ni cuentas ajenas. Triggers/funciones temporales de fallo se retiran en finally. La pérdida de respuesta y confirmación SQL son fallos inyectados sobre adaptadores/SQL reales; no se presentan como una caída espontánea del IdP. La prueba de caída sí detiene/restaura el contenedor real con ownership comprobado.
 
 ## Runtime vigente de CU01 integrado
 
@@ -265,3 +265,7 @@ Backend-foundation fue integrado por fast-forward a main3bbf499 por instrucción
 ## Cierre integrado CU01 web
 
 En feat/cu01-keycloak el código/binario se ejecuta desde .worktrees/cu01-keycloak; el párrafo anterior describe la base histórica de main. PostgreSQL conserva su propietario en infra/compose de la raíz y las configuraciones privadas copiadas mantienen sus bytes. Frozen/build40 unitarias+32 HTTP/lint/tipos PASS; API con tokens reales de Keycloak y salud SQL/outage PASS. La revisión integral y la re-revisión cerraron los hallazgos sin críticos pendientes; el runtime se reactivó con live/ready200 y protegido anónimo401. No es CRUD, CU02 ni BFF. Comandos conjuntos, evidencia y límites en ../../scripts/cu01/README.md y ../../docs/context/STATUS.md. No se integró CU01 en main ni se hizo push automático.
+
+Amendment de revisión: email dot-atom ASCII/DNS-punycode (local64, etiquetas1–63 sin guiones extremos, total254). Una edición laboral no reactiva una identidad deshabilitada: failed/IDP_ACCOUNT_DISABLED requiere acción autorizada separada en IdP. El mismo operationId sigue siendo replay; un retry nuevo reconcilia también desde synced (última confirmación), sin otra versión laboral. La prueba de pérdida de sesión termina solo la conexión SQL que posee el lock del empleado sintético; no detiene PostgreSQL ni toca conexiones ajenas.
+
+Si se interrumpe el verificador: node scripts/verify-cu03-real.mjs --cleanup-only inspecciona únicamente registros activos CU03 con documento C03-UUID/email UUID@example.invalid y snapshot inicial Synthetic/CU03, y los desactiva mediante API autorizada; no borra. La espera de restauración IdP está acotada a300s y exige Dockerhealthy+discovery. El primer intento con presupuesto anterior agotó espera (arranque observado118s), no se presenta como PASS; real-timeout.log conserva ese intento y real.log/real.exit acreditan la ronda posterior.

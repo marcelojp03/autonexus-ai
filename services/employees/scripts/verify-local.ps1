@@ -1,4 +1,4 @@
-$Checks=@('build','test','test:e2e','lint')
+param([ValidateSet('build','test','test:e2e','lint')][string[]]$Checks=@('build','test','test:e2e','lint'))
 $ErrorActionPreference='Stop'
 $service=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $node='C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'

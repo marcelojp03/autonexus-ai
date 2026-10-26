@@ -155,6 +155,8 @@ export class KeycloakIdentityGateway implements IdentityGateway {
       }
       user = verify(user);
     }
+    if (desired.enabled && !user.enabled)
+      throw new IdentitySyncError('IDP_ACCOUNT_DISABLED');
     await this.request(users + '/' + encodeURIComponent(user.id), {
       method: 'PUT',
       headers,
@@ -162,7 +164,7 @@ export class KeycloakIdentityGateway implements IdentityGateway {
         firstName: desired.firstName,
         lastName: desired.lastName,
         email: desired.email,
-        enabled: desired.enabled,
+        ...(desired.enabled ? {} : { enabled: false }),
         attributes: { ...user.attributes, employeeId: [desired.employeeId] },
       }),
     });
@@ -173,6 +175,8 @@ export class KeycloakIdentityGateway implements IdentityGateway {
         }),
       )) as IdpUser,
     );
+    if (desired.enabled && !confirmed.enabled)
+      throw new IdentitySyncError('IDP_ACCOUNT_DISABLED');
     if (
       confirmed.firstName !== desired.firstName ||
       confirmed.lastName !== desired.lastName ||

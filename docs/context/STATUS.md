@@ -13,11 +13,11 @@ Transacción local empleado/historial/intención/resultado; IdP fuera de transac
 | Verificación observada | Resultado |
 | --- | --- |
 | Empleados frozen/build | PASS, lockfile/versiones conservados; build final exit0 |
-| Unitarias finales | PASS55/8archivos; incluye40CU01/base y15CU03; texto/Unicode rojo→verde y protección identidad propia |
+| Unitarias finales | PASS67/8archivos; incluye40CU01/base y27CU03; texto/Unicode rojo→verde y protección identidad propia |
 | HTTP final, sin paralelismo entre archivos | PASS42/3archivos;32CU01/base+10CU03; RSA sintético/repositorio falso explícitos |
 | Lint/tipos final | PASS exit0;0errores/0advertencias de lint |
-| Matriz PostgreSQL+Keycloak real | PASS12grupos: persistencia, migración/no-op,401/403, duplicados/versión/historial, desactivación, cuenta opcional, respuesta perdida/reinicio/retry, ownership ajeno, fallo SQL posterior al remoto, lock entre conexiones y caída/restauración IdP real |
-| Funcional real posterior a validación final | PASS8grupos/exit0, incluido duplicado concurrente; no repite caída/recuperación no afectadas |
+| Matriz PostgreSQL+Keycloak real | PASS15grupos: persistencia, migración/no-op,401/403, duplicados/versión/historial, desactivación, cuenta opcional/sin reactivación por edición, respuesta perdida/reinicio/retry, ownership ajeno, fallo SQL posterior al remoto, lock entre conexiones, pérdida de sesión SQL con respuesta tardía/reparación y caída/restauración IdP real |
+| Funcional real previa al amendment de revisión | PASS8grupos/exit0, incluido duplicado concurrente; no repite caída/recuperación no afectadas |
 | Contratos finales | OpenAPI3.1/referencias y sintaxis SDL PASS; no resolvers/BFF ejecutables |
 | Regresión CU01 desde raíz tras cambios IdP | PASS13etapas/exit0,0errores inesperados/recursos fallidos y2x403 intencionales; SQL aislamientoPASS, versiones1/2 |
 
@@ -25,7 +25,7 @@ Evidencia local ignorada en output/cu03-employees del worktree: {build,test,test
 
 Aplicaciones CU01 y ambos Compose permanecen en raíz. CU03 real se ejecutó desde el worktree con Nest en puerto efímero y se cerró al terminar; no hay proceso CU03 permanente acreditado. README explica PORT3003 manual para conservar CU01 en3002. Los registros de prueba son sintéticos, se conservan y desactivan; no se borran empleados/historia. Triggers temporales de fallo se retiran en finally; IdP propio restaurado.
 
-BFF sigue siendo carpeta reservada, sin aplicación. Se entregan contratos al participante2; mf-employees conserva NG-ALAIN/demos y NO llama REST empresarial. No acreditar interfaz integrada, CU03 web completo, CU02, jornadas, agenda, Saga, otros servicios, Kubernetes ni producción. El cierre compose-next sigue sujeto a revisión independiente; fallos SQLite del sistema de agentes impidieron delegaciones de implementación y no se sustituyen por revisión propia.
+BFF sigue siendo carpeta reservada, sin aplicación. Se entregan contratos al participante2; mf-employees conserva NG-ALAIN/demos y NO llama REST empresarial. No acreditar interfaz integrada, CU03 web completo, CU02, jornadas, agenda, Saga, otros servicios, Kubernetes ni producción. Revisión independiente inicial cerrada: C1 bloqueó emails inválidos; se reprodujeron8rojos,67unitarias/42HTTP posteriores pasan. Se corrigieron dos inconsistencias documentales y la reactivación de cuentas deshabilitadas reproducida con IdP real. La matriz final15grupos/exit0 incluye pérdida de la sesión SQL dueña del lock sintético y reparación explícita. El primer intento de restauración no se acredita: Keycloak arrancó en118s y excedió la espera anterior; el verificador ahora exige Dockerhealthy+discovery dentro de300s, sin recrear volumen. Cleanup acotado verificó origen sintético/desactivó los pendientes, sin borrado. Falta re-revisión antes de delivered. Fallos SQLite iniciales de agentes no sustituyeron revisión: la revisión independiente sí llegó a ejecutarse.
 
 ## CU01 integrado: runtime definitivo verificado (2026-10-26)
 
@@ -181,8 +181,8 @@ Evidencia local: output/cu01-keycloak/{backend-verification.json,operations-buil
 ## Pendiente
 
 - Identificar participantes 2 y 3 por nombre.
-- Inicializar y verificar Finanzas, Inteligencia, Sincronización y aplicaciones de integración restantes cuando sus responsables/CU lo requieran. Operaciones y Empleados ya tienen base técnica terminada y revisada; ningún CU de negocio se considera implementado.
-- Completar BFF GraphQL y funciones empresariales mediante contratos por CU. CU01 web se entrega en su rama; los gráficos siguen siendo ejemplos, no CRUD ni integración empresarial.
+- Inicializar y verificar Finanzas, Inteligencia, Sincronización y aplicaciones de integración restantes cuando sus responsables/CU lo requieran. Operaciones y Empleados ya tienen base técnica terminada y revisada; CU03 backend está implementado/verificado en su rama; los demás CU siguen su estado explícito.
+- Completar BFF GraphQL y funciones empresariales mediante contratos por CU. CU01 web ya está integrado localmente en main; los gráficos siguen siendo ejemplos, no CRUD ni integración empresarial.
 - Crear contratos, infraestructura ejecutable y configuración.
 - Implementar y probar CU15, IA, offline, sincronización, MCP y demás funciones.
 
@@ -192,7 +192,7 @@ Acordar matriz de permisos empresariales para CU02 y contrato BFF del participan
 
 ## Evidencia
 
-No se ha integrado ni probado una plataforma AutoNexus completa ni todos sus CU. La base backend está en main; esta rama incorpora CU01 web local real y distingue explícitamente sus pruebas de las demos históricas. No se acredita Flutter, offline autorizado, CU02, CRUD, BFF, Saga ni producción. El callback ficticio y ACL completa solo pueden ejecutarse en la entrada demo dedicada; compilar/probar ese modo no lo convierte en autenticación válida.
+No se ha integrado ni probado una plataforma AutoNexus completa ni todos sus CU. La base backend está en main; esta rama incorpora CU01 web local real y distingue explícitamente sus pruebas de las demos históricas. En el cierre histórico de CU01 no se acreditaban Flutter, offline autorizado, CU02, CRUD, BFF, Saga ni producción; CU03 backend posterior se registra en la cabecera vigente. El callback ficticio y ACL completa solo pueden ejecutarse en la entrada demo dedicada; compilar/probar ese modo no lo convierte en autenticación válida.
 
 ## Próxima actualización
 

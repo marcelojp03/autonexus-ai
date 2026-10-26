@@ -11,6 +11,52 @@ const input = {
   specialties: ['Motor'],
 };
 describe('CU03 public business rules', () => {
+  it('explicit retry reconciles last-confirmed state without another business version', () => {
+    const c = command('create', null, {
+      ...input,
+      operationId,
+      access: { requested: true },
+    });
+    const first = transition(
+      c,
+      null,
+      'actor',
+      operationId,
+      '2026-10-26T00:00:00.000Z',
+    ).employee;
+    first.access.status = 'synced';
+    first.access.subject = 'linked';
+    const retry = transition(
+      command('retry', first.id, { operationId, expectedVersion: 1 }),
+      first,
+      'actor',
+      operationId,
+      '2026-10-26T00:01:00.000Z',
+    );
+    expect(retry.synchronize).toBe(true);
+    expect(retry.employee.access.status).toBe('pending');
+    expect(retry.employee.version).toBe(1);
+    expect(retry.employee.updatedAt).toBe(first.updatedAt);
+  });
+  it.each([
+    'ana@-example.com',
+    'ana@example..com',
+    '.ana@example.com',
+    'ana.@example.com',
+    'ana..perez@example.com',
+    'ana@example-.com',
+    'ana@' + 'x'.repeat(64) + '.com',
+    'a'.repeat(65) + '@example.com',
+  ])('rejects malformed dot-atom/DNS email %s', (email) => {
+    expect(() => fields({ ...input, email })).toThrow();
+  });
+  it.each([
+    'ana+work@example.com',
+    'ana.perez@sub.example.com',
+    'ana@xn--bcher-kva.example',
+  ])('accepts supported email %s', (email) => {
+    expect(fields({ ...input, email }).email).toBe(email);
+  });
   it('rejects text PostgreSQL cannot represent', () => {
     expect(() =>
       fields({ ...input, document: 'CI' + String.fromCharCode(0) }),

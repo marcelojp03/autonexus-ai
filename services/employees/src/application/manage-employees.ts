@@ -41,6 +41,7 @@ export class ManageEmployees {
                 'IDP_UNAVAILABLE',
                 'IDP_TIMEOUT',
                 'IDP_FORBIDDEN',
+                'IDP_ACCOUNT_DISABLED',
                 'IDP_OWNERSHIP_CONFLICT',
                 'IDP_RESPONSE_INVALID',
               ];

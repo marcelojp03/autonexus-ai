@@ -107,11 +107,31 @@ export function uuid(value: unknown): string {
     return invalid();
   return value.toLowerCase();
 }
+function validEmail(email: string): boolean {
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  const [local, domain] = parts as [string, string];
+  if (!local || local.length > 64 || !domain || domain.length > 253)
+    return false;
+  if (
+    !local
+      .split('.')
+      .every((atom) => /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+$/u.test(atom))
+  )
+    return false;
+  const labels = domain.split('.');
+  return (
+    labels.length >= 2 &&
+    labels.every((label) =>
+      /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label),
+    )
+  );
+}
 export function fields(value: unknown): EmployeeFields {
   const v = object(value);
   only(v, fieldNames);
   const email = text(v.email, 254).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) invalid();
+  if (!validEmail(email)) invalid();
   const phone = text(v.phone, 25);
   if (phone.length < 7 || !/^[0-9+(). -]+$/.test(phone) || !/[0-9]/.test(phone))
     invalid();
@@ -248,12 +268,10 @@ export function transition(
   if (c.action === 'retry') {
     if (!employee.access.requested)
       throw new EmployeeError(409, 'ACCESS_NOT_REQUESTED');
-    const synchronize = employee.access.status !== 'synced';
-    if (synchronize) {
-      employee.access.status = 'pending';
-      employee.access.errorCode = null;
-    }
-    return { employee, action: null, synchronize };
+    // A fresh command reconciles current desired state even after an uncertain old write.
+    employee.access.status = 'pending';
+    employee.access.errorCode = null;
+    return { employee, action: null, synchronize: true };
   }
   if (c.action === 'deactivate') {
     if (employee.access.subject === actor)
