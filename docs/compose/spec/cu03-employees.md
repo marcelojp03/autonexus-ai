@@ -2,7 +2,7 @@
 feature: cu03-employees
 status: delivered
 updated: 2026-10-26
-source: feat/cu03-employees
+source: main
 ---
 
 # CU03 — Gestionar empleados e integración previa CU01
