@@ -49,3 +49,5 @@ minimumReleaseAgeExclude:
   - '@delon/util@22.0.0 || 22.1.1'
   - ng-alain@22.0.0 || 22.1.1
   - lint-staged@17.6.0
+patchedDependencies:
+  '@delon/chart@22.1.1': patches/@delon__chart@22.1.1.patch

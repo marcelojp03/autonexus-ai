@@ -6,7 +6,41 @@ Alcance funcional previsto: clientes, vehículos, servicios, citas, recepción, 
 
 ## Estado y límites
 
-Base técnica S2/T1, sin CU de negocio: no hay CRUD, autenticación, GraphQL, Saga ni tablas de negocio. Build y pruebas sin base se verifican por separado de la integración PostgreSQL. La verificación principal ya comprobó migración/historial/idempotencia, aislamiento y caída/recuperación con PostgreSQL real; ver la sección integrada final. Los mocks solo cubren unidades, no acreditan esa integración.
+Base técnica con Resource Server CU01 y dos recursos REST de diagnóstico; sin CRUD, GraphQL, Saga ni tablas de negocio. La autenticación interactiva pertenece a Keycloak y al cliente OIDC, no a este servicio. Build y pruebas sin base se verifican por separado de la integración PostgreSQL y del SSO real. La verificación principal de la base ya comprobó migración/historial/idempotencia, aislamiento y caída/recuperación con PostgreSQL real; las secciones de base siguientes son evidencia histórica. Los mocks solo cubren unidades, no acreditan integración.
+
+## Seguridad técnica CU01
+
+Implementación en `feat/cu01-keycloak`, worktree `.worktrees/cu01-keycloak`; no cambia automáticamente el runtime de main ni su PostgreSQL. No se inicia un segundo servidor en8081. El integrador principal es responsable de sustituir el runtime y comprobar Keycloak26.8.1 real.
+
+- Se mantiene Boot **4.1.2**, Oracle JDK **21.0.8**, Wrapper **3.3.4** y Maven **3.10.0**. Starter oficial Boot4 `spring-boot-starter-security-oauth2-resource-server`, sin versiones sobrescritas: Spring Security **7.1.2**, Nimbus JOSE JWT **10.9.1**, gestionados por el BOM; `spring-security-test` solo en pruebas. APIs HTTP/Security quedan en infrastructure; application/readiness y persistencia no cambian.
+- Configuración pública opcional, con defaults locales explícitos: `OIDC_ISSUER_URI=http://127.0.0.1:8180/realms/autonexus`, `OIDC_AUDIENCE=autonexus-operations-api`, `WEB_ALLOWED_ORIGINS=http://127.0.0.1:4200,http://127.0.0.1:4201,http://127.0.0.1:4202`. Están en `.env.example`; no se lee ni modifica el `.env` privado. No existe bypass de autenticación. HTTP loopback es solo desarrollo local, no configuración de producción.
+- Nimbus verifica exclusivamente RS256. JWKS se deriva del issuer **configurado** añadiendo `/protocol/openid-connect/certs`; jamás de `jku` ni del `iss` recibido. No necesita discovery/red al crear el bean. Conexión y lectura tienen timeout de2s cada una. Se conserva el caché oficial Nimbus de5min, con actualización por `kid` desconocido; descarga inicial/renovación fallida rechaza la autenticación, sin aceptar firmas no verificadas. Una clave conocida en caché permite validación offline mientras siga vigente.
+- Validadores oficiales comprueban issuer exacto, audiencia propia, `exp` obligatorio, tiempo de expiración y `nbf` cuando existe con tolerancia5s; además sujeto no vacío y claim `typ=Bearer`. IDtokens sin esa marca o audiencia API son rechazados. No hay criptografía casera.
+- `realm_access.roles` se filtra y deduplica a administrador, recepcionista, mecanico, jefe_taller y responsable_financiero. Sin herencia empresarial. No se exponen claims completos ni autoridades internas como `FACTOR_BEARER` de Security7.
+- `GET /technical/session`: token válido y alguno de los cinco roles → exactamente `{resource:"session",service:"operations",subject,roles}`. `GET /technical/admin`: administrador → exactamente `{resource:"admin",service:"operations",authorized:true}`. No constituyen permisos de negocio ni CU02.
+- Ausencia/token inválido →401 `{"error":"unauthorized"}` y challenge `Bearer` sin detalles; válido sin permiso →403 `{"error":"forbidden"}`. Sin tokens, headers recibidos, stack ni datos de base en respuestas.
+- Bearer solo en Authorization, sin query/form/cookies. Stateless, sin sesión, login básico/formulario, logout de API ni caché de peticiones. CSRF desactivado porque las cookies no autentican esta API. CORS solo en los dos recursos técnicos, orígenes exactos configurados (sin comodines), GET/OPTIONS y Authorization/Content-Type, sin credenciales.
+- `GET /actuator/health/liveness` y `GET /actuator/health/readiness` son públicas; no consultan IdP. Readiness conserva su consulta real a la base propietaria. Todo otro recurso/método se deniega por defecto.
+- Logout termina la sesión/renovación del IdP y el estado cliente, no revoca instantáneamente JWTs validados offline. Tokens ya emitidos pueden aceptarse hasta **exp+5s**; tampoco retirar roles/deshabilitar usuarios revoca mágicamente esos JWTs. No se implementa introspección/blacklist.
+
+### Comandos de verificación CU01 (sin base ni servidor)
+
+```powershell
+Set-Location "C:/UAGRM/Ingenieria de Software 2/segundo parcial/autonexus-ai/.worktrees/cu01-keycloak/services/operations"
+$env:JAVA_HOME = "C:/Program Files/Java/jdk-21"
+$env:PATH = "$env:JAVA_HOME/bin;$env:PATH"
+./mvnw.cmd --version
+./mvnw.cmd -B clean verify
+./mvnw.cmd -B dependency:tree "-Dincludes=org.springframework.security:*,com.nimbusds:*,org.springframework.boot:spring-boot-starter-security-oauth2-resource-server"
+```
+
+Estos comandos no cargan `.env`, no requieren DB_PASSWORD y no arrancan la aplicación. La comprobación de entorno de base existente usa únicamente MockEnvironment sintético; no se repite un arranque sin contraseña. Para herramientas con límite60s se ejecutaron workers PowerShell desacoplados, con logs ignorados y ficheros de salida, y se sondeó hasta terminar; no son servidores en background.
+
+Pruebas criptográficas: RSA2048/JWKS sintéticos en memoria y transporte HTTP falso; firma válida/alterada, issuer/audience/exp/nbf/sub/tipo, skew5s, IDtoken, HS/none/malformado, destino JWKS confiable pese a jku, caché/rotación y fallo cerrado. Pruebas MVC: decoder y salud explícitamente falsos, filtro HTTP real para401/403/200, DTO exacto/roles, métodos/rutas denegados, ausencia de cookie de sesión y CORS. **Ninguna acredita login, SSO, refresh, logout o conexión con Keycloak real, ni sustituye pruebas integradas de PostgreSQL.**
+
+Comprobado el2026-10-25: Wrapper `--version` PASS (Maven3.10.0/JDK21.0.8); `clean verify` final **exit0,46tests** (12 de base,20 de RSA/JWKS,14 MVC), sin fallos/errores/omitidas y JAR ejecutable. `dependency:tree` PASS con las versiones anteriores. Evidencia ignorada local: `verification-auth-version.log`, `verification-auth-verified.log`/`verification-auth-verified.exit.log`, `verification-auth-dependencies.log`/`verification-auth-dependencies.exit.log`.
+
+Regresión inicial `-Dtest=AccessTokenDecoderTest test` roja, exit1 por decodificador todavía ausente (`verification-auth-red.log`). Iteraciones no finales: import de builder MVC faltante y prueba de DTO que detectó `FACTOR_BEARER`; corregidos antes del build final. `verification-auth-final.log` es una ejecución anterior de45tests PASS; la evidencia vigente es `verification-auth-verified.log` con46tests, incluyendo claim typ de tipo incorrecto. No se ocultaron avisos de metadata auxiliar MavenFeed401 ni Mockito/Byte Buddy. El AGENTS local conserva SHA-256 B3C721931AA9852D7BFCDAE1EE13061B25641F0DF4F583B9F7EC32F982EF6295. No se hicieron commits, cambios Docker, migraciones, lecturas de secretos ni arranques de servidor durante esta implementación.
 
 ## Generación y versiones
 

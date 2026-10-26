@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#001529" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <title>AutoNexus · Demostración</title>
+  <title>AutoNexus · Sesión</title>
 </head>
 <body>
   <a class="skip-link" href="#main">Saltar al contenido</a>
@@ -16,7 +16,24 @@
       <a href="/operations" data-module="operations" data-shell-link>Operaciones</a>
     </nav>
   </header>
-  <aside class="demo-banner"><strong>Modo demostración</strong> · Keycloak / CU01 pendiente. Sin autenticación real ni operaciones de negocio.</aside>
+  <aside class="demo-banner"><strong>Páginas de ejemplo del template</strong> · La sesión es real; los gráficos no representan operaciones del taller.</aside>
+  <section class="session-panel" aria-label="Sesión del taller">
+    <p id="session-status" role="status" aria-live="polite">Comprobando sesión…</p>
+    <p id="session-identity"></p>
+    <button id="session-login" type="button" hidden>Ingresar</button>
+    <button id="session-logout" type="button" hidden>Cerrar sesión</button>
+    <details id="technical-controls" hidden>
+      <summary>Diagnósticos técnicos de acceso</summary>
+      <p>Estas comprobaciones REST no consultan ni modifican datos de negocio. El recurso administrativo requiere administrador.</p>
+      <div class="technical-actions">
+        <button type="button" data-technical-service="employees" data-technical-resource="session">Sesión en Empleados</button>
+        <button type="button" data-technical-service="employees" data-technical-resource="admin">Acceso admin en Empleados</button>
+        <button type="button" data-technical-service="operations" data-technical-resource="session">Sesión en Operaciones</button>
+        <button type="button" data-technical-service="operations" data-technical-resource="admin">Acceso admin en Operaciones</button>
+      </div>
+      <p id="technical-result" role="status" aria-live="polite"></p>
+    </details>
+  </section>
   <nav class="demo-nav" aria-label="Páginas de demostración">
     <a href="/employees/widgets" data-page="widgets" data-shell-link>Widgets</a>
     <a href="/employees/dashboard/v1" data-page="dashboard/v1" data-shell-link>Panel demo</a>

@@ -1,0 +1,2 @@
+# Unified-diff context prefixes a space to the vendor's tab indentation.
+patches/*.patch text eol=lf whitespace=-space-before-tab

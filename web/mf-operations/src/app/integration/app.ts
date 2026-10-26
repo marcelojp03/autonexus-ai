@@ -1,15 +1,19 @@
 import { Component, ViewEncapsulation } from '@angular/core';
+import { SessionView } from '../auth/session';
+import { SessionControls } from '../auth/session-controls';
+import { inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'anx-operations-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, SessionControls],
   encapsulation: ViewEncapsulation.ShadowDom,
   template: `<link rel="stylesheet" href="/mfs/operations/styles.css" />
     <section class="workspace" aria-label="Operaciones">
       <h1>Operaciones</h1>
       <p class="description">Componentes de demostración de NG-ALAIN. Sin datos ni operaciones del taller.</p>
-      <router-outlet />
+      <anx-session-controls />
+      @if (session.allowed()) { <router-outlet /> }
     </section>`,
   styles: [
     `
@@ -48,4 +52,4 @@ import { RouterOutlet } from '@angular/router';
     `
   ]
 })
-export class IntegratedApp {}
+export class IntegratedApp { readonly session = inject(SessionView); }

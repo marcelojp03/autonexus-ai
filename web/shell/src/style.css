@@ -1,6 +1,14 @@
 :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #262626; background: #f0f2f5; font-synthesis: none; line-height: 1.5; }
 * { box-sizing: border-box; }
 body { margin: 0; }
+.session-panel { padding: 12px 24px; background: #fff; border-bottom: 1px solid #d9d9d9; overflow-wrap: anywhere; }
+.session-panel p { margin: 8px 0; }
+.technical-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+button { min-height: 44px; padding: 8px 16px; border: 1px solid #005bbb; border-radius: 3px; background: #fff; color: #005bbb; font: inherit; cursor: pointer; }
+button:hover { background: #e6f7ff; }
+button:disabled { cursor: wait; color: #595959; border-color: #8c8c8c; background: #f0f2f5; }
+button:focus-visible, summary:focus-visible { outline: 3px solid #1890ff; outline-offset: 3px; }
+summary { cursor: pointer; padding-block: 12px; }
 [hidden] { display: none !important; }
 a { color: #005bbb; text-decoration: none; }
 a:hover { text-decoration: underline; }

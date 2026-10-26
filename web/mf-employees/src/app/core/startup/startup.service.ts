@@ -1,11 +1,12 @@
 import { HttpClient } from '@angular/common/http';
-import { EnvironmentProviders, Injectable, Provider, inject, provideAppInitializer } from '@angular/core';
+import { EnvironmentProviders, Injectable, Provider, DestroyRef, inject, provideAppInitializer } from '@angular/core';
 import { Router } from '@angular/router';
 import { ACLService } from '@delon/acl';
 import { ALAIN_I18N_TOKEN, MenuService, SettingsService, TitleService } from '@delon/theme';
 import { NzSafeAny } from 'ng-zorro-antd/core/types';
 import { Observable, zip, catchError, map } from 'rxjs';
 
+import { SessionView } from '../../auth/session';
 import { I18NService } from '../i18n/i18n.service';
 
 /**
@@ -27,6 +28,8 @@ export function provideStartup(): Array<Provider | EnvironmentProviders> {
 
 @Injectable()
 export class StartupService {
+  private readonly session = inject(SessionView);
+  private readonly destroyRef = inject(DestroyRef);
   private menuService = inject(MenuService);
   private settingService = inject(SettingsService);
   private aclService = inject(ACLService);
@@ -53,11 +56,19 @@ export class StartupService {
         // 应用信息：包括站点名、描述、年份
         this.settingService.setApp(appData.app);
         // 用户信息：包括姓名、头像、邮箱地址
-        this.settingService.setUser(appData.user);
+        if (this.session.demo) {
+          this.settingService.setUser(appData.user);
+          this.aclService.setFull(true);
+        } else {
+          this.destroyRef.onDestroy(this.session.port!.subscribe(state => {
+            this.settingService.setUser({ name: state.identity?.username ?? 'Sin sesión', email: '', avatar: '' });
+            this.aclService.setFull(false);
+            this.aclService.setRole([...(state.identity?.roles ?? [])]);
+          }));
+        }
         // ACL：设置权限为全量
-        this.aclService.setFull(true);
         // 初始化菜单
-        this.menuService.add(appData.menu);
+        this.menuService.add(this.session.demo ? appData.menu : [{ text: 'DEMO — vistas sintéticas', group: true, children: [{ text: 'Widgets DEMO', link: '/widgets' }, { text: 'Dashboard DEMO', link: '/dashboard/v1' }] }]);
         // 设置页面标题的后缀
         this.titleService.default = '';
         this.titleService.suffix = appData.app.name;

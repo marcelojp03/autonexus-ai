@@ -1,0 +1,45 @@
+name: autonexus-keycloak-dev
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    environment:
+      POSTGRES_USER: idp_database_admin
+      POSTGRES_PASSWORD: ${IDP_PG_ADMIN_PASSWORD:?Run init first}
+      POSTGRES_DB: postgres
+      IDP_DB_PASSWORD: ${IDP_DB_PASSWORD:?Run init first}
+    volumes:
+      - idp-postgres-data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-idp.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U idp_database_admin -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: [start-dev]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/autonexus_idp
+      KC_DB_USERNAME: autonexus_idp
+      KC_DB_PASSWORD: ${IDP_DB_PASSWORD:?Run init first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?Run init first}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?Run init first}
+      KC_HOSTNAME: http://127.0.0.1:8180
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8180:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, bash, -ec, "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3; grep -q '200 OK' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    restart: unless-stopped
+volumes:
+  idp-postgres-data:

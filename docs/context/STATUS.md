@@ -1,6 +1,6 @@
 # Estado comprobado
 
-Fecha: 2026-10-25.
+Fecha: 2026-10-26. Los apartados anteriores de base/composición conservan fechas y resultados históricos.
 
 ## Preparado
 
@@ -103,21 +103,53 @@ El 2026-10-25, por instrucción de Marcelo, main avanzó por fast-forward de7bc8
 
 El contenedor PostgreSQL propio fue recreado para que bind/config/ownership apunten a infra/compose de la raíz principal. Se comprobó el mismo volumen autonexus-backend-dev_postgres-data, credenciales conservadas y una migración por servicio. El verificador de raíz pasó caída/restauración200→503→200 con mismos PID/hora de inicio; el verificador del worktree anterior rechazó ownership antes de mutar. La ejecución definitiva de esta base está en la raíz; el worktree se conserva como fuente histórica, no como dueño runtime. Evidencia local: output/backend-main-integration. CU01/Keycloak siguen pendientes de la siguiente rama.
 
+## CU01 web local — feat/cu01-keycloak
+
+La base permanece integrada en main1963ce3. CU01 se implementa aparte en .worktrees/cu01-keycloak, base main1963ce3; contratos aprobados en682bfeb y decisión005. No se hizo push, reset, borrado de ramas/worktrees ni merge automático de CU01. Todos los AGENTS se preservan. Verificación integrada terminada; revisión independiente pendiente antes de marcar delivered.
+
+Runtime de esta entrega: código de servicios y web desde el worktree CU01; PostgreSQL de aplicación administrado desde infra/compose de la raíz principal, con mismo volumen y credenciales. Las dos configuraciones privadas CU01 coinciden byte a byte con main. IdP propio administrado desde infra/keycloak del worktree, proyecto autonexus-keycloak-dev y volumen autonexus-keycloak-dev_idp-postgres-data; no usa las bases de Operaciones/Empleados. No administrar el PostgreSQL compartido con el verificador de un worktree anterior.
+
+Keycloak26.8.1/PostgreSQL17.11 propios; keycloak-js26.2.4 y jose6.2.13 exactos. Se mantienen Node22.22.3/pnpm12.6.0, Boot4.1.2/JDK21.0.8, Nest12.2.0 y Angular22/Delon del lockfile. Servidor y SDK tienen minor distinto legítimo, comprobado sin cambiar versiones por suposición. HTTP/start-dev loopback no acredita producción/TLS.
+
+Shell es propietario de una sola sesión OIDC Code+PKCE S256, nonce/state y refresh en memoria. Pasa SessionPort, no JWT/refresh/ID tokens. Los Angular integrados no crean SDK, fallan cerrados si falta sesión y mantienen prefijos/CSS/ShadowRoot/chrome único. Standalone4201/4202 tiene cliente OIDC explícito y layout completo. Demo solo con entrada/configuración dedicadas, Delon en memoria y sin APIs protegidas. Passport ficticio/ACL completa quedan limitados al demo, no al modo normal OIDC.
+
+APIs RS256/JWKS confiable, issuer/audiencia propios, exp/sub/typ obligatorios, tolerancia5s y políticas servidor; salud pública conserva SQL real. /technical/session permite roles reconocidos; /technical/admin exige administrador. Solo diagnósticos REST: funciones empresariales web siguen reservadas a GraphQL/BFF. Semilla de cinco roles/siete cuentas sintéticas no implementa CU02 ni crea empleados.
+
+| Verificación ejecutada | Evidencia observada |
+| --- | --- |
+| Operaciones clean verify | PASS46 tests; Security7.1.2/Nimbus10.9.1; 12 base+20 RSA/JWKS sintéticos+14 MVC explícitamente falsos |
+| Empleados frozen/build/test/test:e2e/lint/tsc | PASS40 unitarias+32 HTTP; lint0 errores/advertencias |
+| Angular, ambos | Frozen/tipos/2 pruebas de política cada uno PASS; seis builds producción: integrado/OIDC/demo con EXIT0 |
+| Shell frozen/test/build | PASS15 unidades; staging final y hashes main.js coinciden con los bundles Angular finales |
+| Regresión G2 del template | Red reproduce ObjectUnsubscribedError tras destroy; green6/6 cada Angular con servicio real y loader sintético; parche pnpm22.1.1 sin upgrade; navegación rápida posterior sin errores Angular |
+| Cargador PowerShell | Red rechaza OIDC documentado→green3/3 con fixtures temporales; permite tres claves públicas y mantiene rechazo de desconocidas, sin .env reales |
+| IdP config/verify/idempotency/persistence | PASS6 tests; clientes/orígenes/PKCE/mappers reales; mismos bytes privados e IDs tras reprovisión/restart de Keycloak |
+| APIs con Keycloak real | PASS10 grupos: salud/CORS,401 sin token/inválido, credenciales erróneas/deshabilitada,200/403 roles, rechazo IDtoken/firma alterada, refresh real, logout y expiración |
+| PostgreSQL propietario | Roles sin privilegios; tres rechazos42501 por rol; una migración cada servicio; readiness200→503→200 y live200, mismos PID/StartTime sin reiniciar apps |
+| Navegador real final | PASS12 etapas funcionales, Node exit0: Code/PKCE/retorno, navegación sin reload/login, reload SSO, refresh real, diagnósticos200/403, standalone4201/4202, logout/nuevo login, sin rol sin bucle y demo4203 sin bearer |
+| Consola/recursos/almacenamiento | 0 pageErrors/errores inesperados/recursos fallidos/PKCE inválido/tokenFailures; 2 errores403 deliberados contados aparte; sin tokens en localStorage/sessionStorage/IndexedDB |
+
+Se capturaron y verificaron desktop1440/mobile390 con identidad/diagnósticos enmascarados, una cabecera y sin overflow al capturar. La repetición final posterior al parche de ciclo de vida reutiliza explícitamente esos PNG: no cambió la presentación y no se acredita otra ronda visual. Playwright1.64.1/Chromium1248 provienen del lockfile; se instaló el ejecutable faltante sin actualizar paquetes. El verificador corrigió selectores reales de Keycloak/Delon y el formato Locator[] de máscaras; esos intentos no se contaron como PASS. El error real G2 se reprodujo y corrigió, no se clasificó como ruido.
+
+Access local60s. Logout invalida cliente/sesión IdP/refresh, pero un access token real emitido siguió200 y después recibió401 en ambos servicios tras exp+tolerancia. No se promete revocación instantánea de JWT offline. Credenciales/tokens solo en RAM de verificadores; no se publican bodies, Authorization ni URLs OAuth. Los fixtures privados y output están ignorados.
+
+Evidencia local: output/cu01-keycloak/{backend-verification.json,operations-build.log,employees-unit.log,employees-http.log,api-real.log,health-outage.log,browser-real.log}; API/browser/health .exit=0. Builds finales con parche: g2-{red,green,build}-results.json y logs por app/modo; seis builds exit0 y tests reales del servicio en Chromium6/6 cada app. IdP: infra/keycloak/.local/*.result.json/log con PASS/exitCode0; no publicar archivos privados. Capturas sanitizadas output/playwright/cu01-{desktop,mobile}.png. Ejecución/puertos/comandos completos en scripts/cu01/README.md. ESLint global Angular adicional no se acredita: excedió el timeout; no se presenta como PASS ni se ocultaron budgets/CommonJS y warnings de módulos Node.
+
 ## Pendiente
 
 - Identificar participantes 2 y 3 por nombre.
 - Inicializar y verificar Finanzas, Inteligencia, Sincronización y aplicaciones de integración restantes cuando sus responsables/CU lo requieran. Operaciones y Empleados ya tienen base técnica terminada y revisada; ningún CU de negocio se considera implementado.
-- Integrar Keycloak/SSO y BFF GraphQL mediante contratos acordados. La composición Shell/single-spa de MF01/MF02 ya está comprobada, pero sus vistas continúan siendo demos sin funcionalidad de negocio.
+- Completar BFF GraphQL y funciones empresariales mediante contratos por CU. CU01 web se entrega en su rama; los gráficos siguen siendo ejemplos, no CRUD ni integración empresarial.
 - Crear contratos, infraestructura ejecutable y configuración.
 - Implementar y probar CU15, IA, offline, sincronización, MCP y demás funciones.
 
 ## Siguiente entregable
 
-Acordar el contrato de sesión Keycloak/roles y GraphQL para la siguiente entrega; sustituir demos por CU gradualmente sin cambiar la base de composición comprobada. Mantener en paralelo los contratos CU15 y la base de servicios/modelo web-Android.
+Acordar matriz de permisos empresariales para CU02 y contrato BFF del participante2: audiencia propia, forwarding/exchange autorizado, validación issuer/firma/exp y rol/acción/registro por campo/CU. El SessionPort y los cinco roles técnicos están versionados, no sustituyen esas políticas. Flutter/offline de CU01 y CU15 permanecen pendientes.
 
 ## Evidencia
 
-Se instalaron, compilaron y arrancaron los dos Angular en standalone y se integraron realmente en el Shell single-spa, con pruebas de montaje, navegación, recarga, assets y responsive. No se ha integrado ni probado una plataforma AutoNexus completa. Hay dos bases técnicas backend verificadas, no funcionalidades ni CU de negocio acreditados; CU01 no está implementado por haber probado el login simulado. No se probaron funcionalmente todos los CU ni se hizo despliegue productivo; las pruebas unitarias/HTTP y la integración real de la base backend se detallan arriba. El callback social ficticio y aclService.setFull(true) siguen en el template, incluso en producción: no desplegar como autenticación real.
+No se ha integrado ni probado una plataforma AutoNexus completa ni todos sus CU. La base backend está en main; esta rama incorpora CU01 web local real y distingue explícitamente sus pruebas de las demos históricas. No se acredita Flutter, offline autorizado, CU02, CRUD, BFF, Saga ni producción. El callback ficticio y ACL completa solo pueden ejecutarse en la entrada demo dedicada; compilar/probar ese modo no lo convierte en autenticación válida.
 
 ## Próxima actualización
 

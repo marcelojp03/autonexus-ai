@@ -1,7 +1,7 @@
 ---
 feature: cu01-keycloak
 status: in-progress
-updated: 2026-10-25
+updated: 2026-10-26
 branch: feat/cu01-keycloak
 commits: ""
 ---
@@ -69,6 +69,7 @@ Se admite acceso a los **contenedores y diagnósticos técnicos** a cualquiera d
 - Conservar layout completo standalone. En OIDC no se montan Passport/callback/refresh ficticios de NG-ALAIN ni guards basados en token demo. Logout standalone usa IdP. Usuarios/ACL de presentación proceden de la sesión, no de Admin estático o setFull(true).
 - Modo standalone-demo solo por configuración/script explícito, banner inequívoco, datos sintéticos y sin acceso a APIs protegidas. Un error OIDC no activa demo. Delon usa almacenamiento en memoria, incluso para sus datos auth de demostración; nunca copiar JWT real al tokenService legacy. La carga integrada normal es oidc, no auth simulada.
 - Conservar world/layout NG-ZORRO existente; añadir controles/estado de sesión con texto claro, foco, loading/error/forbidden y responsive. Los gráficos/datos del template permanecen identificados como ejemplos, no como negocio implementado.
+- El teardown rápido debe ser seguro también con carga G2 pendiente. Se confirmó en el paquete instalado @delon/chart22.1.1 una continuación de LazyService.load que emite después de notify$.unsubscribe al destruir. Aplicar un parche pnpm versionado y fijado por hash, sin cambiar la versión: no iniciar ni notificar después de destruir el servicio. Regresión con G2Service real/DI y promesa diferida sintética; comprobar igualmente resolución viva, llamada repetida y nueva instancia. No silenciar errores globales ni retrasar la navegación. La aceptación final sigue usando navegador/IdP reales sin mocks de red.
 
 ## [S4] APIs y frontera con BFF
 
@@ -100,9 +101,11 @@ CU02 funcional, CRUD empleados/clientes/órdenes, Saga, permisos empresariales p
 ## Tasks
 
 - [x] T0: Fijar contratos de claims/roles/SessionPort y recurso técnico — acceptance: contratos de tipos/REST versionados, sin tokens ni lógica de negocio, como prerequisite real de consumidores paralelos (covers: S2,S3,S4).
-- [ ] T1: Configurar IdP/datos privados y contratos de identidad — acceptance: Keycloak26.8.1 real persistente, clientes PKCE/redirect/origins exactos, cinco roles y cuentas privadas, datos base conservados (covers: S2,S4; depends: T0).
-- [ ] T2: Sesión única Shell y helper browser — acceptance: código+PKCE, retorno validado, memoria/refresh/logout real y SessionPort sin exponer tokens a MFs; pruebas de límites (covers: S3; depends: T0).
-- [ ] T3: Adaptar ambos Angular integrado/standalone/demo explícito — acceptance: una sesión en integrado, OIDC independiente configurado, ningún fallback demo ni JWT en Delon/storage; builds y pruebas (covers: S3; depends: T2).
-- [ ] T4: Proteger Operaciones y Empleados — acceptance: firma/iss/aud/exp/roles validados,401/403 genéricos, salud real preservada y recursos técnicos sin CRUD (covers: S4; depends: T0).
-- [ ] T5: Verificación real de CU01 y regresión — acceptance: navegador y APIs cumplen escenarios, refresh/logout/expiración observados y datos/ownership/puertos conservados (covers: S2,S3,S4,S5; depends: T2,T3,T4).
+- [x] T1: Configurar IdP/datos privados y contratos de identidad — acceptance: Keycloak26.8.1 real persistente, clientes PKCE/redirect/origins exactos, cinco roles y cuentas privadas, datos base conservados (covers: S2,S4; depends: T0).
+- [x] T2: Sesión única Shell y helper browser — acceptance: código+PKCE, retorno validado, memoria/refresh/logout real y SessionPort sin exponer tokens a MFs; pruebas de límites (covers: S3; depends: T0).
+- [x] T3: Adaptar ambos Angular integrado/standalone/demo explícito — acceptance: una sesión en integrado, OIDC independiente configurado, ningún fallback demo ni JWT en Delon/storage; builds y pruebas (covers: S3; depends: T2).
+- [x] T4: Proteger Operaciones y Empleados — acceptance: firma/iss/aud/exp/roles validados,401/403 genéricos, salud real preservada y recursos técnicos sin CRUD (covers: S4; depends: T0).
+- [x] T5: Verificación real de CU01 y regresión — acceptance: navegador y APIs cumplen escenarios, refresh/logout/expiración observados y datos/ownership/puertos conservados (covers: S2,S3,S4,S5; depends: T2,T3,T4,T7,T8).
 - [ ] T6: Revisión independiente y cierre local — acceptance: cero críticos pendientes, contratos/docs/STATUS/resultados y spec delivered con rango revisado; sin merge/push automático (covers: S5; depends: T5).
+- [x] T7: Corregir emisión G2 tardía sin cambiar framework — acceptance: regresión demuestra el fallo original y luego ausencia de emisión/error tras destroy, mantiene notificación viva/nueva instancia, parche reproducible en ambos lockfiles y navegación rápida sin errores Angular (covers: S3,S5; depends: T0).
+- [x] T8: Alinear allowlist del cargador de entorno con los ejemplos CU01 — acceptance: operaciones/empleados cargan las tres claves públicas OIDC desde fixtures sintéticos, claves desconocidas se rechazan y valores privados no se imprimen; tres pruebas PASS, sin modificar .env reales (covers: S2,S4,S5; depends: T0).

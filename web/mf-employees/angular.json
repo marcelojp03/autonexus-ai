@@ -30,12 +30,22 @@
               "src/assets",
               "src/favicon.ico"
             ],
-            "styles": ["src/styles.less"],
+            "styles": [
+              "src/styles.less"
+            ],
             "scripts": [],
-            "allowedCommonJsDependencies": ["ajv", "ajv-formats", "@faker-js/faker", "file-saver", "extend"],
+            "allowedCommonJsDependencies": [
+              "ajv",
+              "ajv-formats",
+              "@faker-js/faker",
+              "file-saver",
+              "extend"
+            ],
             "inlineStyleLanguage": "less",
             "stylePreprocessorOptions": {
-              "includePaths": ["node_modules/"]
+              "includePaths": [
+                "node_modules/"
+              ]
             }
           },
           "configurations": {
@@ -72,6 +82,15 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "demo": {
+              "fileReplacements": [
+                {
+                  "replace": "src/main.ts",
+                  "with": "src/main.demo.ts"
+                }
+              ],
+              "outputPath": "dist/demo"
             }
           },
           "defaultConfiguration": "production"
@@ -87,6 +106,9 @@
             },
             "development": {
               "buildTarget": "::development"
+            },
+            "demo": {
+              "buildTarget": "::development,demo"
             }
           },
           "defaultConfiguration": "development"
@@ -97,20 +119,29 @@
         "test": {
           "builder": "@angular/build:unit-test",
           "options": {
-            "browsers": ["chromium"],
+            "browsers": [
+              "chromium"
+            ],
             "runnerConfig": "vitest.config.ts"
           },
           "configurations": {
             "coverage": {
-              "coverageReporters": ["lcov"],
-              "browsers": ["ChromiumHeadless"]
+              "coverageReporters": [
+                "lcov"
+              ],
+              "browsers": [
+                "ChromiumHeadless"
+              ]
             }
           }
         },
         "lint": {
           "builder": "@angular-eslint/builder:lint",
           "options": {
-            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+            "lintFilePatterns": [
+              "src/**/*.ts",
+              "src/**/*.html"
+            ]
           }
         }
       }
@@ -118,7 +149,10 @@
   },
   "cli": {
     "packageManager": "pnpm",
-    "schematicCollections": ["@schematics/angular", "ng-alain"]
+    "schematicCollections": [
+      "@schematics/angular",
+      "ng-alain"
+    ]
   },
   "schematics": {
     "@angular-eslint/schematics:application": {

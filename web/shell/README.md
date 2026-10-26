@@ -1,14 +1,24 @@
 # Shell y PWA — primera integración local
 
-Navegación y composición del bloque 1, Marcelo (participante 1); los demás participantes integrarán sus MFs por contrato. Tecnología: TypeScript + single-spa. PWA, caché/IndexedDB, service worker y sesión Keycloak **pendientes**.
+Navegación y composición del bloque 1, Marcelo (participante 1); los demás participantes integrarán sus MFs por contrato. Tecnología: TypeScript + single-spa. CU01 añade sesión OIDC Keycloak; PWA, caché/IndexedDB y service worker siguen pendientes.
 
 ## Qué ejecuta
 
 Una sola cabecera y navegación común en http://127.0.0.1:4200/. Registra @autonexus/employees y @autonexus/operations con importación ESM nativa de builds Angular reales, sin iframe. Los enlaces cambian entre /employees y /operations sin recargar el documento. Las páginas demo comunes son widgets y dashboard/v1. Rutas desconocidas fuera de ambos prefijos no montan un MF.
 
-El Shell pasa {domElement, basePath, assetBase}; cada MF exporta bootstrap/mount/unmount. Los eventos locales `autonexus:lifecycle` observan el inicio/fin/error de esos hooks reales para depuración, no simulan ejecución. Los MFs standalone siguen en 4201/4202 con su login y layout originales.
+El Shell pasa {domElement, basePath, assetBase, session}; cada MF exporta bootstrap/mount/unmount. Los eventos locales `autonexus:lifecycle` observan el inicio/fin/error de esos hooks reales para depuración, no simulan ejecución. Los MFs standalone siguen en4201/4202 con layout completo y propietario OIDC explícito; el login original solo pertenece al modo demo dedicado.
 
-El banner comunica **Modo demostración**. Aquí no hay login real ni SSO compartido; Keycloak/CU01 y backend siguen pendientes. No se inventan empleados, órdenes ni indicadores empresariales.
+El banner identifica las páginas/gráficos del template como ejemplos, no como operaciones de negocio. La sesión normal del Shell es exclusivamente OIDC: no hay fallback demo. No se inventan empleados, órdenes ni indicadores empresariales.
+
+## CU01: sesión y autorización técnica
+
+keycloak-js26.2.4 exacto, instanciado una vez por documento en src/main.ts. Helper común sin dependencias runtime en ../browser-auth/session.ts; ver su README para interfaces/exports. Issuer local http://127.0.0.1:8180/realms/autonexus; cliente público autonexus-shell; callback exacto http://127.0.0.1:4200/auth/callback; post-logout http://127.0.0.1:4200/. No usar localhost como alias.
+
+El Shell pasa también session: SessionPort del contrato ../../contracts/auth/session.ts. Integrado nunca crea SDK; standalone4201/4202 tiene propietario OIDC independiente. Authorization Code standard + PKCE S256 + nonce, respuesta fragment, iframe/logging desactivados. Callback consumido por SDK y URL limpiada antes del montaje. Solo ruta interna validada en sessionStorage; tokens únicamente en memoria SDK. Recargar una ruta protegida inicia nueva autorización que reutiliza cookie SSO del IdP cuando existe. La raíz anónima muestra Ingresar sin autologin, evitando bucles después de logout.
+
+Snapshot inmutable con identidad/cinco roles filtrados; single-spa solo monta con sesión autenticada y algún rol reconocido. Cuenta sin roles muestra acceso insuficiente y salida/cambio de cuenta. No se concede ACL empresarial estática. Refresh10s y updateToken(30) antes de diagnósticos; fallo elimina SDK/estado/timer, desmonta y permite ingreso explícito. Epoch bloquea respuestas tardías. Logout invalida el puerto inmediatamente, espera desmontaje de consumidores y usa POST oficial; conserva ID token RAM hasta capturar formulario, luego limpia. No hay JWT en querystring, globals o logs.
+
+Diagnósticos REST explícitos de Empleados3002/Operaciones8081, recursos /technical/session y /technical/admin únicamente. Cookies omitidas, redirect:error, timeout10s y DTO validado.401 invalida sesión;403 explica falta de permiso sin cerrar sesión. No es CRUD ni sustituye el futuro BFF GraphQL. Access tokens emitidos pueden seguir aceptados por APIs que validan offline hasta su expiración60s+5s de tolerancia después del logout; no se promete revocación inmediata.
 
 ## Versiones y generación
 
@@ -48,7 +58,8 @@ El staging valida ambos main.js/styles.css antes de reemplazar únicamente `publ
 
 | Ruta | Dueño / comportamiento |
 | --- | --- |
-| / | replaceState a /employees |
+| / | Entrada anónima con botón Ingresar, sin autologin |
+| /auth/callback | Consumo SDK, limpieza URL y retorno interno validado (default /employees) |
 | /employees y /employees/* | MF01; raíz redirige a widgets |
 | /operations y /operations/* | MF02; raíz redirige a widgets |
 | /mfs/employees/* | ESM, chunks, CSS, imágenes y JSON de MF01 |
@@ -61,7 +72,7 @@ Vite dev/preview usa fallback SPA para abrir/recargar rutas history. En un hosti
 
 Solo el CSS del Shell vive globalmente en el documento. Los Angular montan su CSS de template, componentes y CDK overlays en ShadowRoot propio. La cabecera/nav del template no se monta en integrado; no se la oculta mediante reglas globales. El Shell conserva el lenguaje visual NG-ZORRO azul/navy/gris de las capturas, con banner demo, enlaces activos, estado de carga/error, teclado y versión móvil. El título del documento pertenece al Shell.
 
-## Comandos y resultados comprobados
+## Comandos y resultados históricos de composición (antes de CU01)
 
 - Generación oficial y ambas instalaciones (inicial y frozen): código 0.
 - typecheck: código 0; test: 2 pruebas de prefijos/rutas, 2 pasan.
@@ -69,4 +80,8 @@ Solo el CSS del Shell vive globalmente en el documento. Los Angular montan su CS
 - Navegación real de módulos, exports y hooks observados; ver resultados finales en [STATUS](../../docs/context/STATUS.md).
 - Evidencia: `../../output/shell-integration/` y `../../output/playwright/shell-*.png`. No se usaron mocks de Playwright para aprobar la carga de aplicaciones.
 
-El AGENTS original se conserva por hash. No hay Git en la raíz/Shell; no se inicializó ni reorganizó el repositorio general. Las pruebas no acreditan CU de negocio, SSO, backend, offline ni todo el catálogo demo de NG-ALAIN.
+El AGENTS original se conserva. Actualmente el proyecto usa el monorepositorio raíz; las referencias anteriores a ausencia de Git son históricas. Las pruebas históricas no acreditan CU01/SSO, offline ni todo el catálogo demo.
+
+## Verificación de este cambio CU01
+
+En el worktree cu01-keycloak se ejecutaron con Node22.22.3/pnpm12.6.0 exactos: add keycloak-js@26.2.4 --save-exact, install --frozen-lockfile, test, run typecheck y exec vite build, todos con exit0. Las pruebas de sesión usan SDK/fetch falsos y no acreditan SSO. exec vite build compila únicamente el Shell, sin ejecutar prebuild ni stagear builds Angular viejos. La construcción final run build (staging de MFs nuevos), el ejercicio visual/responsive/teclado y SSO real quedan para el principal después de reconstruir ambos Angular. No se arrancaron ni detuvieron servidores en esta tarea. El puerto4200 preexistente no constituye evidencia de las fuentes nuevas.

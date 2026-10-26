@@ -10,6 +10,8 @@ import { NzDropdownModule } from 'ng-zorro-antd/dropdown';
 import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzMenuModule } from 'ng-zorro-antd/menu';
 
+import { SessionControls } from '../../auth/session-controls';
+import { DEMO_MODE } from '../../auth/session';
 import { HeaderClearStorage } from './widgets/clear-storage';
 import { HeaderFullScreen } from './widgets/fullscreen';
 import { HeaderI18n } from './widgets/i18n';
@@ -29,11 +31,11 @@ import { HeaderUser } from './widgets/user';
           <nz-icon nzType="github" />
         </a>
       </layout-default-header-item>
-      <layout-default-header-item direction="left" hidden="mobile">
+      @if (demo) { <layout-default-header-item direction="left" hidden="mobile">
         <a layout-default-header-item-trigger routerLink="/passport/lock">
           <nz-icon nzType="lock" />
         </a>
-      </layout-default-header-item>
+      </layout-default-header-item> }
       <layout-default-header-item direction="left" hidden="pc">
         <div layout-default-header-item-trigger (click)="searchToggleStatus.set(!searchToggleStatus())">
           <nz-icon nzType="search" />
@@ -63,9 +65,7 @@ import { HeaderUser } from './widgets/user';
             <div nz-menu-item>
               <header-fullscreen />
             </div>
-            <div nz-menu-item>
-              <header-clear-storage />
-            </div>
+            @if (demo) { <div nz-menu-item><header-clear-storage /></div> }
             <div nz-menu-item>
               <header-i18n />
             </div>
@@ -91,6 +91,7 @@ import { HeaderUser } from './widgets/user';
         </nz-dropdown-menu>
       </ng-template>
       <ng-template #contentTpl>
+        <anx-session-controls />
         <router-outlet />
       </ng-template>
     </layout-default>
@@ -100,6 +101,7 @@ import { HeaderUser } from './widgets/user';
     <theme-btn />
   `,
   imports: [
+    SessionControls,
     RouterOutlet,
     RouterLink,
     I18nPipe,
@@ -122,6 +124,7 @@ import { HeaderUser } from './widgets/user';
   ]
 })
 export class LayoutBasic {
+  readonly demo = inject(DEMO_MODE);
   readonly user = inject(SettingsService).user;
   protected options: LayoutDefaultOptions = {
     logoExpanded: `./assets/logo-full.svg`,

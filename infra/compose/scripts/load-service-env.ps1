@@ -3,7 +3,7 @@ param([Parameter(Mandatory=$true)][ValidateSet('operations','employees')][string
 $workspaceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $environmentFile = Join-Path $workspaceRoot ('services/' + $Service + '/.env')
 if (-not (Test-Path -LiteralPath $environmentFile -PathType Leaf)) { throw 'Missing local service .env. Run infra/compose/scripts/init-env.mjs first.' }
-$allowedKeys = @('PORT','DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD')
+$allowedKeys = @('PORT','DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD','OIDC_ISSUER_URI','OIDC_AUDIENCE','WEB_ALLOWED_ORIGINS')
 foreach ($line in Get-Content -LiteralPath $environmentFile) {
   if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith('#')) { continue }
   $separator = $line.IndexOf('=')

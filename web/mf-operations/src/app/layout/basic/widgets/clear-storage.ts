@@ -23,9 +23,9 @@ export class HeaderClearStorage {
 
   protected _click(): void {
     this.modalSrv.confirm({
-      nzTitle: 'Make sure clear all local storage?',
+      nzTitle: '¿Limpiar únicamente la caché de demostración?',
       nzOnOk: () => {
-        localStorage.clear();
+        localStorage.removeItem('autonexus:demo-cache');
         this.messageSrv.success('Clear Finished!');
       }
     });

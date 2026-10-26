@@ -1,3 +1,6 @@
+import type { IntegratedProps } from '../../../contracts/auth/session';
+import { SESSION_PORT } from './app/auth/session';
+import { canPresentSession } from './app/auth/session-policy';
 import { APP_BASE_HREF } from '@angular/common';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { APP_ID, ApplicationRef, PlatformRef } from '@angular/core';
@@ -10,11 +13,7 @@ import { IntegratedApp } from './app/integration/app';
 import { ASSET_BASE, INTEGRATION_HOST, INTEGRATED_MODE } from './app/integration/asset-base';
 import { IntegratedOverlayContainer } from './app/integration/overlay-container';
 
-interface IntegrationProps {
-  domElement: HTMLElement;
-  basePath: string;
-  assetBase: string;
-}
+type IntegrationProps = IntegratedProps;
 let platform: PlatformRef | undefined;
 let mountedApp: ApplicationRef | undefined;
 
@@ -27,6 +26,7 @@ const lifecycles = singleSpaAngular<IntegrationProps>({
     if (props.basePath !== '/employees' || props.assetBase !== '/mfs/employees/') {
       throw new Error('Unexpected employees integration URLs');
     }
+    if (!props.session || !canPresentSession(props.session.snapshot())) throw new Error('OIDC authenticated workshop session required');
     const host = props.domElement.querySelector<HTMLElement>('anx-employees-root');
     if (!host) throw new Error('Missing employees mount container');
     platform = platformBrowser(provideSingleSpaPlatform());
@@ -36,6 +36,7 @@ const lifecycles = singleSpaAngular<IntegrationProps>({
         {
           providers: [
             ...config.providers,
+            { provide: SESSION_PORT, useValue: props.session },
             { provide: APP_BASE_HREF, useValue: props.basePath },
             { provide: APP_ID, useValue: 'anx-employees' },
             { provide: ASSET_BASE, useValue: props.assetBase },
@@ -48,6 +49,7 @@ const lifecycles = singleSpaAngular<IntegrationProps>({
         },
         { platformRef: platform }
       );
+      if (!canPresentSession(props.session.snapshot())) throw new Error('Session changed during mount');
       mountedApp.bootstrap(IntegratedApp, host);
       return mountedApp;
     } catch (error) {
@@ -68,6 +70,7 @@ async function runLifecycle(
   for (const callback of Array.isArray(hook) ? hook : [hook]) await callback(props);
 }
 export async function mount(props: AppProps & IntegrationProps): Promise<void> {
+  if (!props.session || !canPresentSession(props.session.snapshot())) throw new Error('OIDC authenticated workshop session required');
   try {
     await runLifecycle(lifecycles.mount, props);
     const link = props.domElement.querySelector('anx-employees-root')?.shadowRoot?.querySelector('link');

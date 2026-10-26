@@ -4,7 +4,9 @@ Segundo parcial de Ingeniería de Software II · UAGRM · Entrega: 10 de noviemb
 
 ## Estado
 
-Monorepositorio de AutoNexus AI. El Shell y los microfrontends Angular de Empleados y Operaciones están integrados y verificados localmente. La base técnica backend de Operaciones y Empleados está generada y verificada con PostgreSQL real integrada localmente en main por fast-forward, con revisión independiente satisfactoria; las funciones de negocio, Keycloak y CU01 real siguen pendientes. Consultar `docs/context/STATUS.md` para evidencia y límites.
+Monorepositorio de AutoNexus AI. La base backend quedó integrada localmente en main1963ce3 por fast-forward y conserva PostgreSQL/credenciales. La entrega CU01 web está en feat/cu01-keycloak, worktree .worktrees/cu01-keycloak: Keycloak persistente propio, sesión OIDC/PKCE única en el Shell, Angular integrado/standalone explícito y APIs técnicas con JWT/RBAC reales. Su verificación y revisión se registran en [STATUS](docs/context/STATUS.md); no confundir esta rama con la base de main ni con una plataforma de negocio completa. Flutter/offline, CU02, CRUD, BFF y Saga siguen pendientes.
+
+Ejecución del conjunto, puertos y pruebas: [guía CU01](scripts/cu01/README.md). Diseño y límites: [decisión005](docs/decisions/005-cu01-keycloak.md) y [especificación](docs/compose/spec/cu01-keycloak.md). No regenerar secretos ni volúmenes existentes. No se hizo push ni merge automático de CU01.
 
 ## Primeros pasos
 

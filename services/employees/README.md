@@ -5,11 +5,81 @@ Alcance funcional previsto: empleados, especialidades, jornadas, disponibilidad,
 
 ## Estado y límites
 
-Base técnica T2 del diseño `docs/compose/spec/backend-foundation.md`, aprobada por Marcelo (S2). Generada y comprobada localmente en `feat/backend-foundation`, base `7bc80a7`, el 2026-10-25. No implementa CU01, CRUD, autenticación, GraphQL ni participación en Saga. Ningún CU de negocio se considera terminado.
+Base técnica T2 del diseño docs/compose/spec/backend-foundation.md, aprobada por Marcelo (S2), generada y comprobada en feat/backend-foundation, base7bc80a7, el2026-10-25 e integrada en main. feat/cu01-keycloak incorpora ahora validación JWT y autorización técnica para CU01 web. No implementa CRUD, GraphQL, CU02 ni participación en Saga. Los resultados históricos de la base se conservan; la sección CU01 y ../../docs/context/STATUS.md distinguen las comprobaciones nuevas de la entrega web local.
 
 Hay instalación reproducible, compilación, pruebas unitarias y HTTP con probe falso explícito. La migración, historial, aislamiento y caída/recuperación con PostgreSQL real ya fueron comprobados por la verificación principal; se describen al final. Las `.env` privadas las genera infraestructura, no se versionan ni se imprimen. AGENTS y alcance funcional preservados; sin Git separado ni commits.
 
-## Generación y versiones reales
+## CU01: protección OIDC en este worktree
+
+Implementación de S2/S4/S5 de `docs/compose/spec/cu01-keycloak.md` y contratos `contracts/auth` / `contracts/rest/technical-auth.openapi.yaml`. Solo Empleados: no acredita todavía Keycloak real ni CU01 completo. Sin CU02, CRUD, BFF, GraphQL ni permisos empresariales por registro; las funciones web de negocio siguen reservadas al futuro BFF GraphQL.
+
+### Configuración pública local y confianza
+
+| Variable | Default explícito / valores admitidos |
+| --- | --- |
+| OIDC_ISSUER_URI | `http://127.0.0.1:8180/realms/autonexus`, exacto, sin slash final |
+| OIDC_AUDIENCE | `autonexus-employees-api`, audiencia propia exacta |
+| WEB_ALLOWED_ORIGINS | `http://127.0.0.1:4200,http://127.0.0.1:4201,http://127.0.0.1:4202`; admite subconjunto separado por comas |
+
+Los defaults son política **exclusiva de desarrollo local**; no existe modo servidor demo ni bypass. Valores ajenos al contrato fallan al componer la aplicación, sin imprimirlos. `.env.example` solo contiene valores públicos y DB_PASSWORD vacío. La `.env` privada permanece intacta: estos defaults evitan editarla. Otro entorno requiere acordar explícitamente issuer HTTPS, audiencia y allowlist; no se acredita producción pública.
+
+`jose` **6.2.13 exacto** se confirmó en npm con `view jose@6.2.13 version` y añadió con `add --save-exact jose@6.2.13`, usando los ejecutables fijados abajo. Nest12.2.0, ESM, TypeScript6, Vitest4 y Oxlint de la base se conservan.
+
+`jwtVerify` oficial exige RS256, firma válida, `sub` no vacío, `iss` exacto, `aud` propio y `exp` obligatorio. Valida expiración y `nbf` cuando existe con tolerancia **5s**. Además exige claim de payload `typ: Bearer` de access tokens Keycloak; un ID token no se acepta aunque llevara audiencia API.
+
+`createRemoteJWKSet` oficial obtiene claves solo de `<issuer configurado>/protocol/openid-connect/certs`, nunca de `jku` ni del `iss` del JWT. Inicialización diferida: arranque/salud no contactan IdP. Timeout HTTP2000ms, caché600000ms, cooldown30000ms para búsqueda por kid desconocido tras un fetch exitoso. JOSE gestiona selección/rotación y firma. Clave desconocida, JWKS inválido o timeout fallan cerrados con401; claves válidas cacheadas pueden verificar tokens vigentes sin contactar al IdP.
+
+### Recursos y política global
+
+Guard global JWT/política registrado en AppModule: sin token válido→401; token válido sin política explícita o sin rol suficiente→403. Un futuro endpoint no hereda acceso por ser Administrador. Solo los dos handlers de salud son públicos.
+
+- `GET /health/live` y `GET /health/ready`: públicos; SELECT1, pool, timeouts y semántica PostgreSQL originales preservados.
+- `GET /technical/session`: al menos un rol realm reconocido; DTO exacto `{resource:'session',service:'employees',subject:string,roles:string[]}`.
+- `GET /technical/admin`: solo `administrador`; DTO exacto `{resource:'admin',service:'employees',authorized:true}`.
+
+Roles: `administrador`, `recepcionista`, `mecanico`, `jefe_taller`, `responsable_financiero`. Se extraen únicamente de `realm_access.roles`, filtrando desconocidos y duplicados; no se infieren de roles de cliente ni se concede herencia empresarial. El bootstrap IdP no implementa CU02.
+
+Solo un header `Authorization: Bearer <JWT>` con tres segmentos base64url autentica; no duplicados, cookies ni querystring. Errores de firma/algoritmo/claims/JWKS devuelven401 con solo statusCode401 y message `Unauthorized`; falta de permiso devuelve403 con solo statusCode403 y message `Forbidden`. Sin token, claims completos, stack ni detalles internos en respuestas/logs.
+
+CORS: orígenes exactos4200/4201/4202, métodos GET/OPTIONS, header Authorization y credentials=false. Sin wildcard ni reflection arbitraria; localhost no es alias autorizado. Express deshabilita `x-powered-by`. CORS no reemplaza autenticación/autorización.
+
+### Logout stateless
+
+No hay sesión/cookie ni endpoint logout de API. Logout OIDC pertenece a web/IdP: termina renovación y estado cliente, pero no revoca instantáneamente un access token ya emitido. Puede aceptarse hasta **exp +5s**; retirar roles o deshabilitar usuario tiene igual ventana para JWT ya emitidos. Sin blacklist ni introspección por petición. El principal debe comprobar logout/refresh/expiración real con tokens solo en RAM.
+
+### Comandos y evidencia local CU01
+
+```powershell
+Set-Location 'C:/UAGRM/Ingenieria de Software 2/segundo parcial/autonexus-ai/.worktrees/cu01-keycloak/services/employees'
+$env:PATH = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3;' + $env:PATH
+$node = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'
+$pnpm = 'C:/Users/marcelo/AppData/Local/node/corepack/v1/pnpm/12.6.0/bin/pnpm.mjs'
+& $node --version
+& $node $pnpm --version
+& $node $pnpm install --frozen-lockfile
+& $node $pnpm build
+& $node $pnpm test
+& $node $pnpm test:e2e
+& $node $pnpm exec tsc --noEmit
+& $node $pnpm lint
+```
+
+| Comprobación | Resultado | Log ignorado en esta carpeta |
+| --- | --- | --- |
+| Node /pnpm /jose npm | 22.22.3 /12.6.0 /6.2.13 confirmados | Salida de herramientas |
+| Tests-first (red esperado) | 13 tests base PASS, dos suites sin implementación fallan | cu01-red.log |
+| Instalación exacta /frozen | PASS | cu01-install.log /cu01-frozen.log |
+| Build | PASS, código0 | cu01-build.log |
+| Unitarias | PASS,40 tests/6 archivos, incluidas13 base | cu01-unit.log |
+| HTTP, puertos efímeros | PASS,32 tests/2 archivos, incluidas3 base | cu01-http.log |
+| Typecheck | PASS, código0 | cu01-types.log |
+| Lint | PASS,0 warnings/0 errores | cu01-lint.log |
+
+Tests con RSA/tokens generados solo en RAM: firma alternativa/alterada, issuer/audience, claims ausentes, exp/nbf, IDtokens, HS256/none/malformed, tolerancia, roles realm vs cliente, 401/403 genéricos, DTO exacto, default deny, headers duplicados, cookies/query ignorados, CORS y salud sin consultar claves. JWKS sintético loopback/puerto0 verifica ruta confiable ignorando jku, caché/cooldown y timeout real2s; listeners cerrados. **Son unidades/HTTP con DB falsa, no evidencia de Keycloak26.8.1, SSO ni PostgreSQL real.** Un tipo amplio de mock falló inicialmente en typecheck y quedó corregido antes del PASS final.
+
+Pendiente del principal: cambiar runtime propietario, probar IdP/tokens/roles reales, expiración tras logout y regresión PostgreSQL conservando rol/password/volumen55432. No se leyó/imprimió/editó `.env`, no se ejecutó Docker ni se tocó el proceso activo3002, ni quedó otra aplicación. La evidencia histórica siguiente corresponde a la base, no a integración CU01.
+
+## Generación y versiones reales (base original)
 
 Generador oficial ejecutado en `%TEMP%/autonexus-employees-foundation`, con destino relativo; después se trasladaron los archivos necesarios mediante `apply_patch`, sin reemplazar AGENTS ni adoptar el README del template. `new --help` confirmó el flag real `--no-observe`; no se configuró Observe ni telemetría.
 
@@ -103,7 +173,7 @@ La migración `1792886400000-create-employees-schema.ts` crea únicamente el sch
 
 No se crean directorios vacíos de dominio ni entidades ficticias. El primer CU incorporará sus agregados/reglas independientes del framework; sus modelos ORM y migraciones permanecerán dentro de Empleados, sin compartirlos ni importar dominios de otros servicios. La salud es una capacidad técnica, no un CU del taller.
 
-## Evidencia de esta entrega
+## Evidencia de la base original
 
 Todos los comandos de verificación se ejecutaron desde este servicio con los ejecutables indicados.
 
@@ -121,7 +191,7 @@ Todos los comandos de verificación se ejecutaron desde este servicio con los ej
 
 Pruebas: caso de disponibilidad UP/DOWN y recuperación; puertos/configuración inválida; inicialización concurrente compartida, retry, consulta en cada check y cierre; HTTP200 live independiente del probe, ready200/503 con cuerpo sanitizado y recuperación en la misma aplicación. **Los probes/DataSources de tests son falsos explícitos**. No prueban PostgreSQL, migraciones, aislamiento, caída real, permisos, frontend ni plataforma integrada. La evidencia de PostgreSQL real se complementa con la sección siguiente, no con esos fakes.
 
-## Verificación integrada final
+## Verificación integrada final de la base original (anterior a CU01)
 
 La verificación principal repitió frozen/build,13pruebas unitarias+3 HTTP y lint: código0, sin warnings de lint. Luego ejecutó `exec typeorm migration:run -d dist/infrastructure/postgres/data-source.js` contra PostgreSQL 17.11 propio con el rol de Empleados:1migración aplicada; segunda ejecución sin pendientes; historial public.employees_migrations con1 versión y schema employees presente.
 

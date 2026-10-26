@@ -1,38 +1,47 @@
 # MF02 Operaciones
 
-Clientes, vehículos, servicios, citas, recepción, órdenes y avances. Bloque 1 de Marcelo (CU10–CU12, CU15–CU17), y CU06–CU09 del bloque 2; la carpeta no pertenece funcionalmente a un solo participante. Persistencia prevista por APIs y copia offline autorizada.
+## CU01 — modos explícitos
 
-## Estado actual — primera integración con Shell
+La misma aplicación conserva Angular core 22.2.3, CLI/build 22.2.4, Delon 22.1.1, single-spa-angular 22.0.1 y single-spa 6.0.3, con @angular/build:application. Se añade únicamente keycloak-js **26.2.4 exacto**; el lockfile conserva las versiones anteriores.
 
-Fecha: 2026-10-25. Dos entradas de la misma aplicación Angular: standalone con el layout/login original del template, e integrada sin cabecera ni sidebar propios. Se montan componentes reales de NG-ALAIN, no una imitación ni un iframe. No hay funcionalidades de negocio ni backend.
+- **OIDC standalone (predeterminado)**: src/main.ts es el único propietario del SDK en esta app. Cliente público autonexus-mf-operations, realm autonexus, IdP http://127.0.0.1:8180 y origen autorizado http://127.0.0.1:4202. Callback exacto /auth/callback, consumido por el helper antes de bootstrap Angular. Layout completo del template, rutas hash /#/widgets y /#/dashboard/v1. Sin Passport, callback social ficticio, guard/token/refresh demo ni usuario Admin estático. El acceso inicial sin sesión ofrece el botón Keycloak; una ruta protegida válida permite iniciar la autorización desde el helper. Un error no activa demo.
+- **OIDC integrado**: src/main.single-spa.ts exporta bootstrap/mount/unmount. Recibe IntegratedProps y SessionPort del Shell; no importa ni instancia SDK. Cada mount exige modo oidc, fase authenticated y algún rol reconocido. La validación cliente protege presentación, no sustituye autorización de APIs. No existe fallback si falta la prop. El Shell es dueño de login, renovación, logout y título del documento. Unmount destruye solo aplicación/plataforma/host propios y sus suscripciones, sin logout ni limpiar la sesión padre.
+- **Standalone demo**: solo configuración Angular demo, con fileReplacement de main.ts por main.demo.ts y scripts propios. Banner inequívoco, login/guards/mocks del template, datos sintéticos y tokens Delon únicamente en RAM mediante provideAuth(withMemoryStorage()). No tiene SessionPort OIDC ni llama APIs protegidas. No acredita SSO ni CU de negocio.
 
-- Standalone: http://127.0.0.1:4202/, rutas hash, login demo original. `src/main.ts` no se modificó.
-- Integrada: http://127.0.0.1:4200/operations, history con prefijo /operations; inicio en widgets. Vistas de demostración: `/operations/widgets` y `/operations/dashboard/v1`.
-- Assets y ESM: `/mfs/operations/`. Entrada `src/main.single-spa.ts`: exports bootstrap/mount/unmount, sin autoarranque al importar.
-- Verificación histórica inicial: [decisión 001](../../docs/decisions/001-verificacion-templates-angular.md). Estrategia vigente: [decisión 002](../../docs/decisions/002-shell-angular-single-spa.md). Las rutas de documentación correctas desde esta carpeta usan `../../docs/`.
+En todos los modos los gráficos, widgets y menús son **DEMO**, no información del taller ni BFF. Los únicos REST protegidos son los cuatro botones de diagnóstico SessionPort.requestTechnical: session/admin de Empleados/Operaciones. El helper adjunta bearer en RAM a destinos allowlisted; nunca se copia JWT real a Delon, storage ni logs. El usuario y roles OIDC proceden de identidad de sesión, con ACL de presentación setFull(false). Sin rol se informa acceso insuficiente, sin reintento automático de login. Si se pierde sesión, se retiran las vistas protegidas y queda recuperación explícita (el Shell desmonta el MF integrado).
 
-## Versiones comprobadas
+## Parche de ciclo de vida de gráficos (CU01)
 
-Node elegido y fijado en `.nvmrc`: **22.22.3**. Reemplaza 24.20.0 recomendado durante la tarea inicial porque 22.22.3 es la versión compatible efectivamente probada en este equipo. No se cambia el Node global (era 22.14.0, incompatible). Engine de Angular CLI: `^22.22.3 || ^24.15.0 || >=26.0.0`.
+`@delon/chart@22.1.1` contiene una carrera en `G2Service`: si se destruye el injector mientras `LazyService.load()` está pendiente, su callback intenta emitir en un Subject ya desuscrito y produce `ObjectUnsubscribedError`. No es un fallo de sesión, ACL ni título.
 
-| Paquete | Versión instalada |
-| --- | --- |
-| Angular core | 22.2.3 |
-| Angular CLI/build/CDK | 22.2.4 |
-| NG-ALAIN / Delon | 22.1.1 |
-| NG-ZORRO | 22.1.2 |
-| TypeScript / RxJS | 6.0.3 / 7.8.2 |
-| single-spa-angular (nuevo) | 22.0.1 exacto |
-| single-spa (nuevo) | 6.0.3 exacto |
-| pnpm | 12.6.0 exacto |
+Se usa el mecanismo oficial **pnpm patch**, no una subclase ni acceso a campos privados desde la app. `patches/@delon__chart@22.1.1.patch` modifica solamente `fesm2022/core.mjs`: bandera `destroyed` propia, retorno inerte de `libLoad()` tras destrucción, guard antes de `loaded`/`notify$.next()` en la resolución diferida y bandera antes del `unsubscribe()` original. Conserva la deduplicación de cargas pendientes, notificaciones de instancias vivas y API pública. No añade catch, silenciamiento de errores ni demoras de navegación.
 
-Se conservan los rangos originales de Angular/Delon/ZORRO; no hubo downgrade ni migración a Webpack. El paquete real del adaptador declara peer Angular >=22 <23 y runtime ESM/zoneless; el schematic ng-add migra a custom-webpack y **no se ejecutó**. Se usa la API v22 con imports nombrados y `provideSingleSpaPlatform()`. Los exports del artefacto generado se comprobaron explícitamente. La prueba de montaje, no solo los peers, acredita esta combinación local.
+`pnpm-workspace.yaml` fija `patchedDependencies` para **22.1.1 exacto** con la ruta del parche; `pnpm-lock.yaml` registra su hash SHA-256 `460d5fcf167e627d7c33d38b2ab5e73d3c0cd2d4c4b90828db21e2d27466df72` y la resolución `patch_hash`. `.gitattributes` conserva LF en `patches/*.patch`, incluso con autocrlf en Windows. No se actualiza el framework ni se editan dependencias instaladas a mano. `install --frozen-lockfile` aplica el parche automáticamente. Ambos MFs mantienen el mismo parche literal.
 
-`pnpm-lock.yaml` se conserva/versiona. Al añadir los dos adaptadores se actualizó mediante install --no-frozen-lockfile; las reinstalaciones de reproducción usan --frozen-lockfile. La política `allowBuilds.plyr=false` y el resto de restricciones de la tarea inicial se mantienen.
+`test:chart-lifecycle` usa el builder Angular/Vitest ya instalado y Chromium headless: importa `G2Service` real mediante su entrypoint público y crea injectors Angular independientes. Solo config y carga externa son dobles de unidad; una promesa controlada evita el CDN. Comprueba emisión viva, una sola carga pendiente, notificación repetida tras carga, destrucción antes de resolución sin emisión/rechazo no manejado, llamadas posteriores inertes y una instancia nueva funcional. Los rechazos no manejados siguen haciendo fallar el runner. No acredita SSO, APIs reales ni navegación integrada. La ejecución Node directa no es compatible con los imports ESM de AntV; no se usa como evidencia de regresión.
 
-## Comandos (PowerShell, desde esta carpeta)
+Para regenerarlo, desde esta app y con las variables Node/pnpm del bloque siguiente, usar una copia de paquete creada por pnpm en la carpeta ignorada del worktree (no `node_modules`):
 
-El pnpm global 11.1.2 y Corepack 0.31.0 instalados no lanzan correctamente pnpm 12.6.0. Invocación comprobada en el equipo de Marcelo:
+~~~powershell
+$scratch = [System.IO.Path]::GetFullPath((Join-Path $PWD '../../output/cu01-keycloak/chart-patch-operations'))
+& $nodeExe $pnpmEntry patch @delon/chart@22.1.1 --edit-dir $scratch
+# Aplicar únicamente las cuatro inserciones de guards/bandera a fesm2022/core.mjs.
+& $nodeExe $pnpmEntry patch-commit $scratch --patches-dir patches
+# Quitar solo el TAB final del encabezado +++ del parche generado; conservar LF.
+& $nodeExe $pnpmEntry install --no-frozen-lockfile
+& $nodeExe $pnpmEntry install --frozen-lockfile
+& $nodeExe $pnpmEntry run test:chart-lifecycle
+& $nodeExe $pnpmEntry exec tsc --noEmit -p tsconfig.app.json
+& $nodeExe $pnpmEntry exec tsc --noEmit -p tsconfig.spec.json
+~~~
+
+Regresión comprobada con Node **22.22.3** / pnpm **12.6.0**: contra 22.1.1 original, en cada app hubo 4/6 pruebas válidas, 2 fallos y 2 rechazos no manejados `ObjectUnsubscribedError`; tras el parche, 6/6 PASS sin esos errores. Frozen y política de sesión también pasan. Logs ignorados `../../output/cu01-keycloak/g2-operations-{red,green,frozen,session}.log`, con códigos/fechas en `g2-{red,green}-results.json`. Son evidencias de unidad, no SSO.
+
+Con el hash definitivo también pasan los tipos de aplicación/pruebas y los tres builds de producción por app (integrado, OIDC standalone y demo), ejecutados secuencialmente con `NG_BUILD_MAX_WORKERS=2`. Evidencia: `g2-operations-{types,spec-types,integrated,oidc,demo}.log` y `g2-build-results.json` en la misma carpeta ignorada. Se mantienen los avisos de presupuesto/CommonJS; no equivalen a errores de consola de navegador.
+
+Retirar el parche en ambas apps solo cuando una versión upstream comprobada resuelva esta carrera: revisar su implementación, actualizar de forma explícita el contrato de versión y eliminar la entrada/parche mediante pnpm, regenerar lockfiles y repetir estas unidades y los seis builds. La revisión/SSO real posterior corresponde al verificador global; una compilación no demuestra consola limpia.
+
+## Comandos (PowerShell desde esta carpeta)
 
 ~~~powershell
 $nodeExe = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'
@@ -40,34 +49,26 @@ $pnpmEntry = 'C:/Users/marcelo/AppData/Local/node/corepack/v1/pnpm/12.6.0/bin/pn
 $env:Path = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3;' + $env:Path
 $env:NG_BUILD_MAX_WORKERS = '2'
 & $nodeExe $pnpmEntry install --frozen-lockfile
+& $nodeExe $pnpmEntry run test:session
+& $nodeExe $pnpmEntry run test:chart-lifecycle
 & $nodeExe $pnpmEntry run build
 & $nodeExe $pnpmEntry run build:integrated
-# Standalone independiente:
-& $nodeExe $pnpmEntry exec ng serve --host 127.0.0.1 --port 4202 --open=false
+& $nodeExe $pnpmEntry run build:demo
+# Elegir un modo, no ejecutar ambos en el mismo puerto:
+& $nodeExe $pnpmEntry run start:oidc
+& $nodeExe $pnpmEntry run start:demo
 ~~~
 
-Con Node/pnpm correctos ya en PATH, los equivalentes son `pnpm install --frozen-lockfile`, `pnpm run build` y `pnpm run build:integrated`. Salidas separadas: `dist/ng-alain/browser` y `dist/integrated/browser`. Después de construir **ambos** MFs, instalar y ejecutar el Shell según [su README](../shell/README.md). El Shell stagea copias estáticas; tras cambiar un MF, reconstruir y volver a stagear/construir el Shell. No hay HMR cruzado prometido.
+Solo 127.0.0.1 está autorizado por configuración de desarrollo; localhost no es alias implícito. Node 22.22.3 y pnpm 12.6.0 se seleccionan por proceso, sin alterar instalación global. Los builds Angular deben ejecutarse secuencialmente entre ambas apps para limitar memoria. Salidas: dist/ng-alain/browser (OIDC standalone), dist/integrated/browser y dist/demo/browser. Después de modificar los MFs, reconstruir ambos y stagear/construir el Shell siguiendo ../shell/README.md; no hay HMR cruzado prometido.
 
-## Routing, layout, assets y estilos
+## Composición y límites
 
-- `createAppConfig(false)` conserva router hash, LayoutBasic, login y refresh demo. `createAppConfig(true)` usa history, rutas demo y no registra guards ni refresh Delon. No monta Passport.
-- APP_BASE_HREF=/operations mantiene los RouterLink del template dentro del módulo. El wildcard integrado muestra una vista local, sin redirects globales. El Shell reconoce solo la raíz exacta o el prefijo con /, no nombres parecidos.
-- El componente raíz integrado usa ShadowDom. Su link a styles.css contiene el LESS global del template dentro de ese árbol; CDK OverlayContainer se inserta en el mismo ShadowRoot. El Shell no carga ese CSS en su documento.
-- HTTP de assets e imágenes de las vistas demo usan ASSET_BASE; standalone conserva './'. No se modifica el base href global del Shell.
-- En integrado, una imagen decorativa externa del template se reemplaza por su logo local assets/zorro.svg y se omite el tutorial que busca la cabecera original. El standalone conserva esa imagen y tutorial.
-- El unmount destruye ApplicationRef y la plataforma **propias**, y vacía solo el host recibido. La raíz integrada no usa las suscripciones globales de app.ts ni localStorage.clear().
-- Solo en integrado, Title no escribe sobre el documento: el Shell conserva el título aun después de las actualizaciones asíncronas de Delon. Los márgenes de título de LayoutBasic se ajustan dentro del host, sin ocultar overflow.
+History integrado con prefijo /operations; assets ESM/JSON/CSS en /mfs/operations/. El CSS y OverlayContainer siguen dentro del ShadowRoot, sin cambiar estilos globales del Shell. Se conserva el layout standalone. El botón de limpieza solo existe en demo y elimina la clave propia autonexus:demo-cache, nunca localStorage.clear(). Logout OIDC usa el puerto del IdP, no el tokenService legacy.
 
-## Autenticación demo y límites
+La gestión empresarial futura usa GraphQL vía BFF; aquí no se implementan BFF, CRUD, CU02, offline ni permisos empresariales por registro. Los cinco roles permiten solo contenedores/diagnósticos técnicos. El endpoint admin sigue autorizado en servidor, no por ocultar un botón. Logout del IdP no revoca instantáneamente JWT ya emitidos; la ventana de expiración se verifica y documenta en la entrega global.
 
-El modo integrado es una **demostración pública local sin sesión real**. El banner común lo identifica. Conserva mocks del template para gráficos; no se interceptan ni simulan los bundles, ciclos de vida o assets durante las pruebas. El standalone conserva admin/user demo, callback social ficticio, expiraciones artificiales y ACL completa. Nada de esto acredita CU01, Keycloak ni permisos de servidor. No desplegar este demo como autenticación de producción.
+## Evidencia y reproducción
 
-Solo se incluyen vistas del template para comprobar composición. Otros ejemplos, enlaces secundarios de demostración y personalización de temas no forman parte del contrato integrado inicial. No se implementan CU de negocio, GraphQL, SSO, PWA, backend ni offline.
+Pruebas de política pura en tests/session-policy.test.mjs (sesión ausente/demo/error/anónima/roles desconocidos y los cinco roles técnicos). Son unidades, no evidencia de Keycloak real. Los logs de instalación frozen, TypeScript y builds están en ../../output/cu01-keycloak/ (ignorados). Se conservan los avisos de budgets y CommonJS, sin elevar límites ni ocultarlos.
 
-## Evidencia de verificación
-
-Los builds standalone e integrado terminan con código 0 y el Shell compila. Se conservan avisos de tamaño (2,48 MB standalone y ~2,92 MB integrado frente a aviso 2 MB, bajo error 6 MB), CommonJS y Husky deprecado. No se elevaron budgets ni se ocultaron warnings.
-
-Resultados finales de navegación, recarga, consola y capturas: [STATUS](../../docs/context/STATUS.md). Logs de esta tarea: `../../output/shell-integration/`; capturas: `../../output/playwright/shell-*.png`. Los tests de rutas del Shell no sustituyen las pruebas de navegador.
-
-Se preservaron los AGENTS.md locales por SHA-256 y los repositorios Git propios: master, base upstream 58a5297f; ya existían cambios de la tarea anterior. No se creó commit ni se borró/reorganizó Git.
+Las pruebas reales de navegador/SSO, renovación/logout y API son responsabilidad de la verificación global posterior con IdP y servicios en ejecución. Este cambio no inicia servidores ni acredita esas pruebas por compilar. Estado global y limitaciones en ../../docs/context/STATUS.md; contrato de sesión en ../../contracts/auth/session.ts y especificación en ../../docs/compose/spec/cu01-keycloak.md.

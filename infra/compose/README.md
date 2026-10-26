@@ -62,7 +62,7 @@ Empleados, en otra consola y desde services/employees, con $node/$pnpm de arriba
 & $node $pnpm start:prod
 ```
 
-El helper carga las seis variables de formato simple generado (sin eval, sin imprimirlas) solo en el proceso actual. No cambia variables globales. Java/Maven no cargan .env nativamente; Node carga su archivo con process.loadEnvFile, respetando variables ya inyectadas. Usar consolas separadas o cargar el entorno correcto antes de cambiar de servicio.
+El helper carga las seis variables de formato simple generado (sin eval, sin imprimirlas) solo en el proceso actual. La copia CU01 añade a su allowlist las variables públicas opcionales OIDC_ISSUER_URI, OIDC_AUDIENCE y WEB_ALLOWED_ORIGINS de .env.example; no requiere agregarlas a los archivos privados preservados, porque los servicios tienen defaults locales explícitos. Otras claves siguen rechazadas. No cambia variables globales. Java/Maven no cargan .env nativamente; Node carga su archivo con process.loadEnvFile, respetando variables ya inyectadas. Usar consolas separadas o cargar el entorno correcto antes de cambiar de servicio. Regresión con fixtures sintéticos: node --test scripts/service-env-contract.test.mjs desde la raíz CU01, sin leer secretos reales.
 
 Ambas migraciones se ejecutaron y repitieron: Flyway informa schema actualizado sin migración nueva y TypeORM informa que no hay pendientes. Schema operations/employees, historiales `public.flyway_schema_history` y `public.employees_migrations`, una versión en cada uno. No hay tablas de empleados, órdenes u otro negocio. El proyecto Maven tiene versión de desarrollo0.0.1-SNAPSHOT del generador; las dependencias Boot/Flyway/driver seleccionadas son estables.
 

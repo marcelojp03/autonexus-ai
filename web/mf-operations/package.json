@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "prepare": "husky install",
-    "start": "ng s -o",
+    "start": "ng serve --host 127.0.0.1 --port 4202",
     "hmr": "ng s -o --hmr",
     "build": "ng b",
     "build:integrated": "ng build --configuration production,integrated",
@@ -35,11 +35,14 @@
     "test-coverage": "ng test -c coverage --coverage --watch=false",
     "color-less": "ng-alain-plugin-theme -t=colorLess",
     "theme": "ng-alain-plugin-theme -t=themeCss",
-    "icon": "ng g ng-alain:plugin icon"
+    "icon": "ng g ng-alain:plugin icon",
+    "start:oidc": "ng serve --host 127.0.0.1 --port 4202",
+    "start:demo": "ng serve --host 127.0.0.1 --port 4202 --configuration demo",
+    "build:demo": "ng build --configuration production,demo",
+    "test:session": "node --experimental-strip-types --test --experimental-test-isolation=none tests/session-policy.test.mjs",
+    "test:chart-lifecycle": "ng test --include src/app/chart-lifecycle.spec.ts --watch=false --headless"
   },
   "dependencies": {
-    "single-spa": "6.0.3",
-    "single-spa-angular": "22.0.1",
     "@angular/cdk": "^22.2.0",
     "@angular/common": "^22.2.0",
     "@angular/compiler": "^22.2.0",
@@ -57,10 +60,13 @@
     "@delon/theme": "^22.1.1",
     "@delon/util": "^22.1.1",
     "@ng-util/monaco-editor": "^22.0.0",
+    "keycloak-js": "26.2.4",
     "ng-zorro-antd": "^22.1.1",
     "ngx-tinymce": "^22.0.0",
     "rxjs": "~7.8.0",
     "screenfull": "^6.0.2",
+    "single-spa": "6.0.3",
+    "single-spa-angular": "22.0.1",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
@@ -68,6 +74,8 @@
     "@angular/cli": "^22.2.0",
     "@angular/compiler-cli": "^22.2.0",
     "@delon/testing": "^22.1.1",
+    "@eslint/js": "^10.0.1",
+    "@eslint/markdown": "^8.0.3",
     "@playwright/test": "^1.62.1",
     "@typescript-eslint/eslint-plugin": "^8.69.0",
     "@typescript-eslint/parser": "^8.69.0",
@@ -76,8 +84,6 @@
     "@vitest/coverage-v8": "^5.0.2",
     "angular-eslint": "^22.5.0",
     "eslint": "^10.11.0",
-    "@eslint/js": "^10.0.1",
-    "@eslint/markdown": "^8.0.3",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-jsdoc": "^64.5.4",
     "eslint-plugin-prettier": "^5.5.6",
