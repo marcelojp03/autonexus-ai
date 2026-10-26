@@ -1,7 +1,7 @@
 # AutoNexus AI
 Segundo parcial de Ingeniería de Software II · UAGRM · Entrega: 10 de noviembre de 2026.
 ## Estado
-Monorepositorio de AutoNexus AI. El Shell y los microfrontends Angular de Empleados y Operaciones están integrados y verificados localmente. La base backend de Operaciones y Empleados está en preparación; las funciones de negocio, Keycloak y CU01 real siguen pendientes. Consultar `docs/context/STATUS.md` para evidencia y límites.
+Monorepositorio de AutoNexus AI. El Shell y los microfrontends Angular de Empleados y Operaciones están integrados y verificados localmente. La base técnica backend de Operaciones y Empleados está generada y verificada con PostgreSQL real en feat/backend-foundation, pendiente de revisión independiente y cierre; las funciones de negocio, Keycloak y CU01 real siguen pendientes. Consultar `docs/context/STATUS.md` para evidencia y límites.
 ## Primeros pasos
 1. Extraer en una carpeta nueva. La carpeta principal es `autonexus-ai`.
 2. Abrir esta raíz en el editor y en la terminal del asistente.

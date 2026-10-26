@@ -69,15 +69,40 @@ Servidores locales al cierre: Shell preview en 127.0.0.1:4200; standalone en 420
 
 El 2026-10-25 Marcelo indicó usar un único monorepositorio en `autonexus-ai`. Se inicializó la raíz en `main` y se configuró `origin=https://github.com/marcelojp03/autonexus-ai.git`, sin push. Se confirmó que los dos `.git` Angular pertenecían a NG-ALAIN, no a AutoNexus, y se retiraron a la Papelera con autorización; fuentes/AGENTS/lockfiles preservados. El `.gitignore` raíz excluye dependencias/builds/cachés, entornos reales, secretos, datos locales y artefactos de verificación, conservando lockfiles y ejemplos. Ver decisión 003. Las referencias anteriores a falta de Git son históricas.
 
+## Base backend MS01/MS02 — verificada, revisión pendiente
+
+Fecha: 2026-10-25. Rama feat/backend-foundation, worktree .worktrees/backend-foundation, base main7bc80a7. Especificación aprobada: docs/compose/spec/backend-foundation.md; decisión004. Sin merge/push automático ni CU de negocio terminado.
+
+- Operaciones: Boot 4.1.2/JDK 21.0.8, Wrapper 3.3.4/Maven 3.10.0, Flyway 12.4.0/JDBC 42.7.14. Initializr oficial, raíz correcta y AGENTS preservado. Build final:12 tests sin fallos/errores/omitidas. Regresión de configuración aislada red(2fallos)→green; no se leyó .env ni se repitió el arranque sin contraseña bloqueado al actor.
+- Empleados: Nest 12.2.0/CLI 12.0.10, Node 22.22.3/pnpm 12.6.0, TypeORM 1.1.2/@nestjs/typeorm 12.0.2/pg 8.23.1, TypeScript 6.0.3/Vitest 4.1.12. Generador oficial skip-git/no-observe. Frozen/build,13 unitarias+3 HTTP y lint pasan; lockfile versionado.
+- Casos técnicos y puertos puros separados de adaptadores SQL/HTTP/Actuator y composición. Sin dominio ficticio ni capas vacías de negocio. No se generaron otros servicios ni se modificaron versiones/fuentes frontend.
+- Compose propio autonexus-backend-dev, imagen postgres:17.11-bookworm, bind127.0.0.1:55432 y volumen exclusivo. Dos bases/roles autonexus_operations/autonexus_employees sin privilegios elevados. Cada rol conecta a su base y recibe tres rechazos42501: base ajena, postgres ytemplate1. No se detuvieron contenedores ajenos.
+- Tres .env privados con secretos aleatorios distintos, ignorados por Git; ejemplos vacíos versionados. Segunda inicialización rechazada sin modificar archivos. Nunca se imprimen passwords ni se pasan por URL/argumentos.
+- Migraciones reales: schemas operations/employees e historiales public.flyway_schema_history/public.employees_migrations; una versión por servicio y segunda ejecución no-op. Sin tablas de negocio ni synchronize.
+
+| Verificación real | Resultado |
+| --- | --- |
+| Operaciones 127.0.0.1:8081 | /actuator/health/liveness y /actuator/health/readiness |
+| Empleados 127.0.0.1:3002 | /health/live y /health/ready |
+| DB disponible | Ambos live200UP/ready200UP |
+| DB propia detenida | Ambos live200UP/ready503DOWN |
+| DB restaurada | Ambos live200UP/ready200UP, sin reiniciar apps |
+| Cuerpos HTTP | Solo status; sin SQL, password, host, usuario o stacks |
+| Frontend | Shell4200 navega y recarga; MF4201/4202 login demo;0 errores JS/recursos |
+
+Mismos PID/hora de inicio Java/Node durante caída/restauración. El verificador valida ownership por nombre/proyecto/servicio/working_dir y restaura en finally. Fakes de unidades no sustituyen la integración real. Avisos no bloqueantes: metadata de feeds auxiliares Flyway401 y Mockito/Byte Buddy; sin añadir credenciales ni ocultarlos. Java global8/javac23/Node global22.14 no se modificaron.
+
+README por servicio/infra con comandos reales para configurar, instalar, compilar, migrar, ejecutar y verificar. Evidencia local ignorada: output/backend-foundation (build/tests, migraciones, aislamiento, health-outage, frontend-browser). Procesos propios pausados para revisión; el estado final se registrará al cerrar.
+
 ## Pendiente
 - Identificar participantes 2 y 3 por nombre.
-- Inicializar y verificar las aplicaciones restantes. La organización Git general ya está acordada y preparada; los repositorios copiados se retiraron de forma recuperable conforme a la decisión 003.
+- Inicializar y verificar Finanzas, Inteligencia, Sincronización y aplicaciones de integración restantes cuando sus responsables/CU lo requieran. Operaciones y Empleados ya tienen base técnica verificada, pendiente de revisión final de esta entrega.
 - Integrar Keycloak/SSO y BFF GraphQL mediante contratos acordados. La composición Shell/single-spa de MF01/MF02 ya está comprobada, pero sus vistas continúan siendo demos sin funcionalidad de negocio.
 - Crear contratos, infraestructura ejecutable y configuración.
 - Implementar y probar CU15, IA, offline, sincronización, MCP y demás funciones.
 ## Siguiente entregable
 Acordar el contrato de sesión Keycloak/roles y GraphQL para la siguiente entrega; sustituir demos por CU gradualmente sin cambiar la base de composición comprobada. Mantener en paralelo los contratos CU15 y la base de servicios/modelo web-Android.
 ## Evidencia
-Se instalaron, compilaron y arrancaron los dos Angular en standalone y se integraron realmente en el Shell single-spa, con pruebas de montaje, navegación, recarga, assets y responsive. No se ha integrado ni probado una plataforma AutoNexus completa. No hay servicios ni CU de negocio acreditados por esta tarea; CU01 no está implementado por haber probado el login simulado. No se ejecutaron suites unitarias/e2e completas ni despliegue productivo. El callback social ficticio y aclService.setFull(true) siguen en el template, incluso en producción: no desplegar como autenticación real.
+Se instalaron, compilaron y arrancaron los dos Angular en standalone y se integraron realmente en el Shell single-spa, con pruebas de montaje, navegación, recarga, assets y responsive. No se ha integrado ni probado una plataforma AutoNexus completa. Hay dos bases técnicas backend verificadas, no funcionalidades ni CU de negocio acreditados; CU01 no está implementado por haber probado el login simulado. No se probaron funcionalmente todos los CU ni se hizo despliegue productivo; las pruebas unitarias/HTTP y la integración real de la base backend se detallan arriba. El callback social ficticio y aclService.setFull(true) siguen en el template, incluso en producción: no desplegar como autenticación real.
 ## Próxima actualización
 Registrar fecha, rama/commit, cambios implementados, verificaciones reales, bloqueos y siguiente paso. No reemplazar pendientes por porcentajes estimados sin evidencia.
