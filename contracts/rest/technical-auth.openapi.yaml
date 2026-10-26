@@ -1,0 +1,39 @@
+openapi: 3.1.0
+info:
+  title: AutoNexus CU01 technical authentication proof
+  version: 1.0.0
+  description: Non-business resources only; web business functions remain GraphQL via the future BFF.
+servers:
+  - url: http://127.0.0.1:8081
+    description: Operations (audience autonexus-operations-api)
+  - url: http://127.0.0.1:3002
+    description: Employees (audience autonexus-employees-api)
+security:
+  - bearer: []
+paths:
+  /technical/session:
+    get:
+      summary: Confirm validated identity and recognized workshop role
+      responses:
+        '200':
+          description: Technical identity only (resource, service, subject, roles)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: No recognized workshop role
+  /technical/admin:
+    get:
+      summary: Verify administrador permission without a business operation
+      responses:
+        '200':
+          description: Technical permission confirmed (resource, service, authorized true)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: administrador role is required
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
