@@ -183,10 +183,12 @@ export class EmployeeFormComponent implements OnInit {
     this.error.set(null);
     try {
       const result = await this.api.retryAccess({ id: current.id, input: { operationId: newOperationId(), expectedVersion: current.version } });
-      this.employee.set(result.employee);
-      this.saved.set(result.employee);
+      // The mutation snapshot predates the identity sync; read the owner record to show the final state.
+      const refreshed = await this.api.get(result.employee.id);
+      this.employee.set(refreshed);
+      this.saved.set(refreshed);
       this.replayed.set(result.replayed);
-      this.patch(result.employee);
+      this.patch(refreshed);
     } catch (error) {
       this.fail(error);
     } finally {
