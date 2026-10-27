@@ -10,4 +10,6 @@ $code=$LASTEXITCODE
 $code | Out-File (Join-Path $out 'cu01-main.exit')
 if($code -ne 0){exit $code}
 & $node infra/compose/scripts/verify-databases.mjs --require-migrations *> (Join-Path $out 'postgres-main.log')
-$LASTEXITCODE | Out-File (Join-Path $out 'postgres-main.exit')
+$code=$LASTEXITCODE
+$code | Out-File (Join-Path $out 'postgres-main.exit')
+exit $code

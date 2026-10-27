@@ -2,6 +2,8 @@
 
 ## Integración CU03 en main — runtime raíz verificado, publicación pendiente
 
+Control de wrappers: Node --test scripts/cu03/wrapper-exit.test.mjs red2→green4/exit0, con hijos simulados en directorios temporales; propaga fallos7/9 y conserva éxito0, sin tocar aplicaciones/DB. La primera sesión de revisión no produjo dictamen (cancelada tras fallo de herramienta); se solicita una nueva revisión independiente. Esta corrección no modifica CU03 empresarial y no requiere repetir los smokes live aprobados.
+
 Solicitud posterior2026-10-26: main89bc8e1 era ancestro de feat/cu03-employees efc2e1c, divergencia0/7. efc2e1c solo modifica especificación/STATUS sobre código revisado281b9ee. Commit documental897873b ajustó source a main y se integró por fast-forward; ramas/worktrees preservados, sin cambios ajenos descartados. HEAD final se obtiene con git rev-parse main; no push ni PR.
 
 Backend definitivo en services/employees de raíz,127.0.0.1:3002, PID observado29100; sin listener3003. Nuevo start-main.ps1 valida root/main y dueños antes de detener, reutiliza entorno/cliente técnico privado y restaura entorno del llamador. -Restart sustituye solo Empleados reconocidos; sin flag conservó el PID. Arranque general CU01 delega Empleados al helper. Compose/volúmenes no se recrearon; no init/provision ni regeneración de secretos.

@@ -91,6 +91,8 @@ CU02 completo, elevación de roles, inicializar BFF ajeno, CRUD web sin BFF, jor
 
 ## Journey log
 
+Integración main posterior: la primera sesión de revisión se canceló tras un fallo de transpile del diagnóstico; no emitió dictamen ni se cuenta conforme. Inspección posterior reprodujo fallo de propagación en wrappers (hijos7/9, wrapper0): red2 con copias temporales y Node stub, sin apps/SQL/IdP. Wrappers ahora registran y propagan el exitcode; green4 incluye éxito0. Es prueba unitaria de supervisión, no sustituye los6checks live3002 ni12etapas CU01 reales ya aprobados. No cambió código empresarial/runtime.
+
 Evidencia previa a revisión: main89bc8e1 conserva CU01 y su runtime; contratos tempranos12f44e6. Empleados frozen/build PASS,55unitarias+42HTTP PASS, lint/tipos exit0 con0advertencias. Matriz real12grupos incluyó pérdidas remota/local, ownership y caída/restauración IdP; luego8grupos funcionales del código final sin repetir recuperación no afectada. Regresión CU01 desde raíz13etapas exit0 y aislamientoSQL1/2migraciones. OpenAPI3.1/sintaxis SDL PASS. Logs en output/cu03-employees del worktree y output/cu01-main-integration de raíz. Revisión independiente aún pendiente; no se marca delivered por pruebas propias.
 
 2026-10-26: diseño aprobado mediante Question; usuario exige identidad técnica dedicada (no bootstrap habitual), contratos tempranos y límite explícito de cuenta sin acceso operativo. No requiere nuevas confirmaciones para decisiones técnicas rutinarias.
