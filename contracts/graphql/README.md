@@ -43,3 +43,11 @@ mutation RetryEmployeeAccess($id: UUID!, $input: EmployeeCommandInput!) {
 
 La selección GraphQL puede ser parcial; REST devuelve el shape completo. No se permite acceso empresarial web directo a REST como alternativa al BFF pendiente. CU02 y CU03 web no están completados por publicar este contrato.
 
+
+## Implementación CU03 (2026-10-27)
+
+`integration/bff` ejecuta este SDL con `graphql` 17.0.2 sobre la API REST de Empleados (sin ORM ni SQL). Superficie cerrada a los siete campos raíz; una operación por petición; sin introspección ni fragmentos nombrados; profundidad <=6 y <=120 selecciones.
+
+Todas las operaciones requieren access token del usuario con audiencia `autonexus-employees-api` y rol `administrador`; el BFF reenvía ese mismo token a Empleados. Los errores de negocio se exponen en `errors[].extensions={code,statusCode}` con mensajes saneados. El BFF no crea audiencia propia ni realiza token exchange: eso sigue pendiente de acuerdo.
+
+El microfrontend `mf-employees` consume estas operaciones a través de `SessionPort.requestBusiness` y nunca recibe el token. Contrato de transporte: `contracts/auth/README.md`; decisiones010.

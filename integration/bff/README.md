@@ -1,12 +1,61 @@
 # BFF
-Tecnología prevista: NestJS.
-Persistencia: Sin base de negocio.
-Responsabilidad: Bloque 2; contratos compartidos.
-Alcance: GraphQL empresarial, composición por APIs y adaptación del acceso móvil REST. Nunca consultar directamente las bases propietarias.
+
+Tecnología: NestJS 12.2.0. Persistencia: sin base de negocio. GraphQL 17.0.2 sobre el SDL publicado; cliente HTTP hacia la API REST de Empleados.
+
 ## Estado
 
-CU03 está integrado localmente en main y su REST propietario sirve127.0.0.1:3002 desde raíz. Traspaso exacto de OpenAPI/SDL/auth, operaciones/errores/comandos e invariantes operationId/expectedVersion/access.status: docs/handoffs/2026-10-26-cu03-main-cu04.md (ruta desde raíz). Este backend entregado NO convierte el BFF reservado ni mf-employees en integración web terminada. No copiar credenciales IdP ni sustituir usuario por cuenta técnica.
+Implementado para CU03 (Empleados). Consume `contracts/graphql/employees.graphql` como fuente única y reenvía el token del usuario a `http://127.0.0.1:3002`. No consulta PostgreSQL, no usa credenciales administrativas de Keycloak y no expone tokens.
 
-CU03 ya tiene backend propietario verificado en feat/cu03-employees. Contratos tempranos: contracts/rest/employees.openapi.yaml, contracts/graphql/employees.graphql y contracts/auth/employees.md (rutas desde raíz), publicados en12f44e6 antes de implementar. Implementar aquí los resolvers y validación por operación/campo/registro sigue a cargo del participante2; no hay conexión SQL ni credenciales IdP en BFF. Validar sesión y propagar bearer autorizado para audiencia Empleados; audiencia propia/mappers/exchange pendientes de acuerdo. El SDL es propuesta, no integración ejecutable. No conectar mf-employees directamente a REST ni reemplazar usuario por cuenta técnica administrativa.
-Carpeta reservada. Aplicación todavía no generada. Leer el AGENTS raíz y local antes de inicializar. Los comandos para instalar, ejecutar y verificar se añadirán después de comprobarlos en el proyecto real.
+Alcance no exclusivo (decisión 009): el BFF puede ser implementado por cualquier integrante. Decisiones de seguridad y transporte: `docs/decisions/010-bff-graphql-forwarding.md`.
 
+## Ejecución local
+
+Requisitos: Node 22.22.3, pnpm 12.6.0, Empleados en `127.0.0.1:3002` y Keycloak en `127.0.0.1:8180`.
+
+```powershell
+Set-Location integration/bff
+$node = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'
+$pnpm = 'C:/Users/marcelo/AppData/Local/node/corepack/v1/pnpm/12.6.0/bin/pnpm.mjs'
+$env:Path = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3;' + $env:Path
+& $node $pnpm install --frozen-lockfile
+& $node $pnpm build
+& $node dist/main.js
+```
+
+Variables admitidas (todas con default local; no hay secretos):
+
+| Variable | Default | Regla |
+| --- | --- | --- |
+| PORT | 3004 | entero 1–65535 |
+| EMPLOYEES_API_URL | http://127.0.0.1:3002 | solo `http` y host `127.0.0.1` |
+| OIDC_ISSUER_URI | http://127.0.0.1:8180/realms/autonexus | exacto |
+| OIDC_AUDIENCE | autonexus-employees-api | exacto |
+| WEB_ALLOWED_ORIGINS | http://127.0.0.1:4200,4201,4202 | subconjunto exacto |
+| BFF_SCHEMA_PATH | ../../contracts/graphql/employees.graphql | ruta absoluta existente |
+
+## Superficie
+
+`POST /graphql` con `{query, variables?, operationName?}` y `Authorization: Bearer`. Campos raíz permitidos: `employees`, `employee`, `employeeHistory`, `createEmployee`, `updateEmployee`, `deactivateEmployee`, `retryEmployeeAccess`. Una operación por petición; sin introspección ni fragmentos nombrados; profundidad máxima 6; 120 selecciones; consulta de hasta 4000 caracteres y variables de hasta 64 KB.
+
+`GET /health/live` responde `{status:'UP'}` siempre; `GET /health/ready` comprueba alcanzabilidad de Empleados y devuelve 503 `DOWN` si no responde.
+
+## Autorización y errores
+
+- Token RS256 del usuario, issuer/audiencia propios, `exp`, `typ: Bearer`, tolerancia 5 s, JWKS confiable; rol `administrador` requerido.
+- 401/403 de Nest: `{statusCode, message}` sin detalles.
+- Errores de negocio GraphQL: `errors[].extensions = {code,statusCode}` con mensajes saneados (`VALIDATION_ERROR`, `EMPLOYEE_NOT_FOUND`, duplicados, `VERSION_CONFLICT`, `IDEMPOTENCY_CONFLICT`, `SELF_DEACTIVATION_FORBIDDEN`, `ACCESS_REQUEST_CANNOT_BE_REVOKED`, `ACCESS_NOT_REQUESTED`, `PERSISTENCE_UNAVAILABLE`, `SERVICE_UNAVAILABLE`).
+- Indisponibilidad del upstream se expone como `SERVICE_UNAVAILABLE` (503) y nunca filtra el cuerpo del servicio.
+
+## Verificación
+
+```powershell
+Set-Location integration/bff
+& $node $pnpm test        # 10 unitarias: allowlist, límites, mapeo de errores, historial anidado
+& $node $pnpm test:e2e    # 10 HTTP: salud, 401/403, query válida, saneamiento
+```
+
+Matriz real (Empleados + Keycloak, sin mocks): `node scripts/cu03/verify-bff-real.mjs` desde la raíz del worktree. Recorrido web completo: `node scripts/cu03/verify-cu03-web.mjs`.
+
+## Límites
+
+No implementa audiencia propia del BFF, token exchange, cacheo, suscripciones, batching ni otros CU. La web accede solo por este BFF; el REST de Empleados no se expone al navegador.
