@@ -1,5 +1,5 @@
 import { Component, inject, input, OnInit, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, Validators, type AbstractControl, type ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzButtonModule } from 'ng-zorro-antd/button';
@@ -16,7 +16,25 @@ import { EmployeesApi, EmployeesFailure, newOperationId } from './employees-api'
 import type { Employee, EmployeeFieldsInput } from './employees.contract';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** NG-ZORRO reads and writes dates in local time: build and serialize calendar parts, never UTC midnight. */
+function localDate(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+}
+function calendarDate(value: Date): string {
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${value.getFullYear()}-${month}-${day}`;
+}
 const RETRYABLE = new Set(['SERVICE_UNAVAILABLE', 'PERSISTENCE_UNAVAILABLE']);
+const distinctSpecialties = (control: AbstractControl): ValidationErrors | null => {
+  const items = (control.value ?? []) as string[];
+  const normalized = items.map(item => item.trim()).filter(Boolean);
+  if (normalized.length > 20) return { specialties: true };
+  if (normalized.some(item => item.length < 1 || item.length > 80)) return { specialties: true };
+  return new Set(normalized).size === normalized.length ? null : { specialties: true };
+};
 
 interface Attempt {
   operationId: string;
@@ -74,10 +92,10 @@ export class EmployeeFormComponent implements OnInit {
     lastName: this.builder.control('', [Validators.required, Validators.maxLength(100)]),
     document: this.builder.control('', [Validators.required, Validators.maxLength(40)]),
     email: this.builder.control('', [Validators.required, Validators.maxLength(254), Validators.email]),
-    phone: this.builder.control('', [Validators.required, Validators.maxLength(25), Validators.pattern(/^[0-9+().\s-]{7,25}$/)]),
+    phone: this.builder.control('', [Validators.required, Validators.maxLength(25), Validators.pattern(/^(?=.*[0-9])[0-9+(). -]{7,25}$/)]),
     jobTitle: this.builder.control('', [Validators.required, Validators.maxLength(100)]),
     startDate: this.builder.control<Date | null>(null, [Validators.required]),
-    specialties: this.builder.control<string[]>([], [Validators.maxLength(20)]),
+    specialties: this.builder.control<string[]>([], [Validators.maxLength(20), distinctSpecialties]),
     requested: this.builder.control(false)
   });
 
@@ -90,6 +108,7 @@ export class EmployeeFormComponent implements OnInit {
   readonly errorCode = signal<string | null>(null);
   readonly reloadHint = signal(false);
   readonly retryable = signal(false);
+  readonly created = signal<Employee | null>(null);
   private attempt: Attempt | null = null;
 
   get editing(): boolean {
@@ -129,7 +148,11 @@ export class EmployeeFormComponent implements OnInit {
     const fields = this.fields();
     if (!fields) return;
     const editing = this.editing;
-    const expectedVersion = this.employee()?.version ?? 0;
+    if (editing && !this.employee()) {
+      this.error.set('Cargá el empleado antes de guardar.');
+      return;
+    }
+    const expectedVersion = editing ? this.employee()!.version : 0;
     const requested = this.form.getRawValue().requested;
     const signature = JSON.stringify({ editing, expectedVersion: editing ? expectedVersion : null, requested: editing ? null : requested, fields });
     if (!this.attempt || this.attempt.signature !== signature) this.attempt = { operationId: newOperationId(), signature };
@@ -144,11 +167,42 @@ export class EmployeeFormComponent implements OnInit {
       this.employee.set(result.employee);
       this.attempt = null;
       if (editing) this.patch(result.employee);
+      else this.created.set(result.employee);
     } catch (error) {
       this.fail(error);
     } finally {
       this.saving.set(false);
     }
+  }
+
+  async retryAccess(): Promise<void> {
+    const current = this.employee();
+    if (!current) return;
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const result = await this.api.retryAccess({ id: current.id, input: { operationId: newOperationId(), expectedVersion: current.version } });
+      this.employee.set(result.employee);
+      this.saved.set(result.employee);
+      this.replayed.set(result.replayed);
+      this.patch(result.employee);
+    } catch (error) {
+      this.fail(error);
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  accessLabel(employee: Employee): string {
+    if (!employee.access.requested) return 'Sin acceso solicitado';
+    const labels: Record<string, string> = {
+      pending: 'Sincronización pendiente',
+      synced: 'Perfil sincronizado',
+      failed: 'Sincronización fallida',
+      conflict: 'Conflicto de identidad',
+      not_requested: 'Sin acceso solicitado'
+    };
+    return labels[employee.access.status] ?? employee.access.status;
   }
 
   reload(): void {
@@ -180,7 +234,7 @@ export class EmployeeFormComponent implements OnInit {
       email: employee.email,
       phone: employee.phone,
       jobTitle: employee.jobTitle,
-      startDate: new Date(`${employee.startDate}T00:00:00Z`),
+      startDate: localDate(employee.startDate),
       specialties: [...employee.specialties],
       requested: employee.access.requested
     });
@@ -194,7 +248,7 @@ export class EmployeeFormComponent implements OnInit {
       this.error.set('La fecha de ingreso no es válida.');
       return null;
     }
-    const startDate = date.toISOString().slice(0, 10);
+    const startDate = calendarDate(date);
     if (!ISO_DATE.test(startDate)) {
       this.error.set('La fecha de ingreso no es válida.');
       return null;
@@ -203,7 +257,7 @@ export class EmployeeFormComponent implements OnInit {
       firstName: value.firstName.trim(),
       lastName: value.lastName.trim(),
       document: value.document.trim(),
-      email: value.email.trim().toLowerCase(),
+      email: value.email.trim(),
       phone: value.phone.trim(),
       jobTitle: value.jobTitle.trim(),
       startDate,

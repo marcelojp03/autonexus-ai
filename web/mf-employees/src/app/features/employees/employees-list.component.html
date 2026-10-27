@@ -32,6 +32,7 @@
     class="search"
     nz-input
     id="employee-search"
+    aria-label="Buscar empleados por nombre, apellido o documento"
     placeholder="Buscar por nombre, apellido o documento"
     [value]="search()"
     (input)="search.set($any($event.target).value)"
@@ -43,8 +44,7 @@
     nzAllowClear
     nzPlaceHolder="Todos los estados"
     [ngModel]="status()"
-    (ngModelChange)="status.set($event ?? null)"
-    (ngModelChange)="applyFilters()"
+    (ngModelChange)="onStatusChange($event)"
   >
     <nz-option nzValue="active" nzLabel="Activos"></nz-option>
     <nz-option nzValue="inactive" nzLabel="Inactivos"></nz-option>
@@ -66,6 +66,7 @@
   (nzPageIndexChange)="onPage($event)"
   nzSize="middle"
   id="employee-table"
+  aria-label="Empleados registrados"
 >
   <thead>
     <tr>
@@ -118,7 +119,9 @@
               nzDanger
               type="button"
               [disabled]="row.status === 'inactive' || busyId() === row.id"
-              (click)="deactivate(row)"
+              nz-popconfirm
+              nzPopconfirmTitle="¿Desactivar este empleado? El historial se conserva."
+              (nzOnConfirm)="deactivate(row)"
             >
               Desactivar
             </button>

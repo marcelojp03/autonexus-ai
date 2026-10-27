@@ -27,6 +27,7 @@ const shell = process.env.CU03_SHELL_URL ?? 'http://127.0.0.1:4200';
 const shots = resolve(root, 'output/playwright');
 mkdirSync(shots, { recursive: true });
 const stages = [];
+const problems = [];
 let browser;
 let stage = 'launch';
 const check = (value, message = 'Acceptance failed') => assert.ok(value, message);
@@ -58,7 +59,6 @@ try {
   browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
-  const problems = [];
   context.on('page', p => {
     p.on('pageerror', error => problems.push('pageerror:' + error.name));
     p.on('console', message => {
@@ -99,7 +99,7 @@ try {
   const savedText = await page.locator('#employee-saved').innerText();
   check(/guardad/i.test(savedText), 'Saving must be confirmed independently from access sync');
   const statusText = await page.locator('nz-descriptions').innerText();
-  check(/synced|pending|failed|conflict/.test(statusText), 'Access status must be visible');
+  check(/sincroniz|pendiente|conflicto|sin acceso/i.test(statusText), 'Access status must be visible');
   stages.push('access-status-visible');
 
   stage = 'reload-persistence';
@@ -120,6 +120,13 @@ try {
   await page.locator('#employee-submit').click();
   await page.locator('#employee-saved').waitFor({ state: 'visible', timeout: 40000 });
   stages.push('edit-saved');
+
+  stage = 'edit-date';
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('#jobTitle').waitFor({ state: 'visible', timeout: 40000 });
+  const dateValue = await page.locator('#startDate input').inputValue();
+  check(dateValue === '01/01/2020', 'Start date must keep the stored calendar day; got ' + dateValue);
+  stages.push('edit-date-roundtrip');
 
   stage = 'conflict';
   const stale = await context.newPage();
@@ -163,7 +170,10 @@ try {
   const finalRow = page.locator('tr[data-employee-id]', { hasText: document }).first();
   await finalRow.waitFor({ state: 'visible', timeout: 30000 });
   await finalRow.getByRole('button', { name: 'Desactivar' }).click();
-  await page.waitForTimeout(1500);
+  const confirm = page.locator('.ant-popover:visible .ant-btn-primary').first();
+  await confirm.waitFor({ state: 'visible', timeout: 10000 });
+  await confirm.click();
+  await page.locator('nz-alert').first().waitFor({ state: 'visible', timeout: 30000 });
   await page.locator('#employee-search').fill(document);
   await page.locator('#employee-filter').click();
   const inactiveRow = page.locator('tr[data-employee-id]', { hasText: document }).first();
@@ -205,7 +215,8 @@ try {
       await page.screenshot({ path: resolve(shots, 'cu03-web-failure.png'), fullPage: true }).catch(() => {});
       const alerts = await page.locator('#employee-form-error, #employee-error, nz-alert').allInnerTexts().catch(() => []);
       const invalid = await page.locator('.ng-invalid[formcontrolname], .ng-invalid.ant-input').count().catch(() => 0);
-      console.error(JSON.stringify({ diagnostics: { invalidFields: invalid, alerts: alerts.map(text => text.replace(/\s+/g, ' ').slice(0, 200)) } }));
+      const bodyText = await page.locator('main').innerText().catch(() => '');
+      console.error(JSON.stringify({ diagnostics: { invalidFields: invalid, alerts: alerts.map(text => text.replace(/\s+/g, ' ').slice(0, 200)), problems: problems.slice(0, 5), mainText: bodyText.replace(/\s+/g, ' ').slice(0, 300) } }));
     }
   } catch {}
   console.error(JSON.stringify({ pass: false, stage, actual: typeof error?.actual === 'string' ? error.actual.slice(0, 180) : undefined, message: String(error?.message ?? error).slice(0, 180) }));

@@ -1,7 +1,7 @@
 # Cierre y continuidad de sesión
 
 Traspaso más reciente: [CU03 web entregado](../handoffs/2026-10-27-cu03-web.md).
-Traspaso vigente: [CU03 main, participante2, publicación pendiente y CU04](../handoffs/2026-10-26-cu03-main-cu04.md). CU03 backend entregado; BFF/interfaz pendientes. CU04 preparado, no iniciado. Este enlace no reemplaza la plantilla siguiente.
+Traspaso anterior: [CU03 backend en main, publicación pendiente y CU04](../handoffs/2026-10-26-cu03-main-cu04.md) (histórico; el BFF y la interfaz ya se entregaron). Este enlace no reemplaza la plantilla siguiente.
 Copiar una instancia fechada en docs/handoffs/ al cerrar una tarea importante.
 - Fecha y responsable/bloque:
 - Rama y commit (si existen):

@@ -77,6 +77,22 @@ export class EmployeeHistoryComponent implements OnInit {
     return action === 'created' ? 'Alta' : action === 'updated' ? 'Modificación' : 'Desactivación';
   }
 
+  accessLabel(status: string): string {
+    const labels: Record<string, string> = {
+      not_requested: 'Sin acceso solicitado',
+      pending: 'Sincronización pendiente',
+      synced: 'Perfil sincronizado',
+      failed: 'Sincronización fallida',
+      conflict: 'Conflicto de identidad'
+    };
+    return labels[status] ?? status;
+  }
+
+  formattedDate(value: string): string {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' });
+  }
+
   actionColor(action: EmployeeHistoryEntry['action']): string {
     return action === 'created' ? 'green' : action === 'updated' ? 'blue' : 'volcano';
   }

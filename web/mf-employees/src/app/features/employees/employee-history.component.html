@@ -34,6 +34,7 @@
   (nzPageIndexChange)="onPage($event)"
   nzSize="middle"
   id="history-table"
+  aria-label="Historial de versiones del empleado"
 >
   <thead>
     <tr>
@@ -51,14 +52,14 @@
       <tr [attr.data-history-version]="row.version">
         <td>{{ row.version }}</td>
         <td><nz-tag [nzColor]="actionColor(row.action)">{{ actionLabel(row.action) }}</nz-tag></td>
-        <td>{{ row.occurredAt }}</td>
+        <td>{{ formattedDate(row.occurredAt) }}</td>
         <td>{{ row.snapshot.jobTitle }}</td>
         <td>
           <nz-tag [nzColor]="row.snapshot.status === 'active' ? 'green' : 'default'">
             {{ row.snapshot.status === 'active' ? 'Activo' : 'Inactivo' }}
           </nz-tag>
         </td>
-        <td><nz-tag>{{ row.snapshot.access.status }}</nz-tag></td>
+        <td><nz-tag>{{ accessLabel(row.snapshot.access.status) }}</nz-tag></td>
         <td class="mono">{{ row.actorSubject }}</td>
       </tr>
     }

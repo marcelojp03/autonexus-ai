@@ -1,5 +1,19 @@
 import { BusinessError } from './business-error.js';
 
+/** Only codes published by the CU03 contract may leave this BFF. */
+const PUBLIC_CODES = new Set([
+  'VALIDATION_ERROR',
+  'EMPLOYEE_NOT_FOUND',
+  'DUPLICATE_DOCUMENT',
+  'DUPLICATE_EMAIL',
+  'VERSION_CONFLICT',
+  'IDEMPOTENCY_CONFLICT',
+  'SELF_DEACTIVATION_FORBIDDEN',
+  'ACCESS_REQUEST_CANNOT_BE_REVOKED',
+  'ACCESS_NOT_REQUESTED',
+  'PERSISTENCE_UNAVAILABLE',
+]);
+
 export interface EmployeePageQuery {
   limit?: number;
   offset?: number;
@@ -47,7 +61,8 @@ export class HttpEmployeesGateway implements EmployeesGateway {
     if (response.status === 401) throw new BusinessError(401, 'UNAUTHENTICATED');
     if (response.status === 403) throw new BusinessError(403, 'FORBIDDEN');
     if (response.status === 503) throw new BusinessError(503, 'PERSISTENCE_UNAVAILABLE');
-    const code = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' ? body.code : undefined;
+    const candidate = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' ? body.code : undefined;
+    const code = candidate && PUBLIC_CODES.has(candidate) ? candidate : undefined;
     const statusCode = response.status === 400 || response.status === 404 || response.status === 409 ? response.status : 503;
     throw new BusinessError(statusCode, code ?? (statusCode === 404 ? 'EMPLOYEE_NOT_FOUND' : statusCode === 409 ? 'VERSION_CONFLICT' : statusCode === 400 ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE'));
   }

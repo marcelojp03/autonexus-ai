@@ -1,6 +1,6 @@
 # CU03 — Empleados: autenticación y semántica pública
 
-Contrato temprano de S2.2–S2.5 de la especificación aprobada `docs/compose/spec/cu03-employees.md`. OpenAPI: [employees.openapi.yaml](../rest/employees.openapi.yaml). SDL web **propuesto, no ejecutado**: [employees.graphql](../graphql/employees.graphql). No acredita backend integrado, BFF, CU02 ni CU03 web completo.
+Contrato temprano de S2.2–S2.5 de la especificación aprobada `docs/compose/spec/cu03-employees.md`. OpenAPI: [employees.openapi.yaml](../rest/employees.openapi.yaml). SDL web ejecutado por `integration/bff`: [employees.graphql](../graphql/employees.graphql). No acredita backend integrado, BFF, CU02 ni CU03 web completo.
 
 ## Fronteras y autorización
 

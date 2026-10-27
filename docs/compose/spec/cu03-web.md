@@ -11,9 +11,9 @@ source: work/marcelo
 
 **What was built** — BFF NestJS en `integration/bff` que expone GraphQL y compone la API REST de Empleados, y pantallas NG-ALAIN en `mf-employees` para listado, búsqueda, registro, edición, desactivación e historial con estado de la cuenta vinculada. El Shell conserva la sesión OIDC y añade un transporte empresarial por `SessionPort` que nunca expone tokens. Se respetaron `operationId`, `expectedVersion`, replay, errores y estados de sincronización de acceso.
 
-**Verification** — BFF: build, 10 unitarias y 10 HTTP con RSA sintético y upstream falso explícito; matriz real de 6 etapas contra Empleados y Keycloak reales (salud con upstream, 401, 403, lista con forwarding, introspección rechazada, error de negocio mapeado). Web: recorrido de navegador con 10 etapas PASS y exit 0 (login administrador, alta con solicitud de acceso, estado de acceso visible, persistencia tras recarga, edición, conflicto de versión y recarga, historial, desactivación con historial, consola limpia, permiso insuficiente bloqueado). `mf-employees` integrado y Shell construidos en el worktree; Operaciones y Empleados reales de la raíz en `8081`/`3002`; PostgreSQL real.
+**Verification** — BFF: build, 10 unitarias y 10 HTTP con RSA sintético y upstream falso explícito; matriz real de 6 etapas contra Empleados y Keycloak reales (salud con upstream, 401, 403, lista con forwarding, introspección rechazada, error de negocio mapeado). Web: recorrido de navegador con 11 etapas PASS y exit 0 (login administrador, alta con solicitud de acceso, estado de acceso visible, persistencia tras recarga, edición, ida y vuelta de la fecha de ingreso, conflicto de versión y recarga, historial, desactivación con historial confirmada, consola limpia, permiso insuficiente bloqueado). `mf-employees` integrado y Shell construidos en el worktree; Operaciones y Empleados reales de la raíz en `8081`/`3002`; PostgreSQL real.
 
-**Review** — Ver revisión independiente registrada en `docs/context/STATUS.md`. Backend propietario ya estaba entregado; esta entrega agrega BFF e interfaz, sin declarar CU02 ni CU04.
+**Review** — Revisión independiente `425ed03..988d55d`: nueve criterios cumplidos, un crítico (la fecha de ingreso se construía en UTC y NG-ZORRO la leía en hora local, mostrándola un día antes) y hallazgos de corrección no bloqueantes. El crítico y los hallazgos relevantes se corrigieron y se revalidaron con el recorrido de 11 etapas; detalle y re-revisión en `docs/context/STATUS.md`. Backend propietario ya estaba entregado; esta entrega agrega BFF e interfaz, sin declarar CU02 ni CU04.
 
 ## [S1] Problem
 
@@ -80,3 +80,5 @@ CU02 y gestión de roles/credenciales, CU04 y planificación, agenda/asignacione
 - `nz-alert` no proyecta contenido: el botón de recarga del conflicto se movió fuera de la alerta.
 - El límite de profundidad GraphQL (4) rechazaba el `snapshot.access` del historial; se elevó a 6 con regresión específica.
 - Los procesos lanzados con `Start-Process` morían al cerrarse la llamada de la herramienta; los servicios de verificación se lanzan con `spawn` desacoplado (`unref`) o quedan documentados para arranque manual.
+- La revisión independiente detectó que la fecha se mostraba un día antes en husos negativos; el arreglo local-date y su aserción evitan que vuelva a pasar en silencio.
+- El reintento de acceso estaba expuesto sin uso; ahora la ficha ofrece «Reintentar sincronización de la cuenta» y la desactivación pide confirmación.

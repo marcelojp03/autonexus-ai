@@ -16,10 +16,12 @@ Rama `work/marcelo`, base main425ed03. Decisión009 habilita alcance no exclusiv
 | BFF real contra Empleados+Keycloak | PASS 6 etapas/exit0: salud con upstream,401,403,lista con forwarding,introspección rechazada,error de negocio mapeado |
 | `mf-employees` build:integrated | PASS exit0; advertencias CommonJS del template preexistentes |
 | Shell build (tsc+vite+staging) | PASS exit0 |
-| Recorrido web real (Playwright, Keycloak y PostgreSQL reales) | PASS 10 etapas/exit0: login,alta con acceso,estado de acceso,persistencia tras recarga,edición,conflicto+recarga,historial,desactivación,consola limpia,permiso insuficiente |
+| Recorrido web real (Playwright, Keycloak y PostgreSQL reales) | PASS 11 etapas/exit0: login,alta con acceso,estado de acceso,persistencia tras recarga,edición,fecha de ingreso tras recargar,conflicto+recarga,historial,desactivación confirmada,consola limpia,permiso insuficiente |
 | Regresión de carrera del listado | Respuesta obsoleta podía sobrescribir la búsqueda; se descarta por secuencia y el recorrido vuelve a PASS |
 
 Hallazgos corregidos durante la verificación: fecha NG-ZORRO requería entrada por teclado; `nz-alert` no proyecta el botón de recarga; el límite de profundidad GraphQL no contemplaba `snapshot.access`; y la carrera de respuestas del listado. Todos con corrección y nueva ejecución, no reclasificados como ruido.
+
+Revisión independiente (`425ed03..988d55d`): nueve criterios de aceptación cumplidos; un crítico de corrección —la fecha de ingreso se construía en UTC y NG-ZORRO la interpretaba en hora local, mostrándola un día antes— y hallazgos no bloqueantes. Correcciones aplicadas: fecha por componentes locales con aserción de ida y vuelta; reintento de sincronización de acceso disponible en la ficha; confirmación al desactivar; catálogo cerrado de códigos del upstream; decodificación de `errors` vacíos; validación de especialidades; alta bloqueada tras registrar y edición sin empleado cargado; etiquetas y fechas legibles; accesibilidad de búsqueda y tablas; `.env.example` válido y textos de contrato alineados. Re-ejecutadas las verificaciones afectadas: BFF 10 unitarias + 10 HTTP PASS, build PASS, Shell 15 pruebas y build PASS, `mf-employees` build PASS y recorrido web 11/11 PASS.
 
 Evidencia local ignorada en `output-cu03web/` (logs de BFF, shell, Empleados, Operaciones y verificadores) y `output/playwright/cu03-web-list.png`. Los procesos lanzados con `Start-Process` morían al cerrar la herramienta; la verificación usó lanzamiento desacoplado. Estado remoto sin cambios: el primer push sigue preparado y NO ejecutado; los compañeros no tienen estos commits.
 

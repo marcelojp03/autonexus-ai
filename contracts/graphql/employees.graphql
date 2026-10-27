@@ -1,4 +1,4 @@
-# Proposed CU03 web contract, not an executable BFF. All root operations AND
+# CU03 web contract, executed by integration/bff over the Employees REST API. All root operations AND
 # employee/history fields require administrador on the server. See auth/employees.md.
 # REST validation applies unchanged; input null is invalid even for optional access.
 """UUID string; parse and serialize canonical lowercase hyphenated UUID on the server."""

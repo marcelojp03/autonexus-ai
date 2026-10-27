@@ -48,6 +48,11 @@
       nzShowIcon
       id="employee-access-pending"
     ></nz-alert>
+    <div class="footer panel">
+      <button nz-button type="button" [disabled]="saving()" (click)="retryAccess()" id="employee-access-retry">
+        Reintentar sincronización de la cuenta
+      </button>
+    </div>
   }
 }
 
@@ -58,7 +63,7 @@
       <nz-tag [nzColor]="current.status === 'active' ? 'green' : 'default'">{{ current.status === 'active' ? 'Activo' : 'Inactivo' }}</nz-tag>
     </nz-descriptions-item>
     <nz-descriptions-item nzTitle="Cuenta vinculada">
-      <nz-tag>{{ current.access.status }}</nz-tag>
+      <nz-tag [nzColor]="current.access.status === 'synced' ? 'green' : current.access.status === 'failed' || current.access.status === 'conflict' ? 'red' : 'gold'">{{ accessLabel(current) }}</nz-tag>
     </nz-descriptions-item>
     <nz-descriptions-item nzTitle="Historial">
       <a [routerLink]="['/', current.id, 'history']">Ver historial</a>
@@ -136,9 +141,12 @@
     }
   </div>
   <div class="footer">
-    <button nz-button nzType="primary" type="submit" [disabled]="saving()" id="employee-submit">
+    <button nz-button nzType="primary" type="submit" [disabled]="saving() || (created() && !editing)" id="employee-submit">
       {{ saving() ? 'Guardando…' : editing ? 'Guardar cambios' : 'Registrar empleado' }}
     </button>
     <button nz-button type="button" (click)="back()">Cancelar</button>
+    @if (created(); as fresh) {
+      <a nz-button nzType="default" [routerLink]="['/', fresh.id, 'edit']" id="employee-open-created">Ver ficha registrada</a>
+    }
   </div>
 </form>

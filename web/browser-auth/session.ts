@@ -33,7 +33,7 @@ export function safeReturnTo(value: unknown, application: BrowserApplication): s
 function parseBusinessResult(value: unknown): BusinessResult {
   if (!value || typeof value !== 'object') throw new Error('Respuesta empresarial inválida.');
   const body = value as { data?: unknown; errors?: unknown };
-  if (Array.isArray(body.errors)) {
+  if (Array.isArray(body.errors) && body.errors.length) {
     const errors: BusinessFailure[] = body.errors.map((raw: unknown) => {
       if (!raw || typeof raw !== 'object') throw new Error('Respuesta empresarial inválida.');
       const entry = raw as { message?: unknown; extensions?: { code?: unknown; statusCode?: unknown } };
@@ -89,7 +89,8 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
     publish('authenticated');
     if (disposed || version !== epoch || !current.authenticated) throw new Error('Sesión no disponible.');
   }
-  sdk.onAuthLogout = fail;  sdk.onAuthRefreshError = fail;
+  sdk.onAuthLogout = fail;
+  sdk.onAuthRefreshError = fail;
   sdk.onTokenExpired = () => { void refresh().catch(() => {}); };
   const session: SessionPort = {
     snapshot: () => current,

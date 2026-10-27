@@ -6,6 +6,7 @@ import { NzButtonModule } from 'ng-zorro-antd/button';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
+import { NzPopconfirmModule } from 'ng-zorro-antd/popconfirm';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzTagModule } from 'ng-zorro-antd/tag';
@@ -21,6 +22,7 @@ import type { Employee, EmployeeStatus } from './employees.contract';
     NzEmptyModule,
     NzInputModule,
     NzPageHeaderModule,
+    NzPopconfirmModule,
     NzSelectModule,
     NzTableModule,
     NzTagModule
@@ -88,6 +90,11 @@ export class EmployeesListComponent implements OnInit {
     this.status.set(null);
     this.pageIndex.set(1);
     void this.load();
+  }
+
+  onStatusChange(value: EmployeeStatus | null): void {
+    this.status.set(value ?? null);
+    this.applyFilters();
   }
 
   onPage(index: number): void {
