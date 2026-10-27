@@ -1,0 +1,226 @@
+import { Component, inject, input, OnInit, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
+import { NzAlertModule } from 'ng-zorro-antd/alert';
+import { NzButtonModule } from 'ng-zorro-antd/button';
+import { NzCheckboxModule } from 'ng-zorro-antd/checkbox';
+import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
+import { NzDescriptionsModule } from 'ng-zorro-antd/descriptions';
+import { NzFormModule } from 'ng-zorro-antd/form';
+import { NzInputModule } from 'ng-zorro-antd/input';
+import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
+import { NzSelectModule } from 'ng-zorro-antd/select';
+import { NzSpinModule } from 'ng-zorro-antd/spin';
+import { NzTagModule } from 'ng-zorro-antd/tag';
+import { EmployeesApi, EmployeesFailure, newOperationId } from './employees-api';
+import type { Employee, EmployeeFieldsInput } from './employees.contract';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const RETRYABLE = new Set(['SERVICE_UNAVAILABLE', 'PERSISTENCE_UNAVAILABLE']);
+
+interface Attempt {
+  operationId: string;
+  signature: string;
+}
+
+@Component({
+  selector: 'anx-employee-form',
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    NzAlertModule,
+    NzButtonModule,
+    NzCheckboxModule,
+    NzDatePickerModule,
+    NzDescriptionsModule,
+    NzFormModule,
+    NzInputModule,
+    NzPageHeaderModule,
+    NzSelectModule,
+    NzSpinModule,
+    NzTagModule
+  ],
+  templateUrl: './employee-form.component.html',
+  styles: [
+    `
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 0 16px;
+      }
+      .wide {
+        grid-column: 1 / -1;
+      }
+      .footer {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      .panel {
+        margin-bottom: 16px;
+      }
+    `
+  ]
+})
+export class EmployeeFormComponent implements OnInit {
+  readonly id = input<string>();
+  private readonly api = inject(EmployeesApi);
+  private readonly router = inject(Router);
+  private readonly builder = inject(FormBuilder).nonNullable;
+
+  readonly form = this.builder.group({
+    firstName: this.builder.control('', [Validators.required, Validators.maxLength(100)]),
+    lastName: this.builder.control('', [Validators.required, Validators.maxLength(100)]),
+    document: this.builder.control('', [Validators.required, Validators.maxLength(40)]),
+    email: this.builder.control('', [Validators.required, Validators.maxLength(254), Validators.email]),
+    phone: this.builder.control('', [Validators.required, Validators.maxLength(25), Validators.pattern(/^[0-9+().\s-]{7,25}$/)]),
+    jobTitle: this.builder.control('', [Validators.required, Validators.maxLength(100)]),
+    startDate: this.builder.control<Date | null>(null, [Validators.required]),
+    specialties: this.builder.control<string[]>([], [Validators.maxLength(20)]),
+    requested: this.builder.control(false)
+  });
+
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+  readonly employee = signal<Employee | null>(null);
+  readonly saved = signal<Employee | null>(null);
+  readonly replayed = signal(false);
+  readonly error = signal<string | null>(null);
+  readonly errorCode = signal<string | null>(null);
+  readonly reloadHint = signal(false);
+  readonly retryable = signal(false);
+  private attempt: Attempt | null = null;
+
+  get editing(): boolean {
+    return !!this.id();
+  }
+
+  ngOnInit(): void {
+    const id = this.id();
+    if (id) void this.load(id);
+  }
+
+  async load(id = this.id()): Promise<void> {
+    if (!id) return;
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      const employee = await this.api.get(id);
+      this.employee.set(employee);
+      this.patch(employee);
+      this.attempt = null;
+    } catch (error) {
+      this.fail(error);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  async submit(): Promise<void> {
+    this.error.set(null);
+    this.errorCode.set(null);
+    this.reloadHint.set(false);
+    if (this.form.invalid) {
+      Object.values(this.form.controls).forEach(control => control.markAsDirty());
+      this.error.set('Revisá los campos marcados antes de guardar.');
+      return;
+    }
+    const fields = this.fields();
+    if (!fields) return;
+    const editing = this.editing;
+    const expectedVersion = this.employee()?.version ?? 0;
+    const requested = this.form.getRawValue().requested;
+    const signature = JSON.stringify({ editing, expectedVersion: editing ? expectedVersion : null, requested: editing ? null : requested, fields });
+    if (!this.attempt || this.attempt.signature !== signature) this.attempt = { operationId: newOperationId(), signature };
+    const operationId = this.attempt.operationId;
+    this.saving.set(true);
+    try {
+      const result = editing
+        ? await this.api.update({ id: this.id()!, input: { operationId, expectedVersion, ...fields } })
+        : await this.api.create({ input: { operationId, ...fields, access: { requested } } });
+      this.saved.set(result.employee);
+      this.replayed.set(result.replayed);
+      this.employee.set(result.employee);
+      this.attempt = null;
+      if (editing) this.patch(result.employee);
+    } catch (error) {
+      this.fail(error);
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  reload(): void {
+    const id = this.id();
+    if (id) void this.load(id);
+  }
+
+  back(): void {
+    void this.router.navigate(['/list']);
+  }
+
+  accessDescription(employee: Employee): string {
+    if (!employee.access.requested) return 'No se solicitó cuenta de acceso.';
+    const descriptions: Record<string, string> = {
+      pending: 'La cuenta vinculada todavía se está sincronizando con Keycloak.',
+      synced: 'El perfil de la cuenta coincide con los datos laborales. Sin roles ni credencial habilitada no hay acceso operativo.',
+      failed: 'La cuenta no pudo sincronizarse. Los datos laborales sí quedaron guardados.',
+      conflict: 'La cuenta encontrada no pertenece a este empleado; no se modificó.',
+      not_requested: 'No se solicitó cuenta de acceso.'
+    };
+    return descriptions[employee.access.status] ?? employee.access.status;
+  }
+
+  private patch(employee: Employee): void {
+    this.form.patchValue({
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      document: employee.document,
+      email: employee.email,
+      phone: employee.phone,
+      jobTitle: employee.jobTitle,
+      startDate: new Date(`${employee.startDate}T00:00:00Z`),
+      specialties: [...employee.specialties],
+      requested: employee.access.requested
+    });
+    this.form.controls.requested.disable();
+  }
+
+  private fields(): EmployeeFieldsInput | null {
+    const value = this.form.getRawValue();
+    const date = value.startDate;
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      this.error.set('La fecha de ingreso no es válida.');
+      return null;
+    }
+    const startDate = date.toISOString().slice(0, 10);
+    if (!ISO_DATE.test(startDate)) {
+      this.error.set('La fecha de ingreso no es válida.');
+      return null;
+    }
+    return {
+      firstName: value.firstName.trim(),
+      lastName: value.lastName.trim(),
+      document: value.document.trim(),
+      email: value.email.trim().toLowerCase(),
+      phone: value.phone.trim(),
+      jobTitle: value.jobTitle.trim(),
+      startDate,
+      specialties: (value.specialties ?? []).map(item => item.trim()).filter(Boolean)
+    };
+  }
+
+  private fail(error: unknown): void {
+    if (error instanceof EmployeesFailure) {
+      this.errorCode.set(error.failure.code);
+      this.error.set(error.failure.message);
+      this.reloadHint.set(error.failure.code === 'VERSION_CONFLICT');
+      this.retryable.set(RETRYABLE.has(error.failure.code));
+      return;
+    }
+    this.errorCode.set('UNKNOWN');
+    this.error.set('No se pudo completar la operación. Reintenta.');
+    this.retryable.set(true);
+  }
+}

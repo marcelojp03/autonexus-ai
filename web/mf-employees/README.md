@@ -78,3 +78,11 @@ La gestión empresarial futura usa GraphQL vía BFF; aquí no se implementan BFF
 Pruebas de política pura en tests/session-policy.test.mjs (sesión ausente/demo/error/anónima/roles desconocidos y los cinco roles técnicos). Son unidades, no evidencia de Keycloak real. Los logs de instalación frozen, TypeScript y builds están en ../../output/cu01-keycloak/ (ignorados). Se conservan los avisos de budgets y CommonJS, sin elevar límites ni ocultarlos.
 
 El principal completó posteriormente la verificación global con IdP/APIs reales: sesión integrada única, navegación sin segundo login, recarga/refresh/logout, cliente standalone propio y demo sin bearer. El recorrido final pasó12 etapas, sin errores inesperados; los403 deliberados se contaron aparte. Compilar o probar con loader sintético no acredita por sí solo esa integración. La rama revisada y el runtime CU01 permanecen en su worktree; PostgreSQL de aplicación sigue administrado desde la raíz principal. Estado/límites en ../../docs/context/STATUS.md, ejecución en ../../scripts/cu01/README.md y rango revisado en ../../docs/compose/spec/cu01-keycloak.md. Flutter/offline, BFF, CU02 y negocio siguen pendientes.
+
+## CU03 web — pantallas funcionales
+
+Rutas bajo la base `/employees` del Shell: `list`, `new`, `:id/edit`, `:id/history`; también disponibles en el arranque independiente OIDC. Conservan NG-ALAIN y single-spa.
+
+El listado permite buscar por nombre o documento, filtrar por estado, paginar y desactivar conservando historial. El formulario valida los campos del contrato, solicita cuenta de acceso solo en el alta y distingue el guardado laboral del estado de sincronización (`pending`, `synced`, `failed`, `conflict`). El conflicto de versión muestra recarga explícita; no se reenvía con una versión vencida.
+
+Los datos llegan por GraphQL a través de `SessionPort.requestBusiness`; el microfrontend no conoce tokens ni llama al REST empresarial. La demo del template no monta estas rutas: requieren sesión OIDC real. Estados cubiertos: carga, vacío, error con reintento, permiso insuficiente, conflicto y sincronización pendiente. Evidencia del recorrido real en `docs/compose/spec/cu03-web.md`.

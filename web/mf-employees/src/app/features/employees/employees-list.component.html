@@ -1,0 +1,134 @@
+<nz-page-header nzTitle="Empleados" nzSubtitle="Personal del taller">
+  <nz-page-header-extra>
+    <button nz-button nzType="primary" type="button" (click)="create()" id="employee-create">Registrar empleado</button>
+  </nz-page-header-extra>
+</nz-page-header>
+
+@if (notice()) {
+  <nz-alert class="notice" nzType="success" [nzMessage]="notice()!" nzShowIcon nzCloseable (nzOnClose)="notice.set(null)"></nz-alert>
+}
+@if (forbidden()) {
+  <nz-alert
+    class="notice"
+    nzType="warning"
+    nzMessage="Acceso insuficiente"
+    nzDescription="La gestión de empleados requiere el rol administrador. Iniciá sesión con una cuenta autorizada."
+    nzShowIcon
+    id="employee-forbidden"
+  ></nz-alert>
+} @else if (error()) {
+  <nz-alert
+    class="notice"
+    nzType="error"
+    [nzMessage]="error()!"
+    [nzDescription]="conflict() ? 'Otra persona modificó este empleado. Recargá el listado para ver la versión vigente.' : ''"
+    nzShowIcon
+    id="employee-error"
+  ></nz-alert>
+}
+
+<div class="toolbar">
+  <input
+    class="search"
+    nz-input
+    id="employee-search"
+    placeholder="Buscar por nombre, apellido o documento"
+    [value]="search()"
+    (input)="search.set($any($event.target).value)"
+    (keyup.enter)="applyFilters()"
+  />
+  <nz-select
+    style="width: 190px"
+    id="employee-status"
+    nzAllowClear
+    nzPlaceHolder="Todos los estados"
+    [ngModel]="status()"
+    (ngModelChange)="status.set($event ?? null)"
+    (ngModelChange)="applyFilters()"
+  >
+    <nz-option nzValue="active" nzLabel="Activos"></nz-option>
+    <nz-option nzValue="inactive" nzLabel="Inactivos"></nz-option>
+  </nz-select>
+  <button nz-button type="button" (click)="applyFilters()" id="employee-filter">Buscar</button>
+  <button nz-button type="button" nzType="default" (click)="clearFilters()">Limpiar</button>
+  <button nz-button type="button" nzType="text" (click)="applyFilters()">Actualizar</button>
+</div>
+
+<nz-table
+  #table
+  [nzData]="items()"
+  [nzLoading]="loading()"
+  [nzFrontPagination]="false"
+  [nzTotal]="total()"
+  [nzPageIndex]="pageIndex()"
+  [nzPageSize]="pageSize"
+  [nzShowSizeChanger]="false"
+  (nzPageIndexChange)="onPage($event)"
+  nzSize="middle"
+  id="employee-table"
+>
+  <thead>
+    <tr>
+      <th>Empleado</th>
+      <th>Documento</th>
+      <th>Cargo</th>
+      <th>Especialidades</th>
+      <th>Estado</th>
+      <th>Cuenta vinculada</th>
+      <th>Versión</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (row of items(); track row.id) {
+      <tr [attr.data-employee-id]="row.id">
+        <td class="identity">
+          <strong>{{ row.firstName }} {{ row.lastName }}</strong>
+          <span>{{ row.email }} · {{ row.phone }}</span>
+        </td>
+        <td>{{ row.document }}</td>
+        <td>{{ row.jobTitle }}</td>
+        <td>
+          @if (row.specialties.length) {
+            @for (item of row.specialties; track item) {
+              <nz-tag>{{ item }}</nz-tag>
+            }
+          } @else {
+            <span>—</span>
+          }
+        </td>
+        <td>
+          <nz-tag [nzColor]="row.status === 'active' ? 'green' : 'default'">{{ row.status === 'active' ? 'Activo' : 'Inactivo' }}</nz-tag>
+        </td>
+        <td>
+          <nz-tag [nzColor]="accessColor(row)">{{ accessLabel(row) }}</nz-tag>
+          @if (row.access.errorCode) {
+            <span class="identity"><span>{{ row.access.errorCode }}</span></span>
+          }
+        </td>
+        <td>{{ row.version }}</td>
+        <td>
+          <div class="actions">
+            <button nz-button nzType="link" nzSize="small" type="button" (click)="edit(row)">Editar</button>
+            <button nz-button nzType="link" nzSize="small" type="button" (click)="history(row)">Historial</button>
+            <button
+              nz-button
+              nzType="link"
+              nzSize="small"
+              nzDanger
+              type="button"
+              [disabled]="row.status === 'inactive' || busyId() === row.id"
+              (click)="deactivate(row)"
+            >
+              Desactivar
+            </button>
+          </div>
+        </td>
+      </tr>
+    }
+  </tbody>
+</nz-table>
+
+@if (!loading() && !items().length && !error()) {
+  <nz-empty nzNotFoundImage="simple" nzNotFoundContent="No hay empleados que coincidan con la búsqueda." id="employee-empty"></nz-empty>
+}

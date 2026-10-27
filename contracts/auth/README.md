@@ -17,3 +17,9 @@ Logout termina sesión/renovación IdP y estado cliente. JWT ya emitido puede se
 ## Frontera BFF
 
 Funciones empresariales web se implementarán en GraphQL mediante integration/bff (participante2), mientras servicios conservan REST. No se crea BFF ni una simulación en esta entrega. Para el futuro BFF se requiere acordar audiencia propia/mappers, validación de issuer/firma/exp, forwarding o exchange autorizado y políticas rol/acción/registro por campo/CU. Este contrato técnico no reemplaza esos esquemas empresariales ni acredita su integración.
+
+## Transporte empresarial del BFF (CU03 web)
+
+`SessionPort.requestBusiness(query, variables)` es la única vía web hacia GraphQL. El propietario de la sesión renueva el token, envía `Authorization` a `http://127.0.0.1:3004/graphql` y devuelve `{data}` o `errors[{code,statusCode,message}]`. Un 401 invalida la sesión; un 403 se entrega como fallo de permiso. No hay getters de token ni copia a props, storage o logs.
+
+El BFF valida el access token del usuario con la audiencia `autonexus-employees-api` y reenvía ese mismo token al REST propietario; no realiza exchange ni usa credenciales administrativas de Keycloak. Cuenta técnica y credenciales del IdP permanecen exclusivamente en el backend de Empleados.

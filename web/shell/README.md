@@ -97,3 +97,9 @@ El principal completó después run build con staging de ambos Angular finales y
 pagehide invalida y destruye el propietario de sesión. Una restauración BFCache no reevalúa el módulo: pageshow con persisted=true fuerza por ello una recarga del mismo destino, creando un propietario nuevo y reevaluando SSO. No afecta cambios SPA entre módulos ni pageshow inicial. Así no se conserva una sesión ya destruida o identidad obsoleta al volver desde otro documento.
 
 Regresión: scripts/verify-cu01-bfcache.mjs desde la raíz. --synthetic-events reproduce explícitamente PageTransitionEvent.persisted en Chromium y verifica recarga efectiva y navegación posterior al IdP; no simula SDK ni credenciales. El intento de BFCache nativo no fue elegible (notRestoredReasons=masked), por lo que no se acredita un hit nativo del cache en este entorno. El recorrido SSO principal es real e independiente de esta prueba de eventos.
+
+## Navegación CU03 y transporte al BFF
+
+El Shell expone `Empleados (CU03)` y `Registrar empleado` solo cuando el módulo activo es Empleados. La sesión sigue siendo la única propietaria de los tokens: el contrato añade `SessionPort.requestBusiness`, que renueva el token, llama a `http://127.0.0.1:3004/graphql` y devuelve datos o errores tipados. El token no se pasa a los microfrontends, no se escribe en storage y no se registra.
+
+El servidor estático `scripts/serve-dist.mjs` sirve el build para verificaciones automatizadas (sin dependencia de stdin), con fallback SPA y 404 estricto para recursos `/mfs/`.

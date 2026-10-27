@@ -1,4 +1,4 @@
-import type { SessionPort, SessionSnapshot, TechnicalResult, WorkshopRole } from '../../contracts/auth/session.ts';
+import type { BusinessFailure, BusinessResult, SessionPort, SessionSnapshot, TechnicalResult, WorkshopRole } from '../../contracts/auth/session.ts';
 
 export type BrowserApplication = 'shell' | 'employees' | 'operations';
 export interface BrowserOidcAdapter {
@@ -27,6 +27,25 @@ export function safeReturnTo(value: unknown, application: BrowserApplication): s
   if (/(?:[?&#])(?:code|state|session_state|iss|error|error_description|access_token|id_token|refresh_token|token|session_code|nonce|redirect_uri|client_id|response_type|response_mode)(?:=|&|$)/i.test(decoded)) return null;
   if (application === 'shell') return /^\/(employees|operations)(?:\/|[?]|$)/.test(decoded) && !decoded.includes('#') ? value : null;
   return /^\/#\/(?:widgets|dashboard(?:\/[^?#]*)?|exception(?:\/[^?#]*)?)(?:[?].*)?$/.test(decoded) ? value : null;
+}
+
+/** Accepts only the BFF contract shape; arbitrary bodies never reach a component. */
+function parseBusinessResult(value: unknown): BusinessResult {
+  if (!value || typeof value !== 'object') throw new Error('Respuesta empresarial inválida.');
+  const body = value as { data?: unknown; errors?: unknown };
+  if (Array.isArray(body.errors)) {
+    const errors: BusinessFailure[] = body.errors.map((raw: unknown) => {
+      if (!raw || typeof raw !== 'object') throw new Error('Respuesta empresarial inválida.');
+      const entry = raw as { message?: unknown; extensions?: { code?: unknown; statusCode?: unknown } };
+      const code = entry.extensions?.code;
+      const statusCode = entry.extensions?.statusCode;
+      if (typeof code !== 'string' || typeof statusCode !== 'number' || typeof entry.message !== 'string') throw new Error('Respuesta empresarial inválida.');
+      return Object.freeze({ code, statusCode, message: entry.message });
+    });
+    return Object.freeze({ errors: Object.freeze(errors) });
+  }
+  if (body.data && typeof body.data === 'object') return Object.freeze({ data: body.data });
+  throw new Error('Respuesta empresarial inválida.');
 }
 
 export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin: string; application: BrowserApplication }): BrowserSessionOwner {
@@ -70,8 +89,7 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
     publish('authenticated');
     if (disposed || version !== epoch || !current.authenticated) throw new Error('Sesión no disponible.');
   }
-  sdk.onAuthLogout = fail;
-  sdk.onAuthRefreshError = fail;
+  sdk.onAuthLogout = fail;  sdk.onAuthRefreshError = fail;
   sdk.onTokenExpired = () => { void refresh().catch(() => {}); };
   const session: SessionPort = {
     snapshot: () => current,
@@ -124,6 +142,35 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
       } catch (error) {
         if (error instanceof Error && ['Sesión no disponible.', 'Sesión rechazada (401). Ingresa nuevamente.', 'Acceso insuficiente (403). Este recurso requiere el rol autorizado en el servidor.', 'El servicio técnico no está disponible.', 'Respuesta técnica inválida.'].includes(error.message)) throw error;
         throw new Error('No se pudo contactar al servicio técnico. Reintenta la comprobación.');
+      } finally { clearTimeout(timeout); requests.delete(controller); }
+    },
+    async requestBusiness(query, variables): Promise<BusinessResult> {
+      if (typeof query !== 'string' || !query.trim() || query.length > 4000) throw new Error('Solicitud empresarial inválida.');
+      if (variables !== undefined && (typeof variables !== 'object' || variables === null || Array.isArray(variables))) throw new Error('Solicitud empresarial inválida.');
+      await refresh();
+      const version = epoch;
+      const controller = new AbortController();
+      requests.add(controller);
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch('http://127.0.0.1:3004/graphql', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${sdk.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, ...(variables === undefined ? {} : { variables }) }),
+          credentials: 'omit',
+          redirect: 'error',
+          signal: controller.signal,
+        });
+        if (disposed || version !== epoch) throw new Error('Sesión no disponible.');
+        if (response.status === 401) { fail(); throw new Error('Sesión rechazada (401). Ingresa nuevamente.'); }
+        if (response.status === 403) return Object.freeze({ errors: Object.freeze([Object.freeze({ code: 'FORBIDDEN', statusCode: 403, message: 'Acceso insuficiente (403). Esta operación requiere el rol administrador.' })]) });
+        if (!response.ok) throw new Error('El servicio empresarial no está disponible.');
+        const data: unknown = await response.json();
+        if (disposed || version !== epoch) throw new Error('Sesión no disponible.');
+        return parseBusinessResult(data);
+      } catch (error) {
+        if (error instanceof Error && ['Sesión no disponible.', 'Sesión rechazada (401). Ingresa nuevamente.', 'El servicio empresarial no está disponible.', 'Respuesta empresarial inválida.', 'Solicitud empresarial inválida.'].includes(error.message)) throw error;
+        throw new Error('No se pudo contactar al servicio empresarial. Reintenta.');
       } finally { clearTimeout(timeout); requests.delete(controller); }
     },
   };

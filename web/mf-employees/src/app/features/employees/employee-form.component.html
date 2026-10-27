@@ -1,0 +1,144 @@
+<nz-page-header [nzTitle]="editing ? 'Editar empleado' : 'Registrar empleado'" nzSubtitle="CU03 · Gestión del personal">
+  <nz-page-header-extra>
+    <a nz-button routerLink="/list">Volver al listado</a>
+  </nz-page-header-extra>
+</nz-page-header>
+
+@if (loading()) {
+  <nz-spin nzTip="Cargando empleado…" id="employee-form-loading"></nz-spin>
+}
+
+@if (error()) {
+  <nz-alert
+    class="panel"
+    nzType="error"
+    [nzMessage]="error()!"
+    [nzDescription]="reloadHint() ? 'La versión cambió: recargá los datos antes de reintentar.' : ''"
+    nzShowIcon
+    id="employee-form-error"
+  ></nz-alert>
+  @if (reloadHint()) {
+    <div class="footer panel">
+      <button nz-button nzType="primary" type="button" (click)="reload()" id="employee-reload">Recargar datos</button>
+    </div>
+  } @else if (retryable()) {
+    <div class="footer panel">
+      <button nz-button nzType="primary" type="button" [disabled]="saving()" (click)="submit()" id="employee-retry">
+        Reintentar envío
+      </button>
+    </div>
+  }
+}
+
+@if (saved(); as result) {
+  <nz-alert
+    class="panel"
+    nzType="success"
+    [nzMessage]="replayed() ? 'La operación ya estaba registrada; no se duplicaron efectos.' : 'Datos laborales guardados.'"
+    [nzDescription]="accessDescription(result)"
+    nzShowIcon
+    id="employee-saved"
+  ></nz-alert>
+  @if (result.access.requested && result.access.status !== 'synced') {
+    <nz-alert
+      class="panel"
+      nzType="warning"
+      nzMessage="Sincronización de la cuenta pendiente"
+      nzDescription="El empleado quedó guardado. La cuenta de acceso se completa fuera de la transacción y puede requerir reintento."
+      nzShowIcon
+      id="employee-access-pending"
+    ></nz-alert>
+  }
+}
+
+@if (employee(); as current) {
+  <nz-descriptions class="panel" nzTitle="Estado registrado" nzBordered nzSize="small" [nzColumn]="{ xxl: 4, xl: 4, lg: 2, md: 2, sm: 1, xs: 1 }">
+    <nz-descriptions-item nzTitle="Versión">{{ current.version }}</nz-descriptions-item>
+    <nz-descriptions-item nzTitle="Estado laboral">
+      <nz-tag [nzColor]="current.status === 'active' ? 'green' : 'default'">{{ current.status === 'active' ? 'Activo' : 'Inactivo' }}</nz-tag>
+    </nz-descriptions-item>
+    <nz-descriptions-item nzTitle="Cuenta vinculada">
+      <nz-tag>{{ current.access.status }}</nz-tag>
+    </nz-descriptions-item>
+    <nz-descriptions-item nzTitle="Historial">
+      <a [routerLink]="['/', current.id, 'history']">Ver historial</a>
+    </nz-descriptions-item>
+  </nz-descriptions>
+  @if (current.status === 'inactive') {
+    <nz-alert
+      class="panel"
+      nzType="info"
+      nzMessage="Empleado inactivo"
+      nzDescription="Los datos pueden corregirse, pero esta pantalla no reactiva al empleado ni habilita su cuenta."
+      nzShowIcon
+    ></nz-alert>
+  }
+}
+
+<form nz-form [formGroup]="form" (ngSubmit)="submit()" id="employee-form">
+  <div class="form-grid">
+    <nz-form-item>
+      <nz-form-label nzRequired nzFor="firstName">Nombres</nz-form-label>
+      <nz-form-control nzErrorTip="Ingresá los nombres (máximo 100).">
+        <input nz-input id="firstName" formControlName="firstName" maxlength="100" />
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item>
+      <nz-form-label nzRequired nzFor="lastName">Apellidos</nz-form-label>
+      <nz-form-control nzErrorTip="Ingresá los apellidos (máximo 100).">
+        <input nz-input id="lastName" formControlName="lastName" maxlength="100" />
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item>
+      <nz-form-label nzRequired nzFor="document">Documento</nz-form-label>
+      <nz-form-control nzErrorTip="Ingresá el documento (máximo 40).">
+        <input nz-input id="document" formControlName="document" maxlength="40" />
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item>
+      <nz-form-label nzRequired nzFor="email">Email</nz-form-label>
+      <nz-form-control nzErrorTip="Ingresá un email válido.">
+        <input nz-input id="email" formControlName="email" maxlength="254" type="email" />
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item>
+      <nz-form-label nzRequired nzFor="phone">Teléfono</nz-form-label>
+      <nz-form-control nzErrorTip="Ingresá un teléfono válido (7–25 caracteres).">
+        <input nz-input id="phone" formControlName="phone" maxlength="25" />
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item>
+      <nz-form-label nzRequired nzFor="jobTitle">Cargo laboral</nz-form-label>
+      <nz-form-control nzErrorTip="Ingresá el cargo (máximo 100). No otorga permisos.">
+        <input nz-input id="jobTitle" formControlName="jobTitle" maxlength="100" />
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item>
+      <nz-form-label nzRequired nzFor="startDate">Fecha de ingreso</nz-form-label>
+      <nz-form-control nzErrorTip="Seleccioná una fecha válida no futura.">
+        <nz-date-picker id="startDate" formControlName="startDate" nzFormat="dd/MM/yyyy"></nz-date-picker>
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item class="wide">
+      <nz-form-label nzFor="specialties">Especialidades</nz-form-label>
+      <nz-form-control nzExtra="Opcionales; no otorgan permisos. Escribí y presioná Enter para agregar cada una.">
+        <nz-select id="specialties" formControlName="specialties" nzMode="tags" nzPlaceHolder="Motor, frenos, electricidad…"></nz-select>
+      </nz-form-control>
+    </nz-form-item>
+    @if (!editing) {
+      <nz-form-item class="wide">
+        <nz-form-control>
+          <label nz-checkbox formControlName="requested" id="access-requested">
+            Solicitar cuenta de acceso en Keycloak (sin roles ni credencial habilitada)
+          </label>
+        </nz-form-control>
+      </nz-form-item>
+    }
+  </div>
+  <div class="footer">
+    <button nz-button nzType="primary" type="submit" [disabled]="saving()" id="employee-submit">
+      {{ saving() ? 'Guardando…' : editing ? 'Guardar cambios' : 'Registrar empleado' }}
+    </button>
+    <button nz-button type="button" (click)="back()">Cancelar</button>
+  </div>
+</form>

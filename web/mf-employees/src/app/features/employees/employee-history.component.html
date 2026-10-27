@@ -1,0 +1,70 @@
+<nz-page-header nzTitle="Historial del empleado" [nzSubtitle]="employee() ? employee()!.firstName + ' ' + employee()!.lastName : 'CU03'">
+  <nz-page-header-extra>
+    <a nz-button routerLink="/list">Volver al listado</a>
+    @if (employee(); as current) {
+      <a nz-button nzType="primary" [routerLink]="['/', current.id, 'edit']">Editar</a>
+    }
+  </nz-page-header-extra>
+</nz-page-header>
+
+@if (forbidden()) {
+  <nz-alert
+    class="panel"
+    nzType="warning"
+    nzMessage="Acceso insuficiente"
+    nzDescription="El historial requiere el rol administrador."
+    nzShowIcon
+    id="history-forbidden"
+  ></nz-alert>
+} @else if (error()) {
+  <nz-alert class="panel" nzType="error" [nzMessage]="error()!" nzShowIcon id="history-error">
+    <button nz-button nzType="primary" nzSize="small" type="button" (click)="load()">Reintentar</button>
+  </nz-alert>
+}
+
+<nz-table
+  #table
+  [nzData]="entries()"
+  [nzLoading]="loading()"
+  [nzFrontPagination]="false"
+  [nzTotal]="total()"
+  [nzPageIndex]="pageIndex()"
+  [nzPageSize]="pageSize"
+  [nzShowSizeChanger]="false"
+  (nzPageIndexChange)="onPage($event)"
+  nzSize="middle"
+  id="history-table"
+>
+  <thead>
+    <tr>
+      <th>Versión</th>
+      <th>Acción</th>
+      <th>Fecha</th>
+      <th>Cargo registrado</th>
+      <th>Estado laboral</th>
+      <th>Cuenta</th>
+      <th>Actor</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (row of entries(); track row.id) {
+      <tr [attr.data-history-version]="row.version">
+        <td>{{ row.version }}</td>
+        <td><nz-tag [nzColor]="actionColor(row.action)">{{ actionLabel(row.action) }}</nz-tag></td>
+        <td>{{ row.occurredAt }}</td>
+        <td>{{ row.snapshot.jobTitle }}</td>
+        <td>
+          <nz-tag [nzColor]="row.snapshot.status === 'active' ? 'green' : 'default'">
+            {{ row.snapshot.status === 'active' ? 'Activo' : 'Inactivo' }}
+          </nz-tag>
+        </td>
+        <td><nz-tag>{{ row.snapshot.access.status }}</nz-tag></td>
+        <td class="mono">{{ row.actorSubject }}</td>
+      </tr>
+    }
+  </tbody>
+</nz-table>
+
+@if (!loading() && !entries().length && !error()) {
+  <nz-empty nzNotFoundImage="simple" nzNotFoundContent="Todavía no hay movimientos registrados."></nz-empty>
+}

@@ -23,3 +23,5 @@ export class SessionView {
   }
 }
 export const sessionGuard: CanActivateFn = () => inject(SessionView).allowed();
+/** CU03 business screens require the real OIDC SessionPort; the template demo never reaches the BFF. */
+export const businessSessionGuard: CanActivateFn = () => !inject(DEMO_MODE);
