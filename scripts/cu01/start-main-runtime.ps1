@@ -40,6 +40,10 @@ foreach ($app in $apps) {
 foreach ($app in $apps) { if ($app.OldPid) { Stop-Process -Id $app.OldPid -ErrorAction Stop } }
 foreach ($app in $apps) {
   if ($app.AlreadyRoot) { Write-Output ('Preserved existing main process ' + $app.Name); continue }
+  if ($app.Name -eq 'employees') {
+    & (Join-Path $root 'services/employees/scripts/start-main.ps1')
+    continue
+  }
   if ($app.Name -eq 'operations') { . (Join-Path $root 'infra/compose/scripts/load-service-env.ps1') -Service operations }
   $started = Start-Process -FilePath $app.Exe -ArgumentList $app.Args -WorkingDirectory (Join-Path $root $app.Dir) -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $out ($app.Name + '-runtime.log')) -RedirectStandardError (Join-Path $out ($app.Name + '-runtime-error.log'))
   Write-Output ('Started ' + $app.Name + ' PID=' + $started.Id + ' from main')

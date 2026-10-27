@@ -1,6 +1,6 @@
 # MS02 Empleados
 
-## CU03 — backend funcional en feat/cu03-employees
+## CU03 — backend integrado localmente en main
 
 Consulta paginada/detalle/historial, alta, PUT completo y desactivación sin borrado; datos personales/laborales, cargo y especialidades. Documento/email únicos incluso inactivos, validaciones y control de versión. Todas las acciones requieren administrador en servidor usando JWT CU01. Cargo/especialidad no asignan roles. No hay BFF ejecutable y no se modificó el frontend para consumir REST empresarial: esta entrega no acredita CU02 ni CU03 web completo.
 
@@ -16,28 +16,26 @@ Sin access.requested no se contacta IdP. Cliente técnico confidencial autonexus
 
 Username determinista employee-UUID, employeeId admin-only y subject estable. Error/timeout no revierte empleado ni confirma rechazo remoto. Reintento recupera creación con respuesta perdida y fallo de confirmación SQL; cuenta ajena produce conflict sin modificarla. Lock de sesión por empleado serializa mutación/sync sin transacción abierta durante red. Contención503 antes del guardado admite retry mismo operationId. Desactivar conserva historia y solicita deshabilitar cuenta. Cuenta creada sin roles empresariales ni credencial habilitada todavía NO tiene acceso operativo al taller; synced no implementa CU02 ni login listo. JWT previo puede seguir válido hasta exp+5s.
 
-### Ejecutar CU03 sin desplazar CU01
+### Ejecutar CU03 integrado desde la raíz
 
-Desde services/employees del worktree CU03, con Node22.22.3 y pnpm12.6.0 fijados en las secciones históricas:
+Ubicación definitiva: services/employees de la raíz principal en main; puerto127.0.0.1:3002. No3003 permanente y no otra instancia del worktree. .env y cliente técnico privado existentes se reutilizan; ambos Compose continúan bajo infra/compose e infra/keycloak de raíz. No init-env/bootstrap/provision al integrar. En máquina nueva preparar privados según infraestructura, nunca copiarlos al BFF/repositorio.
 
 ~~~powershell
-$node = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'
-$pnpm = 'C:/Users/marcelo/AppData/Local/node/corepack/v1/pnpm/12.6.0/bin/pnpm.mjs'
-$env:Path = 'C:/Users/marcelo/AppData/Local/nvm/v22.22.3;' + $env:Path
-$runtimeRoot = Split-Path (& git rev-parse --path-format=absolute --git-common-dir)
-. (Join-Path $runtimeRoot 'infra/compose/scripts/load-service-env.ps1') -Service employees
-$env:EMPLOYEES_IDP_CLIENT_FILE = Join-Path $runtimeRoot 'infra/keycloak/.local/employees-client.json'
-# Una vez por infraestructura; repetición conserva cliente/secreto/fixtures:
-& $node ../../infra/keycloak/scripts/provision-employees-client.mjs
-& $node $pnpm install --frozen-lockfile
+# Desde la raíz principal; versiones verificadas en esta máquina:
+$node='C:/Users/marcelo/AppData/Local/nvm/v22.22.3/node.exe'
+$pnpm='C:/Users/marcelo/AppData/Local/node/corepack/v1/pnpm/12.6.0/bin/pnpm.mjs'
+$env:Path='C:/Users/marcelo/AppData/Local/nvm/v22.22.3;'+$env:Path
+Push-Location services/employees
 & $node $pnpm build
 & $node $pnpm migration:run
-# Instancia manual de rama, sin ocupar3002 de CU01:
-$env:PORT = '3003'
-& $node dist/main.js
+Pop-Location
+& ./services/employees/scripts/start-main.ps1 -Restart
+# Sin -Restart conserva un único proceso raíz ya existente.
 ~~~
 
-No copiar secretos a comandos/URLs ni volver a init-env. Ambos Compose siguen bajo raíz principal. El verificador real carga privados en memoria desde esa raíz y levanta una instancia efímera; la cierra al terminar. No deja un CU03 web o una API3003 permanente por inferencia.
+start-main.ps1 valida raíz/main, artefacto, privados ignorados y dueños de procesos antes de detener ninguno. Rechaza dueños ambiguos3002/3003 y copias de worktree. -Restart sustituye únicamente las instancias Empleados reconocidas del mismo repo y fija3002; no toca Compose/otros servicios. Inyecta ruta EMPLOYEES_IDP_CLIENT_FILE y entorno propio sin imprimir credenciales ni cambiar archivos; restaura el entorno del llamador. No ejecutar pnpm start:prod/start:dev en paralelo por accidente. El arranque general CU01 delega Empleados al helper dedicado.
+
+Traspaso con operaciones/errores/semántica BFF, publicación pendiente y CU04: docs/handoffs/2026-10-26-cu03-main-cu04.md desde raíz. Smoke afectado: node services/employees/scripts/verify-main-integration.mjs desde raíz o el script vía su carpeta; apunta al3002 vivo, NO crea Nest efímero. scripts/cu03/verify-cu01-main.ps1 reutiliza capturas previas sin acreditar revisión visual nueva. Logs de integración en output/cu03-main-integration.
 
 ### Verificación reproducible
 

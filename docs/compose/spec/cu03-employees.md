@@ -1,6 +1,6 @@
 ---
 feature: cu03-employees
-status: delivered
+status: in-progress
 updated: 2026-10-26
 source: main
 ---
@@ -13,7 +13,7 @@ source: main
 
 **Verification** — Frozen/build PASS; pnpm test70/8archivos y pnpm test:e2e --no-file-parallelism42/3archivos PASS (unidades/HTTP con dobles explícitos), pnpm lint0errores/0advertencias y pnpm exec tsc --noEmit exit0. Matriz PostgreSQL/Keycloak real15grupos/exit0: persistencia, migración/no-op,401/403, duplicados/concurrencia, desactivación/historia, cuenta opcional, pérdida de respuesta/confirmación SQL, ownership, bloqueo, sesión SQL perdida/escritura tardía y caída/restauración IdP. Tras ajuste final solo de email, funcional real9grupos/exit0 con Unicode rechazado y ASCII/punycode válidos; no se repitieron áreas no afectadas por rutina. CU01 root13etapas/exit0,0errores inesperados/recursos y2x403 intencionales; aislamiento SQL1Ops/2Empl PASS. OpenAPI3.1/referencias y sintaxis SDL PASS, no BFF ejecutable.
 
-**Review** — Integral b8d8079..8af992d; afectada 8af992d..5e1f5cc y final 5e1f5cc..281b9ee. C1 email y observaciones documentales cerrados con regresiones; cumplimiento/corrección/consistencia conformes, cero críticos pendientes. Código final revisado281b9eeb9412c96177f2f2b3a601c6ca5b4381fc. Este cierre es documental y no cambia código probado. Logs/limitaciones en STATUS y README. Sin push ni merge CU03 a main; ramas/worktrees conservados.
+**Review** — Integral b8d8079..8af992d; afectada 8af992d..5e1f5cc y final 5e1f5cc..281b9ee. C1 email y observaciones documentales cerrados con regresiones; cumplimiento/corrección/consistencia conformes, cero críticos pendientes. Código final revisado281b9eeb9412c96177f2f2b3a601c6ca5b4381fc. Este cierre es documental y no cambia código probado. Logs/limitaciones en STATUS y README. La entrega inicial de rama cerró sin merge; la integración posterior solicitada en main se registra en S2.7. Sin push, ramas/worktrees conservados.
 
 ## [S1] Problem
 
@@ -62,11 +62,26 @@ Pruebas públicas de reglas/HTTP más PostgreSQL real: migraciones/no-op, persis
 
 Después de terminar verificaciones, revisión independiente con base/head/diff y comandos observados, separando cumplimiento, corrección y consistencia; resolver críticos y revalidar áreas afectadas. Actualizar contratos, migraciones, README, STATUS, decisiones y esta especificación. Commits locales de implementación/cierre documental; sin merge CU03, push ni eliminación automática de worktrees. Distinguir backend verificado, interfaz no integrada y dependencias pendientes.
 
+### [S2.7] Integración local en main y preparación de publicación
+
+Solicitud posterior explícita: integrar localmente feat/cu03-employees y usar la raíz principal como workspace/runtime, sin nueva rama de implementación. Integración mecánica con requisitos fijados: conservar ramas/worktrees y cambios ajenos; comprobar ancestros y que efc2e1c solo documenta281b9ee. Source se ajusta a main mediante commit documental antes del fast-forward. Backend previo entregado, no CU03 de punta a punta.
+
+Puerto definitivo Empleados127.0.0.1:3002; no3003 permanente. Recompilar/tipar desde services/employees de raíz, sin repetir suites ni fallos distribuidos no afectados. Mantener .env, cliente técnico privado y ambos Compose/volúmenes bajo raíz, sin init/provision/recreaciones. Arranque con guardas de raíz/ownership y detección de instancias Empleados conocidas; negar dueño ambiguo antes de detener procesos, usar restart explícito para sustituir el binario cargado. No detener otros servicios.
+
+Verificación afectada contra el proceso vivo3002: migración sin pendientes/no-op; alta, consulta, modificación e historial de un empleado sintético y desactivación de limpieza sin borrado;401/403 con sesión real; conservar operationId/expectedVersion y estados de acceso. SmokeCU01 desde raíz y salud/ownership; credenciales solo RAM y comparación privada sin imprimir. No levantar otro Nest efímero como sustituto del runtime definitivo.
+
+Traspaso participante2 con rutas exactas OpenAPI/SDL/auth, operaciones, errores y comandos reproducibles. BFF debe conservar operationId, expectedVersion, replay y estados de acceso; GraphQL pendiente, sin REST empresarial directo desde web. Preparar CU04 según documento, sin implementarlo ni resolver arbitrariamente decisiones de horarios/conflictos. Auditoría GitHub del main final y TODO historial inicial: remoto, paths/objetos, secretos reales y dependencias/artefactos excluidos, comando explícito para main; no push/dry-run/PR ni reescritura de historial. Revisión independiente tras verificaciones; cierre documental local.
+
 ## [S3] Out of Scope
 
 CU02 completo, elevación de roles, inicializar BFF ajeno, CRUD web sin BFF, jornadas, agenda, reservas, Saga, otros microservicios, Flutter, Kubernetes y producción.
 
 ## Tasks
+
+- [x] T6: Verificar ancestros/documental e integrar por fast-forward — acceptance: main incluye efc2e1c/281b9ee, ramas/worktrees conservados (covers: S2.7).
+- [x] T7: Fijar runtime raíz3002 y smoke afectado — acceptance: instancia única conocida, privados/volúmenes sin cambios, migración no-op, CRUD/historia/auth reales y CU01 PASS (depends: T6; covers: S2.7).
+- [ ] T8: Preparar traspaso participante2/CU04 y GitHub sin publicar — acceptance: rutas/contratos/comandos y alcanceCU04 documentados; historial/payload escaneado y primerpush propuesto, no ejecutado (covers: S2.7).
+- [ ] T9: Revisar integración y cerrar documentación local — acceptance: dictamen independiente conforme, HEAD main reportado, backend entregado/BFF-interfaz pendientes explícitos (depends: T7,T8; covers: S2.7).
 
 - [x] T1: Verificar CU01 y fijar runtime de raíz — acceptance: ownership/rutas documentados, secretos/volúmenes conservados y smoke real PASS (covers: S2.1).
 - [x] T2: Implementar dominio, migraciones y REST autorizado — acceptance: PostgreSQL real confirma CRUD sin borrado, historial, duplicados, validaciones, autorización y concurrencia (depends: T1; covers: S2.2, S2.3).

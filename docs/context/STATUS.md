@@ -1,5 +1,17 @@
 # Estado comprobado
 
+## Integración CU03 en main — runtime raíz verificado, publicación pendiente
+
+Solicitud posterior2026-10-26: main89bc8e1 era ancestro de feat/cu03-employees efc2e1c, divergencia0/7. efc2e1c solo modifica especificación/STATUS sobre código revisado281b9ee. Commit documental897873b ajustó source a main y se integró por fast-forward; ramas/worktrees preservados, sin cambios ajenos descartados. HEAD final se obtiene con git rev-parse main; no push ni PR.
+
+Backend definitivo en services/employees de raíz,127.0.0.1:3002, PID observado29100; sin listener3003. Nuevo start-main.ps1 valida root/main y dueños antes de detener, reutiliza entorno/cliente técnico privado y restaura entorno del llamador. -Restart sustituye solo Empleados reconocidos; sin flag conservó el PID. Arranque general CU01 delega Empleados al helper. Compose/volúmenes no se recrearon; no init/provision ni regeneración de secretos.
+
+Verificación afectada: build/tipos raíz exit0, paquetes/lockfile sin cambios; migration:run exit0 con No migrations are pending. Smoke contra proceso VIVO3002 (no Nest efímero):6comprobacionesPASS/exit0 — salud SQL, siete rutas401/403 reales, alta/consulta sintética, modificación/historia/replay/version409, desactivación conservando3snapshots y seis archivos privados byte-idénticos. CU01 desde raíz:12etapas funcionalesPASS/exit0,0errores/recursos inesperados,2x403 deliberados; capturas previas reutilizadas, sin acreditar otra revisión visual. SQL aislamientoPASS1Ops/2Empl. No se repitieron70unitarias/42HTTP ni fallos distribuidos no afectados.
+
+Evidencia ignorada: output/cu03-main-integration/{live-main,cu01-main,postgres-main,migration-main}.{log,exit}; build/types en output/cu03-employees. Traspaso participante2, comandos3002, GitHub y alcance/decisiones CU04: docs/handoffs/2026-10-26-cu03-main-cu04.md, enlazado desde docs/ai/HANDOFF.md. CU04 es tareaT3 abierta/preparada, sin código ni rama iniciados.
+
+GitHub: origin saneado correcto, ls-remote exit0 sin refs; lectura no acredita permisos de push. Históricos sin paths privados/dependencias/artefactos locales; escaneo inicial897873b de18commits/667blobs/251entradas comprimidasPASS sin coincidencias de privados actuales ni patrones de alta confianza. Auditoría del HEAD final y revisión independiente de integración pendientes antes del cierre. Backend entregado; BFF/interfaz siguen pendientes: no CU03 de punta a punta ni CU02.
+
 ## CU03 backend propietario — entregado localmente y revisado; BFF/interfaz pendientes
 
 Cierre2026-10-26: revisión integral y re-revisiones afectadas conformes hasta código281b9ee. C1 y observaciones de consistencia cerrados, cero críticos pendientes. Especificación delivered con70unitarias/42HTTP,9grupos funcionales finales y15grupos previos de identidad/recuperación reales, todosPASS; CU01 root13etapas/SQLPASS. Los párrafos posteriores que dicen pendiente revisión describen etapas históricas del recorrido, no el dictamen final. No se acredita CU02 ni CU03 web completo; no hubo push ni merge CU03 a main.
