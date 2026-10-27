@@ -2,7 +2,7 @@
 
 ## CU03 — backend integrado localmente en main
 
-Consulta paginada/detalle/historial, alta, PUT completo y desactivación sin borrado; datos personales/laborales, cargo y especialidades. Documento/email únicos incluso inactivos, validaciones y control de versión. Todas las acciones requieren administrador en servidor usando JWT CU01. Cargo/especialidad no asignan roles. No hay BFF ejecutable y no se modificó el frontend para consumir REST empresarial: esta entrega no acredita CU02 ni CU03 web completo.
+Consulta paginada/detalle/historial, alta, PUT completo y desactivación sin borrado; datos personales/laborales, cargo y especialidades. Documento/email únicos incluso inactivos, validaciones y control de versión. Todas las acciones requieren administrador en servidor usando JWT CU01. Cargo/especialidad no asignan roles. El BFF y las pantallas web de CU03 se entregaron después en `work/marcelo` (ver `docs/compose/spec/cu03-web.md`); esta sección describe el backend y no acredita CU02.
 
 Contratos desde raíz: contracts/rest/employees.openapi.yaml, contracts/graphql/employees.graphql (propuesta), contracts/auth/employees.md. Especificación: docs/compose/spec/cu03-employees.md; decisiones006/007. Publicados tempranamente en12f44e6 y alineados durante pruebas, sin push. Los apartados posteriores de base/CU01 son evidencia histórica.
 

@@ -17,9 +17,10 @@
     id="history-forbidden"
   ></nz-alert>
 } @else if (error()) {
-  <nz-alert class="panel" nzType="error" [nzMessage]="error()!" nzShowIcon id="history-error">
-    <button nz-button nzType="primary" nzSize="small" type="button" (click)="load()">Reintentar</button>
-  </nz-alert>
+  <nz-alert class="panel" nzType="error" [nzMessage]="error()!" nzShowIcon id="history-error"></nz-alert>
+  <div class="panel">
+    <button nz-button nzType="primary" nzSize="small" type="button" (click)="load()" id="history-retry">Reintentar</button>
+  </div>
 }
 
 <nz-table

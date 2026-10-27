@@ -1,6 +1,6 @@
 # CU03 — Empleados: autenticación y semántica pública
 
-Contrato temprano de S2.2–S2.5 de la especificación aprobada `docs/compose/spec/cu03-employees.md`. OpenAPI: [employees.openapi.yaml](../rest/employees.openapi.yaml). SDL web ejecutado por `integration/bff`: [employees.graphql](../graphql/employees.graphql). No acredita backend integrado, BFF, CU02 ni CU03 web completo.
+Contrato temprano de S2.2–S2.5 de la especificación aprobada `docs/compose/spec/cu03-employees.md`. OpenAPI: [employees.openapi.yaml](../rest/employees.openapi.yaml). SDL web ejecutado por `integration/bff`: [employees.graphql](../graphql/employees.graphql). El backend propietario y el BFF están integrados localmente para CU03; no acredita CU02, CU04 ni publicación en remoto.
 
 ## Fronteras y autorización
 
@@ -8,7 +8,7 @@ Contrato temprano de S2.2–S2.5 de la especificación aprobada `docs/compose/sp
 - Reutilizar guard CU01: access token RS256, issuer/JWKS confiables, audiencia `autonexus-employees-api`, exp/sub/typ y tolerancia existente de 5 s. Sin token/vencido/inválido: 401. Token válido sin permiso: 403. No aceptar ID tokens ni roles/subject del body.
 - Bloquear desactivación si el `access.subject` vinculado coincide con el subject administrador autenticado: 409 `SELF_DEACTIVATION_FORBIDDEN`. No implementar política general de último administrador (CU02).
 - La web empresarial **no llama REST directamente**: usa GraphQL mediante futuro BFF del participante 2. El BFF validará sesión y permiso por operación/campo/registro (incluidos nested snapshots), y el servicio vuelve a autorizar. No confiar solo en menú, props o directivas SDL.
-- BFF futuro: propagar bearer autorizado con audiencia Empleados mediante forwarding/exchange acordado. Su audiencia propia, mappers y exchange **siguen pendientes**; no se inventa una audiencia desplegada. No sustituir usuario por cuenta técnica con autoridad administrativa para eludir autorización.
+- BFF: propaga el bearer autorizado con audiencia Empleados mediante forwarding; está implementado en `integration/bff`. Su audiencia propia, mappers y exchange **siguen pendientes**; no se inventa una audiencia desplegada. No sustituir usuario por cuenta técnica con autoridad administrativa para eludir autorización.
 
 ## Shapes REST normativos
 
@@ -72,9 +72,9 @@ Negocio: `{statusCode:number,message:string,code:string}`; message sanitizado st
 | 409 | DUPLICATE_DOCUMENT, DUPLICATE_EMAIL, VERSION_CONFLICT, IDEMPOTENCY_CONFLICT, SELF_DEACTIVATION_FORBIDDEN, ACCESS_REQUEST_CANNOT_BE_REVOKED, ACCESS_NOT_REQUESTED |
 | 503 | PERSISTENCE_UNAVAILABLE |
 
-GraphQL aún no ejecutado: UUID serializa string UUID canónico; Date/DateTime según SDL, validar parseValue/parseLiteral y serialización en servidor, sin aceptar fechas inválidas. Validar arrays reales aunque GraphQL permita coerción singleton. Int positivo para versiones y reglas REST para paginación/search; null explícito no equivale a omisión opcional.
+GraphQL ejecutado por `integration/bff` en local: UUID serializa string UUID canónico; Date/DateTime según SDL, validar parseValue/parseLiteral y serialización en servidor, sin aceptar fechas inválidas. Validar arrays reales aunque GraphQL permita coerción singleton. Int positivo para versiones y reglas REST para paginación/search; null explícito no equivale a omisión opcional.
 
-Los resolvers propuestos son 1:1 con operationId REST: employees→listEmployees, employee→getEmployee, employeeHistory→listEmployeeHistory; mutaciones conservan createEmployee/updateEmployee/deactivateEmployee/retryEmployeeAccess. No transformar pending/failed/conflict en excepción GraphQL si guardado fue exitoso. Errores propuestos en `errors[].extensions`: `{code,statusCode}` con el code REST; 401 sin code REST se mapea a UNAUTHENTICATED, 403 a FORBIDDEN. message sanitizado en errors[].message; no filtrar cuerpos/headers internos. Esto define contrato futuro, no comportamiento de un BFF ya disponible.
+Los resolvers propuestos son 1:1 con operationId REST: employees→listEmployees, employee→getEmployee, employeeHistory→listEmployeeHistory; mutaciones conservan createEmployee/updateEmployee/deactivateEmployee/retryEmployeeAccess. No transformar pending/failed/conflict en excepción GraphQL si guardado fue exitoso. Errores propuestos en `errors[].extensions`: `{code,statusCode}` con el code REST; 401 sin code REST se mapea a UNAUTHENTICATED, 403 a FORBIDDEN. message sanitizado en errors[].message; no filtrar cuerpos/headers internos. Esto describe el contrato y el BFF local ya implementado; no acredita despliegue en remoto.
 
 La parte local del email admite átomos ASCII separados por puntos, máximo64; sin puntos iniciales/finales/consecutivos. Dominio con al menos dos etiquetas DNS de1–63caracteres alfanuméricos/guion (sin guion inicial/final), máximo253; total254. No mailbox entre comillas ni SMTPUTF8; IDN debe usar punycode. No se consulta DNS/MX.
 

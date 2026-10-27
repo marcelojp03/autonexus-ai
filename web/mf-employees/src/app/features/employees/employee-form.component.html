@@ -48,11 +48,7 @@
       nzShowIcon
       id="employee-access-pending"
     ></nz-alert>
-    <div class="footer panel">
-      <button nz-button type="button" [disabled]="saving()" (click)="retryAccess()" id="employee-access-retry">
-        Reintentar sincronización de la cuenta
-      </button>
-    </div>
+
   }
 }
 
@@ -69,6 +65,13 @@
       <a [routerLink]="['/', current.id, 'history']">Ver historial</a>
     </nz-descriptions-item>
   </nz-descriptions>
+  @if (current.access.requested && current.access.status !== 'synced') {
+    <div class="footer panel">
+      <button nz-button type="button" [disabled]="saving()" (click)="retryAccess()" id="employee-access-retry">
+        Reintentar sincronización de la cuenta
+      </button>
+    </div>
+  }
   @if (current.status === 'inactive') {
     <nz-alert
       class="panel"
@@ -126,7 +129,7 @@
     </nz-form-item>
     <nz-form-item class="wide">
       <nz-form-label nzFor="specialties">Especialidades</nz-form-label>
-      <nz-form-control nzExtra="Opcionales; no otorgan permisos. Escribí y presioná Enter para agregar cada una.">
+      <nz-form-control nzErrorTip="Máximo 20 especialidades distintas, de 1 a 80 caracteres." nzExtra="Opcionales; no otorgan permisos. Escribí y presioná Enter para agregar cada una.">
         <nz-select id="specialties" formControlName="specialties" nzMode="tags" nzPlaceHolder="Motor, frenos, electricidad…"></nz-select>
       </nz-form-control>
     </nz-form-item>

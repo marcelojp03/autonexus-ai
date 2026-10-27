@@ -41,7 +41,6 @@ function renderNavigation(): void {
     if (link.dataset.module === module) link.setAttribute('aria-current', 'true');
     else link.removeAttribute('aria-current');
   });
-  document.querySelectorAll<HTMLElement>('[data-employee-link]').forEach((link) => { link.hidden = !allowed || module !== 'employees'; });
   document.querySelectorAll<HTMLElement>('[data-employee-link]').forEach((link) => {
     link.hidden = !allowed || module !== 'employees';
   });

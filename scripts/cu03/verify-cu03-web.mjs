@@ -57,7 +57,8 @@ function employeeFields(document) {
 
 try {
   browser = await chromium.launch();
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const timezoneId = process.env.CU03_TZ;
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, ...(timezoneId ? { timezoneId } : {}) });
   const page = await context.newPage();
   context.on('page', p => {
     p.on('pageerror', error => problems.push('pageerror:' + error.name));
@@ -124,7 +125,13 @@ try {
   stage = 'edit-date';
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.locator('#jobTitle').waitFor({ state: 'visible', timeout: 40000 });
-  const dateValue = await page.locator('#startDate input').inputValue();
+  const dateInput = page.locator('#startDate input');
+  await dateInput.waitFor({ state: 'visible', timeout: 20000 });
+  let dateValue = '';
+  for (let attempt = 0; attempt < 40 && !dateValue; attempt += 1) {
+    dateValue = await dateInput.inputValue();
+    if (!dateValue) await page.waitForTimeout(250);
+  }
   check(dateValue === '01/01/2020', 'Start date must keep the stored calendar day; got ' + dateValue);
   stages.push('edit-date-roundtrip');
 
@@ -207,7 +214,7 @@ try {
   stages.push('insufficient-permission-blocked');
   await fresh.close();
 
-  console.log(JSON.stringify({ pass: true, stages, document }));
+  console.log(JSON.stringify({ pass: true, stages, document, timezone: timezoneId ?? 'system' }));
 } catch (error) {
   try {
     const page = browser?.contexts()[0]?.pages()[0];

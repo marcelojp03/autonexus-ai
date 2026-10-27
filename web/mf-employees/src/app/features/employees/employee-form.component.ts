@@ -30,7 +30,7 @@ function calendarDate(value: Date): string {
 const RETRYABLE = new Set(['SERVICE_UNAVAILABLE', 'PERSISTENCE_UNAVAILABLE']);
 const distinctSpecialties = (control: AbstractControl): ValidationErrors | null => {
   const items = (control.value ?? []) as string[];
-  const normalized = items.map(item => item.trim()).filter(Boolean);
+  const normalized = items.map(item => item.trim().split(/\s+/).join(' ')).filter(Boolean);
   if (normalized.length > 20) return { specialties: true };
   if (normalized.some(item => item.length < 1 || item.length > 80)) return { specialties: true };
   return new Set(normalized).size === normalized.length ? null : { specialties: true };
@@ -137,6 +137,7 @@ export class EmployeeFormComponent implements OnInit {
   }
 
   async submit(): Promise<void> {
+    if (this.created() && !this.editing) return;
     this.error.set(null);
     this.errorCode.set(null);
     this.reloadHint.set(false);
@@ -261,7 +262,7 @@ export class EmployeeFormComponent implements OnInit {
       phone: value.phone.trim(),
       jobTitle: value.jobTitle.trim(),
       startDate,
-      specialties: (value.specialties ?? []).map(item => item.trim()).filter(Boolean)
+      specialties: (value.specialties ?? []).map(item => item.trim().split(/\s+/).join(' ')).filter(Boolean)
     };
   }
 
