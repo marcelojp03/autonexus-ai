@@ -1,6 +1,6 @@
 ---
 feature: cu03-employees
-status: in-progress
+status: delivered
 updated: 2026-10-26
 source: main
 ---
@@ -9,11 +9,13 @@ source: main
 
 ## Report
 
-**What was built** — CU01 consolidado localmente en main89bc8e1 con runtime de raíz, ownership estricto y privados/volúmenes conservados. Backend propietario CU03 en feat/cu03-employees: consulta, alta, modificación, desactivación sin borrado, historial, cargo/especialidades, validaciones, duplicados, versiones e idempotencia. PostgreSQL exclusivo de Empleados con migraciones versionadas. Autorización servidor administrador y cuenta IdP opcional por cliente técnico dedicado, con identidad estable y recuperación explícita no atómica. Contratos REST/GraphQL/auth publicados tempranamente y actualizados. BFF/UI integrados y CU02 siguen pendientes; cuenta sin rol/credencial no tiene acceso operativo.
+**What was built** — Backend propietario CU03 entregado e integrado localmente en main. Fast-forward89bc8e1→897873b después de verificar efc2e1c documental sobre código revisado281b9ee y ajustar source a main. Runtime definitivo desde services/employees de raíz en127.0.0.1:3002, con arranque controlado/sin instancias competidoras conocidas. Privados, cliente técnico, ownership y volúmenes existentes conservados, sin reinicializar ni provisionar. Traspaso participante2 y ficha CU04/tareaT3 preparados. BFF/interfaz y CU02 pendientes: no CU03 de punta a punta. Publicación GitHub preparada, no ejecutada; ramas/worktrees conservados.
 
-**Verification** — Frozen/build PASS; pnpm test70/8archivos y pnpm test:e2e --no-file-parallelism42/3archivos PASS (unidades/HTTP con dobles explícitos), pnpm lint0errores/0advertencias y pnpm exec tsc --noEmit exit0. Matriz PostgreSQL/Keycloak real15grupos/exit0: persistencia, migración/no-op,401/403, duplicados/concurrencia, desactivación/historia, cuenta opcional, pérdida de respuesta/confirmación SQL, ownership, bloqueo, sesión SQL perdida/escritura tardía y caída/restauración IdP. Tras ajuste final solo de email, funcional real9grupos/exit0 con Unicode rechazado y ASCII/punycode válidos; no se repitieron áreas no afectadas por rutina. CU01 root13etapas/exit0,0errores inesperados/recursos y2x403 intencionales; aislamiento SQL1Ops/2Empl PASS. OpenAPI3.1/referencias y sintaxis SDL PASS, no BFF ejecutable.
+**Verification** — Entrega previa:70unitarias/42HTTP y15grupos de identidad/recuperación reales conformes, sin repetirlos por rutina. Integración afectada desde raíz: build/tipos exit0; migration:run no pendientes/exit0; seis comprobaciones contra proceso vivo3002/exit0 (saludSQL, siete rutas401/403, sintéticoalta/consulta/modificación/historia/replay/version409, desactivación3snapshots y seis privados byte-idénticos). Arranque sin -Restart mantuvo PID observado29100, sin3003; no se acredita exit del tool -Restart interrumpido, sí el estado posterior observado. CU01:12etapas funcionales/exit0 con capturas reutilizadas (no nueva revisión visual),0errores/recursos inesperados y2x403 intencionales; aislamientoSQL1Ops/2Empl PASS. Wrappers: red2→green4 aisladas con stubs, propagando7/9 y éxito0; no pruebas falsas de integración. ParsePS/Node y gitdiffcheck PASS.
 
-**Review** — Integral b8d8079..8af992d; afectada 8af992d..5e1f5cc y final 5e1f5cc..281b9ee. C1 email y observaciones documentales cerrados con regresiones; cumplimiento/corrección/consistencia conformes, cero críticos pendientes. Código final revisado281b9eeb9412c96177f2f2b3a601c6ca5b4381fc. Este cierre es documental y no cambia código probado. Logs/limitaciones en STATUS y README. La entrega inicial de rama cerró sin merge; la integración posterior solicitada en main se registra en S2.7. Sin push, ramas/worktrees conservados.
+**Publication** — origin saneado correcto, ls-remote exit0 sin refs; no acredita permisos de escritura. Auditoría sobre código4bbf9af:20commits/685blobs/871candidatos/251entradas comprimidas, sin hallazgos de privados actuales/patrones de alta confianza. Se exige renovar output/cu03-main-integration/publication-audit.json sobre el HEAD documental final antes de publicar. Históricos/candidatos sin secretos conocidos ni dependencias instaladas, ejemplos/lockfiles y assets template conservados. Comando futuro main-only en el traspaso, no push/dry-run/PR ni reescritura; no certificación universal de secretos históricos desconocidos.
+
+**Review** — CU03 empresarial conforme hasta281b9ee tras cerrar C1. Integración efc2e1c..4bbf9af revisada independientemente: cumplimiento/corrección/consistencia conformes, cero críticos. La primera sesión de revisión cancelada no emitió dictamen. Este cierre es documental, sin cambiar código probado. Reporte de ejecución y límites en STATUS, README y docs/handoffs/2026-10-26-cu03-main-cu04.md.
 
 ## [S1] Problem
 
@@ -80,8 +82,8 @@ CU02 completo, elevación de roles, inicializar BFF ajeno, CRUD web sin BFF, jor
 
 - [x] T6: Verificar ancestros/documental e integrar por fast-forward — acceptance: main incluye efc2e1c/281b9ee, ramas/worktrees conservados (covers: S2.7).
 - [x] T7: Fijar runtime raíz3002 y smoke afectado — acceptance: instancia única conocida, privados/volúmenes sin cambios, migración no-op, CRUD/historia/auth reales y CU01 PASS (depends: T6; covers: S2.7).
-- [ ] T8: Preparar traspaso participante2/CU04 y GitHub sin publicar — acceptance: rutas/contratos/comandos y alcanceCU04 documentados; historial/payload escaneado y primerpush propuesto, no ejecutado (covers: S2.7).
-- [ ] T9: Revisar integración y cerrar documentación local — acceptance: dictamen independiente conforme, HEAD main reportado, backend entregado/BFF-interfaz pendientes explícitos (depends: T7,T8; covers: S2.7).
+- [x] T8: Preparar traspaso participante2/CU04 y GitHub sin publicar — acceptance: rutas/contratos/comandos y alcanceCU04 documentados; historial/payload escaneado y primerpush propuesto, no ejecutado (covers: S2.7).
+- [x] T9: Revisar integración y cerrar documentación local — acceptance: dictamen independiente conforme, HEAD main reportado, backend entregado/BFF-interfaz pendientes explícitos (depends: T7,T8; covers: S2.7).
 
 - [x] T1: Verificar CU01 y fijar runtime de raíz — acceptance: ownership/rutas documentados, secretos/volúmenes conservados y smoke real PASS (covers: S2.1).
 - [x] T2: Implementar dominio, migraciones y REST autorizado — acceptance: PostgreSQL real confirma CRUD sin borrado, historial, duplicados, validaciones, autorización y concurrencia (depends: T1; covers: S2.2, S2.3).

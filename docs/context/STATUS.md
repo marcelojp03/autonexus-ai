@@ -1,6 +1,8 @@
 # Estado comprobado
 
-## Integración CU03 en main — runtime raíz verificado, publicación pendiente
+## Integración CU03 en main — verificada y revisada; publicación pendiente
+
+Cierre2026-10-26: integración efc2e1c..4bbf9af conforme por revisión fresca en cumplimiento/corrección/consistencia, cero críticos. Spec delivered; código empresarial no modificado. Auditoría código4bb:20commits/685blobs/871archivos/251entradasPASS sin hallazgos; reporte local debe renovarse contra HEAD documental final antes de publicar. No push/PR; backend raíz3002 entregado, BFF/interfaz pendientes. CU04 queda preparado enT3, no iniciado. Las menciones posteriores a revisión pendiente son fases históricas del recorrido.
 
 Control de wrappers: Node --test scripts/cu03/wrapper-exit.test.mjs red2→green4/exit0, con hijos simulados en directorios temporales; propaga fallos7/9 y conserva éxito0, sin tocar aplicaciones/DB. La primera sesión de revisión no produjo dictamen (cancelada tras fallo de herramienta); se solicita una nueva revisión independiente. Esta corrección no modifica CU03 empresarial y no requiere repetir los smokes live aprobados.
 
