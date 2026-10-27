@@ -250,3 +250,26 @@ C1 residual en re-revisión5e1f5cc: U+212A se convertía en k antes de verificar
 Prueba acotada de reintento de acceso (2026-10-27): `scripts/cu03/verify-access-retry-web.mjs` PASS 7 etapas/exit0. Crea un empleado con acceso, deshabilita su cuenta en Keycloak mediante el cliente técnico, provoca el fallo de sincronización por la API propietaria (setup, no la interfaz bajo prueba), abre la ficha en el navegador con sesión real, comprueba estado fallido + botón de reintento, reintenta mientras la cuenta sigue deshabilitada (se registra el intento) y, tras habilitar la cuenta por vía autorizada, reintenta y verifica el estado `synced` con subject estable y desaparición del botón. Consola limpia. Detectó y corrigió que la ficha mostraba el snapshot previo a la sincronización; ahora relee el empleado tras el reintento.
 
 Revisión del commit final `fe78fe9`: el sistema de agentes siguió bloqueado por SQLite, por lo que se realizó una **revisión directa focalizada** del diff (no independiente). Confirmó el guard de reenvío, la normalización de especialidades, la eliminación del bloque duplicado del Shell, el traslado del reintento fuera de `nz-alert` y la alineación documental; no halló regresiones. La diferencia de método queda registrada aquí.
+## CU04 — Horarios y disponibilidad entregados (2026-10-27)
+
+Rama `work/marcelo`. Backend en Empleados, BFF y pantalla NG-ALAIN integrados. No se modificó el CRUD de CU03.
+
+- Migración `1793109000000` crea `employee_shifts`, `employee_absences`, `employee_assignments` (solo lectura para CU04) , `staffing_operations` y `staffing_audit` en el schema propio. Aplicada con rol propietario; segunda ejecución no-op.
+- REST `/staffing/*` con política explícita administrador + jefe_taller; `/employees*` sigue administrador-only. Proyección `GET /staffing/employees` solo id, nombre, cargo y estado.
+- Reglas: empleado activo, turnos sin superposición, descanso dentro del turno, ausencias sin superposición, conflicto con asignaciones confirmadas con reconocimiento explícito, `operationId` idempotente, `expectedVersion` y desactivación conservando historial y auditoría. Zona `America/La_Paz`; sin cruce de medianoche (límite documentado).
+- BFF: SDL `contracts/graphql/schedules.graphql` con `extend type Query/Mutation`, allowlist ampliada, política por campo raíz y códigos de error CU04. El guard autentica y ya no impone administrador global: cada campo decide.
+- UI: `/employees/schedules` con búsqueda de personal, turnos, descansos, ausencias y disponibilidad del día; enlace en la navegación del Shell.
+
+| Verificación | Resultado |
+| --- | --- |
+| API real CU04 (`scripts/cu04/verify-scheduling-real.mjs`) | PASS 11 etapas/exit0 |
+| BFF unitarias + HTTP | PASS 11 + 11, build exit0 |
+| Navegador CU04 (`scripts/cu04/verify-schedules-web.mjs`) | PASS 8 etapas/exit0 (jefe de taller) |
+| Regresión CU03 (`verify-cu03-web.mjs`) | PASS 11 etapas/exit0 |
+| Smoke CU01 API desde raíz | PASS 10 comprobaciones/exit0 |
+
+La API real cubre 401/403 por rol, proyección mínima, alta con descanso, solapamiento, validaciones de horas, planificación por jefe, disponibilidad sin descanso, ausencia que bloquea el día, conflicto con asignación confirmada y reconocimiento, desactivación con versión e idempotencia, lectura de horario, auditoría e inactividad rechazada. El smoke de navegador usa Keycloak, BFF, Empleados y PostgreSQL reales; el turno creado desde la interfaz aparece con su descanso excluido de la disponibilidad.
+
+Contratos y decisiones: `contracts/rest/staffing.md`, `contracts/graphql/schedules.graphql`, `docs/decisions/011-cu04-scheduling.md`, especificación `docs/compose/spec/cu04-schedules.md`.
+
+Límites: no hay alta de asignaciones ni Saga CU15 (solo la tabla y la regla de conflicto), ni CU05, CU02, reasignación, feriados, nómina, offline o turnos que crucen medianoche. El primer push de CU03 sí se publicó (`main` y `work/marcelo` en `a22032c`); CU04 todavía no está publicado.

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import {
   buildSchema,
   execute,
-  GraphQLError,
+  type GraphQLError,
   parse,
   validate,
   type DocumentNode,
@@ -12,17 +12,29 @@ import {
   type SelectionSetNode,
 } from 'graphql';
 import { BusinessError, publicMessage } from './business-error.js';
-import type { CommandInput, EmployeePageQuery, EmployeesGateway } from './employees-gateway.js';
+import type { CommandInput, EmployeePageQuery, EmployeeQuery, EmployeesGateway, StaffingCommand } from './employees-gateway.js';
 
-const ROOT_FIELDS = new Set([
-  'employees',
-  'employee',
-  'employeeHistory',
-  'createEmployee',
-  'updateEmployee',
-  'deactivateEmployee',
-  'retryEmployeeAccess',
-]);
+type Role = 'administrador' | 'jefe_taller';
+export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
+
+/** Root-field policy: CU03 employee operations stay administrator-only. */
+const ROOT_POLICY: Readonly<Record<string, readonly Role[]>> = Object.freeze({
+  employees: ['administrador'],
+  employee: ['administrador'],
+  employeeHistory: ['administrador'],
+  createEmployee: ['administrador'],
+  updateEmployee: ['administrador'],
+  deactivateEmployee: ['administrador'],
+  retryEmployeeAccess: ['administrador'],
+  staffingEmployees: ['administrador', 'jefe_taller'],
+  employeeSchedule: ['administrador', 'jefe_taller'],
+  employeeAvailability: ['administrador', 'jefe_taller'],
+  createShift: ['administrador', 'jefe_taller'],
+  updateShift: ['administrador', 'jefe_taller'],
+  deactivateShift: ['administrador', 'jefe_taller'],
+  createAbsence: ['administrador', 'jefe_taller'],
+  cancelAbsence: ['administrador', 'jefe_taller'],
+});
 const MAX_QUERY_LENGTH = 4000;
 const MAX_VARIABLES_BYTES = 65536;
 const MAX_DEPTH = 6;
@@ -42,31 +54,24 @@ export interface GraphqlResponse {
   readonly data?: unknown;
   readonly errors?: readonly GraphqlErrorBody[];
 }
-
 export class BadRequest extends Error {
-  constructor(readonly code: string) {
-    super(code);
-    this.name = 'BadRequest';
-  }
+  constructor(readonly code: string) { super(code); this.name = 'BadRequest'; }
 }
 
-/**
- * Executes the published CU03 SDL against the Employees owner API.
- * The query allowlist keeps this BFF from becoming an arbitrary proxy.
- */
 export class EmployeesGraphql {
   private readonly schema: GraphQLSchema;
 
-  constructor(
-    private readonly gateway: EmployeesGateway,
-    schemaPath: string,
-  ) {
-    this.schema = buildSchema(readFileSync(schemaPath, 'utf8'));
+  constructor(private readonly gateway: EmployeesGateway, schemaPaths: readonly string[]) {
+    this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
   }
 
-  async run(request: GraphqlRequest, token: string): Promise<GraphqlResponse> {
+  async run(request: GraphqlRequest, identity: CallerIdentity, token: string): Promise<GraphqlResponse> {
     const document = this.document(request);
-    const { operation, operationName, variables } = this.operation(document, request);
+    const { operationName, variables } = this.operation(document, request);
+    const roots = this.rootFields((document.definitions[0] as OperationDefinitionNode).selectionSet);
+    if (!roots.every(field => ROOT_POLICY[field]!.some(role => identity.roles.includes(role)))) {
+      return { errors: [{ message: publicMessage('FORBIDDEN'), extensions: { code: 'FORBIDDEN', statusCode: 403 } }] };
+    }
     const result = await execute({
       schema: this.schema,
       document,
@@ -75,11 +80,8 @@ export class EmployeesGraphql {
       variableValues: variables,
       operationName,
     });
-    const errors = result.errors?.map((error) => this.toBody(error));
-    if (errors?.length) {
-      // The expected business failures are also surfaced as data-less GraphQL errors.
-      return { ...(result.data ? { data: result.data } : {}), errors };
-    }
+    const errors = result.errors?.map(error => this.toBody(error));
+    if (errors?.length) return { ...(result.data ? { data: result.data } : {}), errors };
     return { data: result.data };
   }
 
@@ -88,20 +90,15 @@ export class EmployeesGraphql {
       throw new BadRequest('BAD_REQUEST');
     }
     let document: DocumentNode;
-    try {
-      document = parse(request.query);
-    } catch {
-      throw new BadRequest('BAD_REQUEST');
-    }
+    try { document = parse(request.query); } catch { throw new BadRequest('BAD_REQUEST'); }
     const operations = document.definitions.filter((definition): definition is OperationDefinitionNode => definition.kind === 'OperationDefinition');
     if (operations.length !== 1 || document.definitions.length !== 1) throw new BadRequest('BAD_REQUEST');
     this.inspect(operations[0].selectionSet, 1, { count: 0 });
-    const invalid = validate(this.schema, document);
-    if (invalid.length) throw new BadRequest('BAD_REQUEST');
+    if (validate(this.schema, document).length) throw new BadRequest('BAD_REQUEST');
     return document;
   }
 
-  /** Rejects unknown root fields, named fragments and unbounded nesting. */
+  /** Rejects unknown root fields, named fragments, introspection and unbounded nesting. */
   private inspect(selectionSet: SelectionSetNode, depth: number, budget: { count: number }): void {
     if (depth > MAX_DEPTH) throw new BadRequest('BAD_REQUEST');
     for (const selection of selectionSet.selections) {
@@ -111,7 +108,7 @@ export class EmployeesGraphql {
         const field = selection as FieldNode;
         const name = field.name.value;
         if (name.startsWith('__')) throw new BadRequest('BAD_REQUEST');
-        if (depth === 1 && !ROOT_FIELDS.has(name)) throw new BadRequest('BAD_REQUEST');
+        if (depth === 1 && !(name in ROOT_POLICY)) throw new BadRequest('BAD_REQUEST');
         if (field.selectionSet) this.inspect(field.selectionSet, depth + 1, budget);
       } else if (selection.kind === 'InlineFragment') {
         this.inspect(selection.selectionSet, depth, budget);
@@ -119,6 +116,14 @@ export class EmployeesGraphql {
         throw new BadRequest('BAD_REQUEST');
       }
     }
+  }
+
+  private rootFields(selectionSet: SelectionSetNode): string[] {
+    const names: string[] = [];
+    for (const selection of selectionSet.selections) {
+      if (selection.kind === 'Field') names.push(selection.name.value);
+    }
+    return names;
   }
 
   private operation(document: DocumentNode, request: GraphqlRequest) {
@@ -129,11 +134,7 @@ export class EmployeesGraphql {
     if (request.variables !== undefined && request.variables !== null) {
       if (typeof request.variables !== 'object' || Array.isArray(request.variables)) throw new BadRequest('BAD_REQUEST');
       let serialized: string;
-      try {
-        serialized = JSON.stringify(request.variables);
-      } catch {
-        throw new BadRequest('BAD_REQUEST');
-      }
+      try { serialized = JSON.stringify(request.variables); } catch { throw new BadRequest('BAD_REQUEST'); }
       if (serialized.length > MAX_VARIABLES_BYTES) throw new BadRequest('BAD_REQUEST');
       variables = request.variables as Record<string, unknown>;
     }
@@ -149,6 +150,14 @@ export class EmployeesGraphql {
       updateEmployee: (args: { id: string; input: CommandInput }) => this.gateway.update(args.id, args.input, token),
       deactivateEmployee: (args: { id: string; input: CommandInput }) => this.gateway.deactivate(args.id, args.input, token),
       retryEmployeeAccess: (args: { id: string; input: CommandInput }) => this.gateway.retryAccess(args.id, args.input, token),
+      staffingEmployees: (args: EmployeeQuery) => this.gateway.staffingEmployees(args ?? {}, token),
+      employeeSchedule: (args: { id: string }) => this.gateway.schedule(args.id, token),
+      employeeAvailability: (args: { id: string; date: string }) => this.gateway.availability(args.id, args.date, token),
+      createShift: (args: { employeeId: string; input: CommandInput }) => this.gateway.createShift(args.employeeId, args.input, token),
+      updateShift: (args: { id: string; input: CommandInput }) => this.gateway.updateShift(args.id, args.input, token),
+      deactivateShift: (args: { id: string; input: StaffingCommand }) => this.gateway.deactivateShift(args.id, args.input, token),
+      createAbsence: (args: { employeeId: string; input: CommandInput }) => this.gateway.createAbsence(args.employeeId, args.input, token),
+      cancelAbsence: (args: { id: string; input: StaffingCommand }) => this.gateway.cancelAbsence(args.id, args.input, token),
     };
   }
 

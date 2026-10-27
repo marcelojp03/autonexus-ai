@@ -16,6 +16,7 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
   let app: NestExpressApplication;
   let admin: string;
   let mechanic: string;
+  let head: string;
   const gateway = {
     list: vi.fn(async () => PAGE),
     get: vi.fn(),
@@ -25,6 +26,14 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     deactivate: vi.fn(),
     retryAccess: vi.fn(),
     reachable: vi.fn(async () => true),
+    staffingEmployees: vi.fn(async () => []),
+    schedule: vi.fn(),
+    availability: vi.fn(),
+    createShift: vi.fn(),
+    updateShift: vi.fn(),
+    deactivateShift: vi.fn(),
+    createAbsence: vi.fn(),
+    cancelAbsence: vi.fn(),
   };
   const config = bffEnvironment({}, process.cwd());
 
@@ -36,6 +45,7 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
         .sign(keys.privateKey);
     admin = await token(['administrador']);
     mechanic = await token(['mecanico']);
+    head = await token(['jefe_taller']);
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AccessTokenVerifier)
       .useValue(new AccessTokenVerifier(config, createLocalJWKSet({ keys: [await exportJWK(keys.publicKey)] })))
@@ -68,8 +78,17 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
   it('rejects anonymous, non-administrator and malformed bearer generically', async () => {
     const body = { query: '{ employees { total } }' };
     await post(body).expect(401).expect({ statusCode: 401, message: 'Unauthorized' });
-    await post(body, mechanic).expect(403).expect({ statusCode: 403, message: 'Forbidden' });
+    const denied = await post(body, mechanic).expect(200);
+    expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
     await post(body, 'a.b.c').expect(401);
+  });
+
+  it('keeps employee operations administrator-only and allows the head only on staffing', async () => {
+    const denied = await post({ query: '{ employees { total } }' }, head).expect(200);
+    expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    gateway.staffingEmployees.mockResolvedValueOnce([]);
+    const allowed = await post({ query: '{ staffingEmployees { id fullName } }' }, head).expect(200);
+    expect(allowed.body).toEqual({ data: { staffingEmployees: [] } });
   });
 
   it('serves the allowlisted query and forwards the same bearer', async () => {

@@ -39,8 +39,11 @@ export class GraphqlController {
       return { errors: [{ message: publicMessage('BAD_REQUEST'), extensions: { code: 'BAD_REQUEST', statusCode: 400 } }] };
     }
     const token = (request.headers.authorization as string).slice(7);
+    if (!request.identity) {
+      return { errors: [{ message: publicMessage('UNAUTHENTICATED'), extensions: { code: 'UNAUTHENTICATED', statusCode: 401 } }] };
+    }
     try {
-      return await this.graphql.run(body as GraphqlRequest, token);
+      return await this.graphql.run(body as GraphqlRequest, request.identity, token);
     } catch (error) {
       if (error instanceof BadRequest) {
         return { errors: [{ message: publicMessage('BAD_REQUEST'), extensions: { code: 'BAD_REQUEST', statusCode: 400 } }] };

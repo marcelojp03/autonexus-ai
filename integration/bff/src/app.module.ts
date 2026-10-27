@@ -26,7 +26,7 @@ const configuration = (): BffConfiguration => bffEnvironment();
     {
       provide: EmployeesGraphql,
       inject: [HttpEmployeesGateway, 'BFF_CONFIGURATION'],
-      useFactory: (gateway: HttpEmployeesGateway, config: BffConfiguration) => new EmployeesGraphql(gateway, config.schemaPath),
+      useFactory: (gateway: HttpEmployeesGateway, config: BffConfiguration) => new EmployeesGraphql(gateway, config.schemaPaths),
     },
   ],
 })

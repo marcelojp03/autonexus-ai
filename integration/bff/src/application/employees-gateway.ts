@@ -1,6 +1,6 @@
 import { BusinessError } from './business-error.js';
 
-/** Only codes published by the CU03 contract may leave this BFF. */
+/** Only codes published by the CU03/CU04 contracts may leave this BFF. */
 const PUBLIC_CODES = new Set([
   'VALIDATION_ERROR',
   'EMPLOYEE_NOT_FOUND',
@@ -12,6 +12,12 @@ const PUBLIC_CODES = new Set([
   'ACCESS_REQUEST_CANNOT_BE_REVOKED',
   'ACCESS_NOT_REQUESTED',
   'PERSISTENCE_UNAVAILABLE',
+  'EMPLOYEE_INACTIVE',
+  'SHIFT_OVERLAP',
+  'ABSENCE_OVERLAP',
+  'AFFECTS_CONFIRMED_ASSIGNMENT',
+  'SHIFT_NOT_FOUND',
+  'ABSENCE_NOT_FOUND',
 ]);
 
 export interface EmployeePageQuery {
@@ -20,10 +26,18 @@ export interface EmployeePageQuery {
   status?: string;
   search?: string;
 }
+export interface EmployeeQuery {
+  search?: string;
+}
 export interface CommandInput {
   operationId: string;
   expectedVersion?: number;
   [field: string]: unknown;
+}
+export interface StaffingCommand {
+  operationId: string;
+  expectedVersion: number;
+  acknowledgeConfirmedAssignments?: boolean;
 }
 
 /** Port to the Employees owner REST API. Never crosses into its database. */
@@ -35,6 +49,14 @@ export interface EmployeesGateway {
   update(id: string, input: CommandInput, token: string): Promise<unknown>;
   deactivate(id: string, input: CommandInput, token: string): Promise<unknown>;
   retryAccess(id: string, input: CommandInput, token: string): Promise<unknown>;
+  staffingEmployees(query: EmployeeQuery, token: string): Promise<unknown>;
+  schedule(employeeId: string, token: string): Promise<unknown>;
+  availability(employeeId: string, date: string, token: string): Promise<unknown>;
+  createShift(employeeId: string, input: CommandInput, token: string): Promise<unknown>;
+  updateShift(shiftId: string, input: CommandInput, token: string): Promise<unknown>;
+  deactivateShift(shiftId: string, input: StaffingCommand, token: string): Promise<unknown>;
+  createAbsence(employeeId: string, input: CommandInput, token: string): Promise<unknown>;
+  cancelAbsence(absenceId: string, input: StaffingCommand, token: string): Promise<unknown>;
   reachable(): Promise<boolean>;
 }
 
@@ -64,7 +86,10 @@ export class HttpEmployeesGateway implements EmployeesGateway {
     const candidate = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' ? body.code : undefined;
     const code = candidate && PUBLIC_CODES.has(candidate) ? candidate : undefined;
     const statusCode = response.status === 400 || response.status === 404 || response.status === 409 ? response.status : 503;
-    throw new BusinessError(statusCode, code ?? (statusCode === 404 ? 'EMPLOYEE_NOT_FOUND' : statusCode === 409 ? 'VERSION_CONFLICT' : statusCode === 400 ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE'));
+    throw new BusinessError(
+      statusCode,
+      code ?? (statusCode === 404 ? 'EMPLOYEE_NOT_FOUND' : statusCode === 409 ? 'VERSION_CONFLICT' : statusCode === 400 ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE'),
+    );
   }
 
   private async payload(response: Response): Promise<unknown> {
@@ -112,6 +137,41 @@ export class HttpEmployeesGateway implements EmployeesGateway {
 
   retryAccess(id: string, input: CommandInput, token: string): Promise<unknown> {
     return this.request(`/employees/${encodeURIComponent(id)}/access/retry`, token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  staffingEmployees(query: EmployeeQuery, token: string): Promise<unknown> {
+    const parameters = new URLSearchParams();
+    if (query.search) parameters.set('search', query.search);
+    const suffix = parameters.toString();
+    return this.request(`/staffing/employees${suffix ? `?${suffix}` : ''}`, token);
+  }
+
+  schedule(employeeId: string, token: string): Promise<unknown> {
+    return this.request(`/staffing/employees/${encodeURIComponent(employeeId)}/schedule`, token);
+  }
+
+  availability(employeeId: string, date: string, token: string): Promise<unknown> {
+    return this.request(`/staffing/employees/${encodeURIComponent(employeeId)}/availability?date=${encodeURIComponent(date)}`, token);
+  }
+
+  createShift(employeeId: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request(`/staffing/employees/${encodeURIComponent(employeeId)}/shifts`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  updateShift(shiftId: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request(`/staffing/shifts/${encodeURIComponent(shiftId)}`, token, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  deactivateShift(shiftId: string, input: StaffingCommand, token: string): Promise<unknown> {
+    return this.request(`/staffing/shifts/${encodeURIComponent(shiftId)}/deactivate`, token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  createAbsence(employeeId: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request(`/staffing/employees/${encodeURIComponent(employeeId)}/absences`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  cancelAbsence(absenceId: string, input: StaffingCommand, token: string): Promise<unknown> {
+    return this.request(`/staffing/absences/${encodeURIComponent(absenceId)}/cancel`, token, { method: 'POST', body: JSON.stringify(input) });
   }
 
   async reachable(): Promise<boolean> {

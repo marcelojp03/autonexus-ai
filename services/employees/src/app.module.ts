@@ -3,6 +3,9 @@ import { ManageEmployees } from './application/manage-employees.js';
 import { EmployeesController } from './infrastructure/http/employees.controller.js';
 import { PostgresEmployeeRepository } from './infrastructure/postgres/postgres-employee-repository.js';
 import { KeycloakIdentityGateway } from './infrastructure/keycloak/keycloak-identity-gateway.js';
+import { ManageSchedules } from './application/manage-schedules.js';
+import { PostgresScheduleRepository } from './infrastructure/postgres/postgres-schedule-repository.js';
+import { StaffingController } from './infrastructure/http/staffing.controller.js';
 import { AuthModule } from './infrastructure/auth/auth.module.js';
 import { TechnicalController } from './infrastructure/http/technical.controller.js';
 import { DataSource } from 'typeorm';
@@ -13,7 +16,7 @@ import { PostgresReadinessProbe } from './infrastructure/postgres/postgres-readi
 
 @Module({
   imports: [AuthModule],
-  controllers: [HealthController, TechnicalController, EmployeesController],
+  controllers: [HealthController, TechnicalController, EmployeesController, StaffingController],
   providers: [
     {
       provide: PostgresEmployeeRepository,
@@ -30,6 +33,15 @@ import { PostgresReadinessProbe } from './infrastructure/postgres/postgres-readi
         repository: PostgresEmployeeRepository,
         identity: KeycloakIdentityGateway,
       ) => new ManageEmployees(repository, identity),
+    },
+    {
+      provide: PostgresScheduleRepository,
+      useFactory: () => new PostgresScheduleRepository(),
+    },
+    {
+      provide: ManageSchedules,
+      inject: [PostgresScheduleRepository],
+      useFactory: (repository: PostgresScheduleRepository) => new ManageSchedules(repository),
     },
     {
       provide: PostgresReadinessProbe,

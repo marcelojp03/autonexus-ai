@@ -1,0 +1,105 @@
+<nz-page-header nzTitle="Horarios y disponibilidad" nzSubtitle="CU04 · Planificación del personal"></nz-page-header>
+
+@if (forbidden()) {
+  <nz-alert class="panel" nzType="warning" nzMessage="Acceso insuficiente" nzDescription="La planificación requiere rol administrador o jefe de taller." nzShowIcon id="schedule-forbidden"></nz-alert>
+} @else if (error()) {
+  <nz-alert class="panel" nzType="error" [nzMessage]="error()!" nzDescription="Revisá los datos; si el cambio afecta asignaciones confirmadas, marcá el reconocimiento y reintentá." nzShowIcon id="schedule-error"></nz-alert>
+}
+@if (notice()) {
+  <nz-alert class="panel" nzType="success" [nzMessage]="notice()!" nzShowIcon nzCloseable (nzOnClose)="notice.set(null)" id="schedule-notice"></nz-alert>
+}
+
+<div class="toolbar">
+  <label class="field">Empleado
+    <nz-select style="min-width: 260px" id="schedule-employee" [ngModel]="selectedId()" (ngModelChange)="select($event)" nzPlaceHolder="Seleccioná un empleado">
+      @for (employee of employees(); track employee.id) {
+        <nz-option [nzValue]="employee.id" [nzLabel]="employee.fullName + ' · ' + employee.jobTitle"></nz-option>
+      }
+    </nz-select>
+  </label>
+  <label class="field">Buscar
+    <input nz-input id="schedule-search" [value]="search" (input)="search = $any($event.target).value" (keyup.enter)="loadEmployees()" placeholder="Nombre o documento" />
+  </label>
+  <button nz-button type="button" (click)="loadEmployees()" id="schedule-search-button">Buscar</button>
+  <label class="field">Disponibilidad del día
+    <input nz-input type="date" id="schedule-date" [value]="date" (change)="date = $any($event.target).value; loadAvailability()" />
+  </label>
+</div>
+
+<nz-table #shifts [nzData]="schedule()?.shifts ?? []" [nzLoading]="loading()" nzSize="middle" id="schedule-shifts" aria-label="Turnos semanales">
+  <thead><tr><th>Día</th><th>Turno</th><th>Descanso</th><th>Estado</th><th>Versión</th><th>Acciones</th></tr></thead>
+  <tbody>
+    @for (shift of shifts.data; track shift.id) {
+      <tr [attr.data-shift-weekday]="shift.weekday">
+        <td>{{ weekday(shift.weekday) }}</td>
+        <td>{{ shift.startsAt }}–{{ shift.endsAt }}</td>
+        <td>{{ shift.breakStart ? shift.breakStart + '–' + shift.breakEnd : '—' }}</td>
+        <td><nz-tag [nzColor]="shift.active ? 'green' : 'default'">{{ shift.active ? 'Activo' : 'Inactivo' }}</nz-tag></td>
+        <td>{{ shift.version }}</td>
+        <td class="actions">
+          <button nz-button nzType="link" nzSize="small" nzDanger type="button" [disabled]="!shift.active || saving()" (click)="deactivate(shift)">Desactivar</button>
+        </td>
+      </tr>
+    }
+  </tbody>
+</nz-table>
+
+<div class="toolbar panel">
+  <label class="field">Día
+    <nz-select style="width: 150px" id="shift-weekday" [(ngModel)]="shiftWeekday">
+      @for (day of weekdays; track day.value) { <nz-option [nzValue]="day.value" [nzLabel]="day.label"></nz-option> }
+    </nz-select>
+  </label>
+  <label class="field">Inicio <input nz-input type="time" id="shift-start" [(ngModel)]="shiftStart" /></label>
+  <label class="field">Fin <input nz-input type="time" id="shift-end" [(ngModel)]="shiftEnd" /></label>
+  <label class="field">Descanso desde <input nz-input type="time" id="shift-break-start" [(ngModel)]="shiftBreakStart" /></label>
+  <label class="field">Descanso hasta <input nz-input type="time" id="shift-break-end" [(ngModel)]="shiftBreakEnd" /></label>
+  <label nz-checkbox id="shift-acknowledge" [(ngModel)]="acknowledge">Reconocer asignaciones confirmadas</label>
+  <button nz-button nzType="primary" type="button" [disabled]="saving()" (click)="addShift()" id="shift-add">Agregar turno</button>
+</div>
+
+<h3>Disponibilidad {{ date }}</h3>
+@if (availability(); as current) {
+  @if (current.absent) {
+    <nz-alert nzType="info" nzMessage="El empleado tiene una ausencia registrada para este día." nzShowIcon id="availability-absent"></nz-alert>
+  } @else {
+    <div class="slots" id="availability-slots">
+      @for (slot of current.available; track slot.start) {
+        <nz-tag nzColor="blue">{{ slot.start }}–{{ slot.end }}</nz-tag>
+      }
+      @if (!current.available.length) { <span>Sin turnos para este día.</span> }
+    </div>
+  }
+  @if (current.assignments.length) {
+    <nz-alert class="panel" nzType="warning" nzMessage="Hay asignaciones confirmadas que se superponen con este día." nzShowIcon id="availability-assignments"></nz-alert>
+  }
+}
+
+<h3>Ausencias</h3>
+<nz-table #absences [nzData]="schedule()?.absences ?? []" nzSize="middle" id="schedule-absences" aria-label="Ausencias registradas">
+  <thead><tr><th>Desde</th><th>Hasta</th><th>Motivo</th><th>Estado</th><th>Acciones</th></tr></thead>
+  <tbody>
+    @for (absence of absences.data; track absence.id) {
+      <tr>
+        <td>{{ absence.startsOn }}</td>
+        <td>{{ absence.endsOn }}</td>
+        <td>{{ absence.reason || '—' }}</td>
+        <td><nz-tag [nzColor]="absence.active ? 'orange' : 'default'">{{ absence.active ? 'Registrada' : 'Cancelada' }}</nz-tag></td>
+        <td class="actions">
+          <button nz-button nzType="link" nzSize="small" type="button" [disabled]="!absence.active || saving()" (click)="cancelAbsence(absence)">Cancelar</button>
+        </td>
+      </tr>
+    }
+  </tbody>
+</nz-table>
+
+<div class="toolbar">
+  <label class="field">Desde <input nz-input type="date" id="absence-start" [(ngModel)]="absenceStart" /></label>
+  <label class="field">Hasta <input nz-input type="date" id="absence-end" [(ngModel)]="absenceEnd" /></label>
+  <label class="field">Motivo <input nz-input id="absence-reason" [(ngModel)]="absenceReason" maxlength="200" /></label>
+  <button nz-button nzType="primary" type="button" [disabled]="saving() || !absenceStart" (click)="addAbsence()" id="absence-add">Registrar ausencia</button>
+</div>
+
+@if (!loading() && !schedule()) {
+  <nz-empty nzNotFoundImage="simple" nzNotFoundContent="Seleccioná un empleado para ver su planificación."></nz-empty>
+}

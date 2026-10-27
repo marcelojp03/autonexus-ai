@@ -1,0 +1,96 @@
+"""CU04 scheduling contract. Query/Mutation extend the employees schema; every root field
+has an explicit server role policy (administrador; jefe_taller only for staffing)."""
+
+type StaffingEmployee {
+  id: UUID!
+  fullName: String!
+  jobTitle: String!
+  status: EmployeeStatus!
+}
+type Shift {
+  id: UUID!
+  weekday: Int!
+  startsAt: String!
+  endsAt: String!
+  breakStart: String
+  breakEnd: String
+  active: Boolean!
+  version: Int!
+}
+type Absence {
+  id: UUID!
+  startsOn: Date!
+  endsOn: Date!
+  reason: String
+  active: Boolean!
+  version: Int!
+}
+type AssignmentRef {
+  id: UUID!
+  startsAt: DateTime!
+  endsAt: DateTime!
+  reference: String!
+}
+type Schedule {
+  employeeId: UUID!
+  timezone: String!
+  shifts: [Shift!]!
+  absences: [Absence!]!
+}
+type AvailabilitySlot { start: String! end: String! }
+type Availability {
+  employeeId: UUID!
+  date: Date!
+  weekday: Int!
+  available: [AvailabilitySlot!]!
+  absent: Boolean!
+  assignments: [AssignmentRef!]!
+}
+type ShiftResult { shift: Shift! replayed: Boolean! acknowledgedAssignments: Boolean! }
+type AbsenceResult { absence: Absence! replayed: Boolean! acknowledgedAssignments: Boolean! }
+
+input ShiftInput {
+  operationId: UUID!
+  weekday: Int!
+  startsAt: String!
+  endsAt: String!
+  breakStart: String
+  breakEnd: String
+  acknowledgeConfirmedAssignments: Boolean
+}
+input ShiftUpdateInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  weekday: Int!
+  startsAt: String!
+  endsAt: String!
+  breakStart: String
+  breakEnd: String
+  acknowledgeConfirmedAssignments: Boolean
+}
+input AbsenceInput {
+  operationId: UUID!
+  startsOn: Date!
+  endsOn: Date!
+  reason: String
+  acknowledgeConfirmedAssignments: Boolean
+}
+input StaffingCommandInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  acknowledgeConfirmedAssignments: Boolean
+}
+
+extend type Query {
+  staffingEmployees(search: String): [StaffingEmployee!]!
+  employeeSchedule(id: UUID!): Schedule!
+  employeeAvailability(id: UUID!, date: Date!): Availability!
+}
+
+extend type Mutation {
+  createShift(employeeId: UUID!, input: ShiftInput!): ShiftResult!
+  updateShift(id: UUID!, input: ShiftUpdateInput!): ShiftResult!
+  deactivateShift(id: UUID!, input: StaffingCommandInput!): ShiftResult!
+  createAbsence(employeeId: UUID!, input: AbsenceInput!): AbsenceResult!
+  cancelAbsence(id: UUID!, input: StaffingCommandInput!): AbsenceResult!
+}

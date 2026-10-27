@@ -5,6 +5,7 @@ import { authSimpleCanActivate, authSimpleCanActivateChild } from '@delon/auth';
 import { LayoutBasic, LayoutBlank } from '../layout';
 import { businessSessionGuard } from '../auth/session';
 import { employeesRoutes } from '../features/employees/routes';
+import { scheduleRoutes } from '../features/schedules/routes';
 
 export const routes: Routes = [
   {
@@ -24,6 +25,7 @@ export const routes: Routes = [
         loadChildren: () => import('./widgets/routes').then(m => m.routes)
       },
       ...employeesRoutes.map(route => ({ ...route, canActivate: [businessSessionGuard] })),
+      ...scheduleRoutes.map(route => ({ ...route, canActivate: [businessSessionGuard] })),
       { path: 'style', loadChildren: () => import('./style/routes').then(m => m.routes) },
       { path: 'delon', loadChildren: () => import('./delon/routes').then(m => m.routes) },
       { path: 'extras', loadChildren: () => import('./extras/routes').then(m => m.routes) },
