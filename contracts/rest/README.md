@@ -7,3 +7,7 @@ OpenAPI, esquemas de entrada/respuesta, errores y ejemplos por servicio.
 
 REST empresarial no se conecta directamente a la web. El consumidor web futuro usa el BFF GraphQL del participante 2, todavía pendiente.
 
+
+## Consumidor web (CU03)
+
+El navegador no llama a este REST. `integration/bff` valida la sesión del usuario, exige rol administrador y reenvía el mismo bearer a Empleados. El BFF conserva `operationId`, `expectedVersion` y la semántica de errores del contrato; no reinterpreta estados de acceso ni convierte un guardado local en confirmación de Keycloak.

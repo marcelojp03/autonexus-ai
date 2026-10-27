@@ -1,5 +1,31 @@
 # Estado comprobado
 
+## CU03 web — BFF e interfaz entregados localmente (2026-10-27)
+
+Rama `work/marcelo`, base main425ed03. Decisión009 habilita alcance no exclusivo: se implementaron BFF y pantallas sin esperar al participante2. Backend CU03 sigue siendo el de main; esta entrega agrega el recorrido web y no modifica reglas de negocio del servicio.
+
+`integration/bff` es ahora una aplicación NestJS12.2.0 con GraphQL17.0.2 sobre el SDL de `contracts/graphql/employees.graphql`, sin ORM ni SQL. Puerto127.0.0.1:3004; expone siete campos raíz con allowlist, rechaza introspección/fragmentos/consultas fuera de límites y valida el access token del usuario (RS256, issuer, audiencia Empleados, exp, typ Bearer, rol administrador). Reenvía el mismo token a Empleados: no hay exchange, audiencia propia nueva ni credenciales administrativas de Keycloak en el BFF.
+
+`SessionPort` incorpora `requestBusiness(query, variables)`; el propietario de la sesión renueva el token, llama al BFF y entrega solo datos o errores tipados. Los tokens permanecen en RAM; no hay getters ni copia a props/storage. La demo del template no monta estas rutas.
+
+`mf-employees` incorpora listado con búsqueda/estado/paginación, alta, edición, historial y desactivación, con estados de carga, vacío, error, permiso insuficiente, conflicto de versión y sincronización de acceso pendiente. Conserva NG-ALAIN, single-spa y la sesión; el Shell agrega navegación solo en el módulo Empleados.
+
+| Verificación | Resultado |
+| --- | --- |
+| BFF `pnpm test` / `test:e2e` / build | PASS 10 unitarias + 10 HTTP, build exit0; RSA sintético y upstream falso explícitos |
+| BFF real contra Empleados+Keycloak | PASS 6 etapas/exit0: salud con upstream,401,403,lista con forwarding,introspección rechazada,error de negocio mapeado |
+| `mf-employees` build:integrated | PASS exit0; advertencias CommonJS del template preexistentes |
+| Shell build (tsc+vite+staging) | PASS exit0 |
+| Recorrido web real (Playwright, Keycloak y PostgreSQL reales) | PASS 10 etapas/exit0: login,alta con acceso,estado de acceso,persistencia tras recarga,edición,conflicto+recarga,historial,desactivación,consola limpia,permiso insuficiente |
+| Regresión de carrera del listado | Respuesta obsoleta podía sobrescribir la búsqueda; se descarta por secuencia y el recorrido vuelve a PASS |
+
+Hallazgos corregidos durante la verificación: fecha NG-ZORRO requería entrada por teclado; `nz-alert` no proyecta el botón de recarga; el límite de profundidad GraphQL no contemplaba `snapshot.access`; y la carrera de respuestas del listado. Todos con corrección y nueva ejecución, no reclasificados como ruido.
+
+Evidencia local ignorada en `output-cu03web/` (logs de BFF, shell, Empleados, Operaciones y verificadores) y `output/playwright/cu03-web-list.png`. Los procesos lanzados con `Start-Process` morían al cerrar la herramienta; la verificación usó lanzamiento desacoplado. Estado remoto sin cambios: el primer push sigue preparado y NO ejecutado; los compañeros no tienen estos commits.
+
+No se acredita CU02, CU04, agenda/asignaciones, Saga, móvil ni producción. CU03 se entrega como backend + web local, no como CU completo de punta a punta en remoto.
+
+
 ## Integración CU03 en main — verificada y revisada; publicación pendiente
 
 Cierre2026-10-26: integración efc2e1c..4bbf9af conforme por revisión fresca en cumplimiento/corrección/consistencia, cero críticos. Spec delivered; código empresarial no modificado. Auditoría código4bb:20commits/685blobs/871archivos/251entradasPASS sin hallazgos; reporte local debe renovarse contra HEAD documental final antes de publicar. No push/PR; backend raíz3002 entregado, BFF/interfaz pendientes. CU04 queda preparado enT3, no iniciado. Las menciones posteriores a revisión pendiente son fases históricas del recorrido.

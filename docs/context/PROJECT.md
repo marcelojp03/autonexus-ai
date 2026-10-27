@@ -13,6 +13,7 @@ Consolidada el 25 de octubre de 2026 a partir del Notion y del chat final compar
 ## Recorrido prioritario
 Cliente/vehículo → recepción/orden → cotización y decisión del cliente → CU15 reserva horario, vincula cotización y confirma → avances/verificación → cobro/entrega.
 ## Reparto
+El reparto siguiente identifica responsables de referencia y coordinación; no es exclusividad. Cualquier integrante puede implementar bases, dependencias, BFF, microfrontends u otras funcionalidades necesarias para completar un recorrido, incluso de otro bloque. Ver `docs/decisions/009-modelo-trabajo-ramas-y-alcance.md`.
 ## Bloque 1: operaciones y empleados
 
 Integrante 1: 11 casos y 34 puntos estimados. Responsable del núcleo operativo, Empleados y coordinación de Saga. Establecerá los contratos iniciales del Shell, autenticación y base móvil con colaboración del equipo.

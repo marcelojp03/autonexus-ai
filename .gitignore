@@ -66,3 +66,6 @@ id_ed25519
 # Estas excepciones también conservan ejemplos de entorno en subdirectorios.
 !**/.env.example
 !**/.env.*.example
+
+# Verificación CU03 web (artefactos locales regerables)
+/output-cu03web/
