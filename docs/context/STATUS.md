@@ -2,7 +2,7 @@
 
 ## T21 — React y pantallas de recepción, órdenes y cotizaciones (2026-10-28)
 
-Implementación y verificación completas en work/marcelo desde la base publicada f63ed9803dc3ec147d51b94ea847fc515628fe62. Revisión e integración/publicación de cierre pendientes. No se crearon ramas/worktrees ni se reinicializaron proyectos.
+Implementación verificada y revisada directamente en work/marcelo desde la base publicada f63ed9803dc3ec147d51b94ea847fc515628fe62. Cierre Git autorizado mediante fast-forward a main y push normal de ambas ramas, conservándolas; los SHA remotos se comprueban al finalizar. No se crearon ramas/worktrees ni se reinicializaron proyectos.
 
 | Capa | Estado observado |
 | --- | --- |
@@ -28,6 +28,8 @@ Implementación y verificación completas en work/marcelo desde la base publicad
 Los tres verificadores de navegador usan Keycloak, APIs y PostgreSQL reales, sin mocks ni inyección de marcadores. La aprobación no cambió el estado de la orden: siguió pending_quote, sin mecánico. Recepción no puede crear cotizaciones; el mecánico queda denegado en Finance. Consola/pageerror limpios; se conserva en diagnóstico una cancelación ERR_ABORTED de recurso Angular al navegar, sin HTTP fallidos. Capturas desktop/mobile y diagnósticos locales en output/playwright/, logs/exit en output/t21/ (ignorados).
 
 Hallazgos corregidos: ESM servido sin exports por tree shaking; Finance fuera de modules y basePath incorrecto; retorno OIDC excluía /finance; decisiones ligadas a la primera pending, referencias por nombre/placa y evidencia ficticia de fallback; códigos nuevos y open omitidos por BFF; cliente independiente sin claims sub/usuario por scopes basic/profile ausentes; Router Angular desincronizado de enlaces del Shell (observado en ejecución y reconciliado con API pública y cleanup); hooks React con resets sincrónicos/ref cleanup. La corrida conjunta inicial React dio 24/25 por agotar 5 s de una interacción; la ejecución aislada con 15 s dio 25/25 sin cambiar aserciones. Se mantienen avisos de pseudoelementos de jsdom y tamaño del bundle (~1,025 MB integrado antes de gzip), no se ocultan ni se elevan presupuestos del build.
+
+Revisión de cierre **directa**, del rango f63ed98..5080cdc53a8c787dd034859f939b3b37cb3f4b5d: sin bloqueantes de cumplimiento/corrección. El revisor independiente general-20 falló al iniciar por SQLiteError: database is locked y fue cancelado sin dictamen; no se acredita independencia. Cierre posterior solo documental. Control de publicación del código: 1 commit, 51 blobs, sin archivos privados/generados, claves privadas ni material JWT detectados por el escaneo del rango; se renueva contra el HEAD documental antes del push.
 
 Límites: CU11 aquí cubre registro textual, no fotografías/S3 ni inspección IA; offline, cobros, indicadores, CU05 con asignaciones y Saga CU15 siguen pendientes. Aprobar no confirma el servicio. La persistencia existente se conserva: Spring usa JDBC/Flyway, Nest TypeORM con SQL explícito y entities:[], Laravel Query Builder, y BFF sin base. Decisión 015; especificación operations-flow.
 

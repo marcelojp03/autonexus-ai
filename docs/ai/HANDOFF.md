@@ -1,6 +1,7 @@
 # Cierre y continuidad de sesión
 
-Traspaso más reciente: [Bloque operativo CU06/CU07/CU09/CU10](../handoffs/2026-10-28-operations-base.md).
+Traspaso más reciente: [T21 — React, recepción, órdenes y cotizaciones](../handoffs/2026-10-28-t21-react-finance.md).
+Traspaso operativo anterior: [CU06/CU07/CU09/CU10](../handoffs/2026-10-28-operations-base.md).
 Traspaso anterior: [CU02 entregado](../handoffs/2026-10-27-cu02-security.md). Este enlace no reemplaza la plantilla siguiente.
 Copiar una instancia fechada en docs/handoffs/ al cerrar una tarea importante.
 - Fecha y responsable/bloque:

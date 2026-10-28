@@ -1,12 +1,39 @@
 ---
-status: in-progress
+status: delivered
 updated: 2026-10-28
-source: work/marcelo
+source: main
 ---
 
 # Recepción, órdenes de trabajo y cotizaciones (CU11, CU12, CU13, CU14)
 
 ## Report
+
+**What was built** — Se completa T21 sobre f63ed9803dc3ec147d51b94ea847fc515628fe62, sin reinicializar proyectos ni crear ramas/worktrees. React/Finanzas queda registrado en el Shell y ejecutable independientemente en 4204, con sesión OIDC compartida por contrato, lifecycles ESM reales y CSS/portales aislados. Angular agrega recepción y órdenes; React consulta/crea/revisa cotizaciones y registra decisiones explícitas por ID/orden/versión con evidencia obligatoria y referencias empresariales UUID. Fechas del taller y cálculo/configuración financiera del servidor. La orden conserva pending_quote después de aprobar: no se implementó CU15.
+
+Backend CU11/CU12 y Finanzas CU13/CU14 son los entregados previamente; no se reescribió persistencia. T21 corrige en BFF códigos públicos CU11/CU12 y open, permite el origen exacto 4204 y completa pantallas. Se añade reconciliación acotada de rutas Angular desde eventos estándar single-spa, sin modificar builders, versiones o campos privados del adaptador.
+
+**Verification** — Node 22.22.3 y pnpm 12.6.0 explícitos, comandos desde cada aplicación:
+
+| Comando/ámbito | Resultado observado |
+| --- | --- |
+| Finance: node node_modules/vitest/vitest.mjs run src/integrated/IntegratedApp.test.jsx src/spa.test.jsx src/standalone.test.js --pool=threads --maxWorkers=1 --testTimeout=15000 --reporter=dot | PASS 25/25; fakes/jsdom, no evidencia empresarial por sí sola |
+| Finance: ESLint de nueve archivos JS/JSX modificados, --max-warnings 0 | PASS cero errores/advertencias, sin disables |
+| Finance: pnpm install --frozen-lockfile --config.manage-package-manager-versions=false; node node_modules/vite/bin/vite.js build --mode integrated y build | PASS frozen y ambos builds; salidas separadas; aviso de tamaño conservado |
+| Operaciones: node node_modules/@angular/cli/bin/ng.js test --include src/app/features/operations/intake.spec.ts --watch=false --headless | PASS 9/9 Chromium con dobles explícitos de API |
+| Ambos Angular: ng build --configuration production,integrated por Node fijado | PASS ambos, tipos de aplicación comprobados por build |
+| Shell: node --experimental-strip-types --test tests/*.test.mjs; stage-mfs, tsc, vite build | PASS 25/25, staging de tres módulos, tipos y build |
+| BFF: Vitest run, Vitest --config vitest.config.e2e.ts, tsc --noEmit, Nest build | PASS 32 unitarias + 13 HTTP con fakes; tipos y build exit 0 |
+| node scripts/finance/verify-t21-web.mjs | PASS 8 etapas reales: dos recepciones/órdenes, dos cotizaciones, revisión a v2, v1 superseded, rechazo y aprobación seleccionados, referencias UUID, evidencia, recarga y rechazo de revisión obsoleta aprobada |
+| node scripts/finance/verify-react-integration.mjs | PASS 12 etapas reales: exports ESM, MOUNTED/host/props, desmontaje/regreso, rutas previas Angular, historial propio/cruzado, Empleados/horarios/seguridad, enlace directo/recarga, escritorio/móvil y aislamiento CSS |
+| node scripts/finance/verify-standalone-web.mjs | PASS 4 etapas reales: PKCE del cliente Finance, GraphQL, recarga SSO, paso al Shell sin otro login y logout/desmontaje |
+| node scripts/operations/verify-flow-bff-real.mjs | PASS 6 etapas reales por GraphQL, incluido rechazo por permiso |
+| Detector de superficies nuevas; git diff --check | PASS detector [] y sin errores de whitespace |
+
+Los recorridos reales usan Keycloak, BFF, servicios y PostgreSQL sin mocks ni marcadores inyectados. El verificador empresarial crea únicamente prerrequisitos sintéticos por API; todas las recepciones, órdenes, cotizaciones, revisiones y decisiones del recorrido se envían desde pantallas. Se guardaron capturas desktop/mobile y diagnósticos incluso al fallar en output/playwright/; logs/exit en output/t21/, todos ignorados. Una cancelación ERR_ABORTED de un recurso Angular al salir se conserva como tal; sin errores console/pageerror ni HTTP fallidos.
+
+**Review** — Revisión directa del agente principal del rango f63ed98..5080cdc53a8c787dd034859f939b3b37cb3f4b5d: sin bloqueantes de cumplimiento/corrección; contratos, fronteras y convenciones conservados. Se intentó revisión fresca independiente (general-20) pero falló antes del dictamen con SQLiteError: database is locked y se canceló; no se acredita independencia. No se repitieron suites aprobadas durante la revisión. El cierre posterior es documental.
+
+**Límites** — Fotografías/S3, inspección IA, offline, cobros/indicadores y CU15 continúan pendientes. Búsqueda textual de órdenes recorre páginas porque el contrato no publica search; no se atribuye una búsqueda server-side. Se mantienen advertencias de jsdom/pseudoelementos y del bundle React; una corrida conjunta inicial agotó 5 s de una interacción (24/25), la corrida aislada con presupuesto de 15 s dio 25/25 sin cambiar aserciones. Publicación normal de main y work/marcelo autorizada para la fase Finish, conservando ambas ramas; comprobar los SHA de las refs como evidencia de cierre.
 
 ## [S1] Problem
 
@@ -118,13 +145,20 @@ No se introduce ORM de entidades: Operaciones mantiene `JdbcClient` con SQL para
 
 ## Tasks
 
-- [ ] T1: Ampliar el catálogo a 21 permisos y sembrar los roles — acceptance: catálogo publicado y roles con los conjuntos del diseño (covers: S2.2)
-- [ ] T2: Operaciones CU11 recepción — acceptance: alta con validaciones, kilometraje no regresivo, recepción abierta única y cita vinculada (covers: S2.3)
-- [ ] T3: Operaciones CU12 orden — acceptance: número único, ítems con copia de tarifa, servicios inactivos rechazados y estado `pending_quote` (covers: S2.4)
-- [ ] T4: Finanzas Laravel con cotización versionada — acceptance: cálculo en servidor, versionado, inmutabilidad de aprobada (covers: S2.5)
-- [ ] T5: Finanzas CU14 decisión — acceptance: aprobación/rechazo con evidencia, expiración y decisión repetida rechazada (covers: S2.6)
-- [ ] T6: BFF GraphQL de recepciones, órdenes y cotizaciones — acceptance: recorrido GraphQL real y 403 sin permiso (covers: S2.7)
-- [ ] T7: Web: recepción y orden en Angular, cotización y decisión en React integrado — acceptance: smoke de navegador con sesión única (covers: S2.8)
-- [ ] T8: Cierre: documentación de persistencia, contrato de Saga CU15, regresión, revisión y publicación (covers: S2.9, S2.10)
+- [x] T1: Ampliar el catálogo a 21 permisos y sembrar los roles — acceptance: catálogo publicado y roles con los conjuntos del diseño (covers: S2.2)
+- [x] T2: Operaciones CU11 recepción — acceptance: alta con validaciones, kilometraje no regresivo, recepción abierta única y cita vinculada (covers: S2.3)
+- [x] T3: Operaciones CU12 orden — acceptance: número único, ítems con copia de tarifa, servicios inactivos rechazados y estado `pending_quote` (covers: S2.4)
+- [x] T4: Finanzas Laravel con cotización versionada — acceptance: cálculo en servidor, versionado, inmutabilidad de aprobada (covers: S2.5)
+- [x] T5: Finanzas CU14 decisión — acceptance: aprobación/rechazo con evidencia, expiración y decisión repetida rechazada (covers: S2.6)
+- [x] T6: BFF GraphQL de recepciones, órdenes y cotizaciones — acceptance: recorrido GraphQL real y 403 sin permiso (covers: S2.7)
+- [x] T7: Web: recepción y orden en Angular, cotización y decisión en React integrado — acceptance: smoke de navegador con sesión única (covers: S2.8)
+- [x] T8: Cierre: documentación de persistencia, contrato de Saga CU15, regresión, revisión y preparación de integración/publicación autorizadas (covers: S2.9, S2.10)
 
 ## Journey log
+
+- Se retomó el estado publicado, no el checkpoint antiguo de CU02. El ESM servido respondía 200 pero sin exports: conservar firmas del entry resolvió la causa observada; no se cambiaron versiones/builders.
+- La instrumentación inicial perdía page/errors por scope del try. Diagnósticos fuera del try/finally, eventos reales, errores y peticiones fallidas conservaron evidencia de cada fallo.
+- La prueba real encontró códigos CU11/CU12 convertidos a VERSION_CONFLICT/NOT_FOUND y open omitido: ocho pruebas de frontera, siete rojas antes del fix, luego todas verdes; duplicado real vuelve a VEHICLE_ALREADY_IN_RECEPTION.
+- El cliente independiente emitía roles/audiencias pero no subject/usuario: scopes basic/profile corregidos y comprobados en presencia de claims sin imprimir tokens.
+- El smoke encontró URL de Vehículos con Router aún en Clientes y sin navegación pendiente. La reconciliación por API pública se limita al prefijo y limpia su listener; historial y rutas de ambos Angular comprobados en navegador.
+- El lint detectó resets sincrónicos/ref cleanup en efectos. Workspace por clave de sesión, estado de carga derivado y contadores estables corrigieron las reglas sin suprimirlas; selección, carreras e idempotencia siguen verificadas.
