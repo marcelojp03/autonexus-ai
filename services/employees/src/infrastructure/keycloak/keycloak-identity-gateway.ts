@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { adminClientCredentials } from './admin-credentials.js';
 import {
   IdentitySyncError,
   type IdentityDesired,
@@ -54,19 +53,7 @@ export class KeycloakIdentityGateway implements IdentityGateway {
   }
   private credentials(): { clientId: string; clientSecret: string } {
     try {
-      const path = process.env.EMPLOYEES_IDP_CLIENT_FILE;
-      if (!path || !isAbsolute(path)) throw new Error();
-      const value = JSON.parse(readFileSync(path, 'utf8')) as {
-        clientId?: unknown;
-        clientSecret?: unknown;
-      };
-      if (
-        value.clientId !== 'autonexus-employees-admin' ||
-        typeof value.clientSecret !== 'string' ||
-        value.clientSecret.length < 16
-      )
-        throw new Error();
-      return { clientId: value.clientId, clientSecret: value.clientSecret };
+      return adminClientCredentials();
     } catch {
       throw new IdentitySyncError('IDP_UNAVAILABLE');
     }

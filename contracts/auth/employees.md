@@ -4,9 +4,9 @@ Contrato temprano de S2.2–S2.5 de la especificación aprobada `docs/compose/sp
 
 ## Fronteras y autorización
 
-- **Todas** las operaciones REST (listado, detalle, alta, PUT, desactivación, historial y retry) requieren rol realm `administrador`, con política servidor por acción/registro. No hay lectura pública ni excepción para mecánicos/jefes o para la propia ficha.
+- **Todas** las operaciones REST (listado, detalle, alta, PUT, desactivación, historial y retry) exigen el permiso `employees:read` (consultas) o `employees:write` (mutaciones), con política servidor por acción/registro. Desde CU02 solo el rol inicial `administrador` posee ambos permisos, así que el CRUD de empleados sigue siendo administrador-only; no hay excepción para mecánicos, jefes ni la propia ficha. `contracts/auth/permissions.md` define el catálogo y la resolución.
 - Reutilizar guard CU01: access token RS256, issuer/JWKS confiables, audiencia `autonexus-employees-api`, exp/sub/typ y tolerancia existente de 5 s. Sin token/vencido/inválido: 401. Token válido sin permiso: 403. No aceptar ID tokens ni roles/subject del body.
-- Bloquear desactivación si el `access.subject` vinculado coincide con el subject administrador autenticado: 409 `SELF_DEACTIVATION_FORBIDDEN`. No implementar política general de último administrador (CU02).
+- Bloquear desactivación si el `access.subject` vinculado coincide con el subject administrador autenticado: 409 `SELF_DEACTIVATION_FORBIDDEN`. CU02 añade la política de "nunca sin administrador" al **retirar roles** y al **reducir permisos** de un rol; desactivar un empleado que administra roles no se bloquea en CU03 y sigue siendo una decisión administrativa explícita.
 - La web empresarial **no llama REST directamente**: usa GraphQL mediante futuro BFF del participante 2. El BFF validará sesión y permiso por operación/campo/registro (incluidos nested snapshots), y el servicio vuelve a autorizar. No confiar solo en menú, props o directivas SDL.
 - BFF: propaga el bearer autorizado con audiencia Empleados mediante forwarding; está implementado en `integration/bff`. Su audiencia propia, mappers y exchange **siguen pendientes**; no se inventa una audiencia desplegada. No sustituir usuario por cuenta técnica con autoridad administrativa para eludir autorización.
 

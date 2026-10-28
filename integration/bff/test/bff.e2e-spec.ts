@@ -10,6 +10,19 @@ import { configureHttp } from '../src/infrastructure/http/configure-http.js';
 import { bffEnvironment } from '../src/infrastructure/config/environment.js';
 
 const PAGE = { items: [], total: 0, limit: 20, offset: 0 };
+const ALL = ['employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write'];
+/** Mirrors the owner resolution: realm roles plus persisted assignments. */
+const effectiveFor = (bearer: string): string[] => {
+  try {
+    const payload = JSON.parse(Buffer.from(bearer.split('.')[1], 'base64url').toString()) as { realm_access?: { roles?: string[] } };
+    const roles = payload.realm_access?.roles ?? [];
+    if (roles.includes('administrador')) return ALL;
+    if (roles.includes('jefe_taller')) return ['schedules:read', 'schedules:write'];
+    return [];
+  } catch {
+    return [];
+  }
+};
 const EMPLOYEE_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
@@ -17,6 +30,7 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
   let admin: string;
   let mechanic: string;
   let head: string;
+  let uncachedAdmin: string;
   const gateway = {
     list: vi.fn(async () => PAGE),
     get: vi.fn(),
@@ -34,18 +48,29 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     deactivateShift: vi.fn(),
     createAbsence: vi.fn(),
     cancelAbsence: vi.fn(),
+    permissions: vi.fn(async (bearer: string) => ({ catalog: [], effective: effectiveFor(bearer), roles: [] })),
+    securityRoles: vi.fn(async () => []),
+    securityRole: vi.fn(),
+    createRole: vi.fn(),
+    updateRole: vi.fn(),
+    retryRoleSync: vi.fn(),
+    employeeRoles: vi.fn(),
+    assignRole: vi.fn(),
+    revokeRole: vi.fn(),
+    securityHistory: vi.fn(),
   };
   const config = bffEnvironment({}, process.cwd());
 
   beforeAll(async () => {
     const keys = await generateKeyPair('RS256');
-    const token = (roles: string[]) =>
-      new SignJWT({ iss: config.issuer, aud: config.audience, sub: 'synthetic-admin', typ: 'Bearer', exp: Math.floor(Date.now() / 1000) + 300, realm_access: { roles } })
+    const token = (roles: string[], subject = 'synthetic-admin') =>
+      new SignJWT({ iss: config.issuer, aud: config.audience, sub: subject, typ: 'Bearer', exp: Math.floor(Date.now() / 1000) + 300, realm_access: { roles } })
         .setProtectedHeader({ alg: 'RS256' })
         .sign(keys.privateKey);
     admin = await token(['administrador']);
     mechanic = await token(['mecanico']);
     head = await token(['jefe_taller']);
+    uncachedAdmin = await token(['administrador'], 'synthetic-admin-uncached');
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AccessTokenVerifier)
       .useValue(new AccessTokenVerifier(config, createLocalJWKSet({ keys: [await exportJWK(keys.publicKey)] })))
@@ -130,5 +155,45 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     const failure = await post({ query: '{ employees { total } }' }, admin).expect(200);
     expect(failure.body.errors[0].extensions).toEqual({ code: 'SERVICE_UNAVAILABLE', statusCode: 503 });
     expect(JSON.stringify(failure.body)).not.toContain('internal-upstream-detail');
+  });
+
+  it('serves the CU02 catalog and enforces the security policy over HTTP', async () => {
+    const own = await post({ query: '{ securityCatalog { catalog { id } effective } }' }, mechanic).expect(200);
+    expect(own.body.errors).toBeUndefined();
+    expect(own.body.data.securityCatalog.effective).toEqual([]);
+
+    const denied = await post({ query: '{ securityRoles { name } }' }, head).expect(200);
+    expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+
+    gateway.securityRoles.mockResolvedValueOnce([{ name: 'administrador', permissions: ALL, system: true, version: 1, syncStatus: 'synced', assignedCount: 0 }]);
+    const allowed = await post({ query: '{ securityRoles { name permissions syncStatus } }' }, admin).expect(200);
+    expect(allowed.body.data.securityRoles[0].name).toBe('administrador');
+    expect(gateway.securityRoles).toHaveBeenCalledWith(admin);
+
+    gateway.createRole.mockResolvedValueOnce({ role: { name: 'supervisor', version: 1, syncStatus: 'synced', permissions: ['schedules:read'] }, replayed: false });
+    const created = await post(
+      {
+        query: 'mutation ($input: RoleCreateInput!) { createRole(input: $input) { role { name syncStatus } replayed } }',
+        variables: { input: { operationId: EMPLOYEE_ID, name: 'supervisor', permissions: ['schedules:read'] } },
+      },
+      admin,
+    ).expect(200);
+    expect(created.body.data.createRole.role.syncStatus).toBe('synced');
+    expect(gateway.createRole).toHaveBeenCalledWith(expect.objectContaining({ name: 'supervisor' }), admin);
+
+    const forbidden = await post(
+      {
+        query: 'mutation ($input: RoleCreateInput!) { createRole(input: $input) { role { name } } }',
+        variables: { input: { operationId: EMPLOYEE_ID, name: 'supervisor', permissions: ['security:read'] } },
+      },
+      head,
+    ).expect(200);
+    expect(forbidden.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+  });
+
+  it('fails closed when the permission catalog cannot be resolved', async () => {
+    gateway.permissions.mockRejectedValueOnce(new BusinessError(503, 'SERVICE_UNAVAILABLE'));
+    const response = await post({ query: '{ employees { total } }' }, uncachedAdmin).expect(200);
+    expect(response.body.errors[0].extensions).toEqual({ code: 'SERVICE_UNAVAILABLE', statusCode: 503 });
   });
 });

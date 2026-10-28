@@ -1,7 +1,7 @@
 import { Body, Catch, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req, UseFilters, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import { ManageSchedules } from '../../application/manage-schedules.js';
 import { ScheduleError } from '../../domain/schedule.js';
-import { RequireRoles, type AuthenticatedRequest } from '../auth/auth-policy.js';
+import { RequirePermissions, type AuthenticatedRequest } from '../auth/auth-policy.js';
 
 const messages: Record<number, string> = {
   400: 'Invalid scheduling request',
@@ -21,7 +21,7 @@ class ScheduleErrorFilter implements ExceptionFilter {
 
 /** CU04 planning surface. Employees CRUD keeps its own administrator-only policy. */
 @Controller('staffing')
-@RequireRoles('administrador', 'jefe_taller')
+@RequirePermissions('schedules:read')
 @UseFilters(ScheduleErrorFilter)
 export class StaffingController {
   constructor(@Inject(ManageSchedules) private readonly schedules: ManageSchedules) {}
@@ -42,28 +42,33 @@ export class StaffingController {
   }
 
   @Post('employees/:id/shifts')
+  @RequirePermissions('schedules:write')
   createShift(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.schedules.createShift(id, body, request.identity.subject);
   }
 
   @Put('shifts/:shiftId')
+  @RequirePermissions('schedules:write')
   @HttpCode(200)
   updateShift(@Param('shiftId') shiftId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.schedules.updateShift(shiftId, body, request.identity.subject);
   }
 
   @Post('shifts/:shiftId/deactivate')
+  @RequirePermissions('schedules:write')
   @HttpCode(200)
   deactivateShift(@Param('shiftId') shiftId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.schedules.deactivateShift(shiftId, body, request.identity.subject);
   }
 
   @Post('employees/:id/absences')
+  @RequirePermissions('schedules:write')
   createAbsence(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.schedules.createAbsence(id, body, request.identity.subject);
   }
 
   @Post('absences/:absenceId/cancel')
+  @RequirePermissions('schedules:write')
   @HttpCode(200)
   cancelAbsence(@Param('absenceId') absenceId: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.schedules.cancelAbsence(absenceId, body, request.identity.subject);

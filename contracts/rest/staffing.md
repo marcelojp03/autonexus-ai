@@ -4,17 +4,19 @@ Contrato del backend propietario de Empleados. La web consume estas operaciones 
 
 ## Políticas
 
-| Operación | Roles |
+Desde CU02 la autorización se resuelve por **permiso** (`contracts/auth/permissions.md`): `schedules:read` para consultas y `schedules:write` para mutaciones. El rol `administrador` posee ambos y `jefe_taller` también; los demás roles iniciales no los tienen.
+
+| Operación | Permiso |
 | --- | --- |
-| `GET /staffing/employees` | administrador, jefe_taller |
-| `GET /staffing/employees/:id/schedule` | administrador, jefe_taller |
-| `GET /staffing/employees/:id/availability?date=` | administrador, jefe_taller |
-| `POST /staffing/employees/:id/shifts` | administrador, jefe_taller |
-| `PUT /staffing/shifts/:shiftId` | administrador, jefe_taller |
-| `POST /staffing/shifts/:shiftId/deactivate` | administrador, jefe_taller |
-| `POST /staffing/employees/:id/absences` | administrador, jefe_taller |
-| `POST /staffing/absences/:absenceId/cancel` | administrador, jefe_taller |
-| `/employees*` (CU03) | administrador únicamente |
+| `GET /staffing/employees` | `schedules:read` |
+| `GET /staffing/employees/:id/schedule` | `schedules:read` |
+| `GET /staffing/employees/:id/availability?date=` | `schedules:read` |
+| `POST /staffing/employees/:id/shifts` | `schedules:write` |
+| `PUT /staffing/shifts/:shiftId` | `schedules:write` |
+| `POST /staffing/shifts/:shiftId/deactivate` | `schedules:write` |
+| `POST /staffing/employees/:id/absences` | `schedules:write` |
+| `POST /staffing/absences/:absenceId/cancel` | `schedules:write` |
+| `/employees*` (CU03) | `employees:read` / `employees:write` (solo el rol administrador los posee) |
 
 `staffingEmployees` devuelve solo `{id, fullName, jobTitle, status}` de empleados activos: el jefe planifica sin acceder a documento, contacto, historial ni cuenta.
 
@@ -31,6 +33,8 @@ Contrato del backend propietario de Empleados. La web consume estas operaciones 
 `VALIDATION_ERROR` (400); `EMPLOYEE_NOT_FOUND`, `SHIFT_NOT_FOUND`, `ABSENCE_NOT_FOUND` (404); `EMPLOYEE_INACTIVE`, `SHIFT_OVERLAP`, `ABSENCE_OVERLAP`, `AFFECTS_CONFIRMED_ASSIGNMENT`, `VERSION_CONFLICT`, `IDEMPOTENCY_CONFLICT` (409); `PERSISTENCE_UNAVAILABLE` (503).
 
 ## Contrato preparado para CU15
+
+**La consulta de disponibilidad es informativa.** Devuelve los tramos libres del día y las asignaciones confirmadas superpuestas, pero no reserva nada: entre la consulta y la confirmación la disponibilidad puede cambiar. La futura operación de reserva/confirmación de CU15 debe revalidar turno, ausencias y asignaciones dentro de la misma transacción de Empleados antes de escribir la asignación, controlando reservas concurrentes.
 
 La tabla `employees.employee_assignments` (`id`, `employee_id`, `starts_at timestamptz`, `ends_at`, `status='confirmed'`, `reference` con la orden de trabajo, `created_at`) es la fuente de conflicto de CU04 y queda como dependencia mínima real.
 

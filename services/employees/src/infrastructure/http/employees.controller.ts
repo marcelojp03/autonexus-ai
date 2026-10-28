@@ -17,7 +17,7 @@ import {
 import { ManageEmployees } from '../../application/manage-employees.js';
 import { EmployeeError } from '../../domain/employee.js';
 import {
-  RequireRoles,
+  RequirePermissions,
   type AuthenticatedRequest,
 } from '../auth/auth-policy.js';
 @Catch(EmployeeError)
@@ -44,7 +44,7 @@ class EmployeeErrorFilter implements ExceptionFilter {
   }
 }
 @Controller('employees')
-@RequireRoles('administrador')
+@RequirePermissions('employees:read')
 @UseFilters(EmployeeErrorFilter)
 export class EmployeesController {
   constructor(
@@ -62,7 +62,9 @@ export class EmployeesController {
   ) {
     return this.employees.history(id, query);
   }
-  @Post() create(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
+  @Post()
+  @RequirePermissions('employees:write')
+  create(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.employees.mutate(
       'create',
       null,
@@ -70,14 +72,19 @@ export class EmployeesController {
       request.identity.subject,
     );
   }
-  @Put(':id') update(
+  @Put(':id')
+  @RequirePermissions('employees:write')
+  update(
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.employees.mutate('update', id, body, request.identity.subject);
   }
-  @Post(':id/deactivate') @HttpCode(200) deactivate(
+  @Post(':id/deactivate')
+  @HttpCode(200)
+  @RequirePermissions('employees:write')
+  deactivate(
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,
@@ -89,7 +96,10 @@ export class EmployeesController {
       request.identity.subject,
     );
   }
-  @Post(':id/access/retry') @HttpCode(200) retry(
+  @Post(':id/access/retry')
+  @HttpCode(200)
+  @RequirePermissions('employees:write')
+  retry(
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: AuthenticatedRequest,

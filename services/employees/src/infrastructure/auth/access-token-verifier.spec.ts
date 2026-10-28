@@ -15,12 +15,12 @@ describe('Access token validation (RSA fixtures, not real Keycloak)', () => {
 
   async function token(overrides: Record<string, unknown> = {}, key = keys.privateKey) {
     return new SignJWT({ iss: config.issuer, aud: config.audience, sub: 'synthetic-subject',
-      exp: now + 60, typ: 'Bearer', realm_access: { roles: ['mecanico', 'unrecognized', 'mecanico'] },
+      exp: now + 60, typ: 'Bearer', realm_access: { roles: ['mecanico', 'Mecanico!', 'mecanico'] },
       ...overrides }).setProtectedHeader({ alg: 'RS256' }).sign(key);
   }
 
-  it('accepts signed access tokens and filters/deduplicates realm roles', async () => {
-    expect(await verifier.verify(await token())).toEqual({ subject: 'synthetic-subject', roles: ['mecanico'] });
+  it('accepts signed access tokens and keeps deduplicated slug realm roles', async () => {
+    expect(await verifier.verify(await token())).toEqual({ subject: 'synthetic-subject', roles: ['mecanico'], permissions: [], recognized: [] });
   });
 
   it.each([
@@ -59,7 +59,7 @@ describe('Access token validation (RSA fixtures, not real Keycloak)', () => {
   it('does not infer workshop roles from client roles', async () => {
     expect(await verifier.verify(await token({ realm_access: undefined,
       resource_access: { 'autonexus-employees-api': { roles: ['administrador'] } } })))
-      .toEqual({ subject: 'synthetic-subject', roles: [] });
+      .toEqual({ subject: 'synthetic-subject', roles: [], permissions: [], recognized: [] });
   });
 
   it('fails closed if key lookup is unavailable', async () => {

@@ -1,0 +1,372 @@
+openapi: 3.1.0
+info:
+  title: AutoNexus AI — Empleados, seguridad (CU02)
+  version: 1.0.0
+  description: >
+    Superficie REST propietaria de roles y permisos. La web consume estas operaciones
+    exclusivamente por GraphQL mediante integration/bff. Autorización por permiso
+    (contracts/auth/permissions.md): security:read para consultas y security:write para
+    mutaciones; GET /security/permissions solo exige un token con algún rol del catálogo.
+servers:
+  - url: http://127.0.0.1:3002
+security:
+  - bearerAuth: []
+paths:
+  /security/permissions:
+    get:
+      operationId: getSecurityCatalog
+      summary: Catálogo cerrado de permisos y permisos efectivos del portador
+      responses:
+        '200':
+          description: Catálogo publicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SecurityCatalog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /security/roles:
+    get:
+      operationId: listSecurityRoles
+      summary: Roles con permisos, versión y estado de sincronización
+      responses:
+        '200':
+          description: Lista completa y ordenada
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Role' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createSecurityRole
+      summary: Crea un rol y lo materializa en el proveedor de identidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleCreateInput' }
+      responses:
+        '201':
+          description: Rol creado; syncStatus indica si el IdP confirmó
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleMutation' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: ROLE_DUPLICATE, PERMISSION_ESCALATION, IDEMPOTENCY_CONFLICT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessError' }
+  /security/roles/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[a-z][a-z0-9_]{2,63}$' }
+    get:
+      operationId: getSecurityRole
+      responses:
+        '200':
+          description: Detalle del rol
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateSecurityRole
+      summary: Modifica descripción y permisos; exige expectedVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleUpdateInput' }
+      responses:
+        '200':
+          description: Rol actualizado y versionado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleMutation' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: VERSION_CONFLICT, PERMISSION_ESCALATION, LAST_ADMINISTRATOR, IDEMPOTENCY_CONFLICT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessError' }
+  /security/roles/{name}/retry-sync:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: retryRoleSync
+      summary: Reconcilia el rol y sus asignaciones pendientes con el IdP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetryInput' }
+      responses:
+        '200':
+          description: Estado de sincronización resultante
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleMutation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: VERSION_CONFLICT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessError' }
+  /security/employees/{id}/roles:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listEmployeeRoles
+      responses:
+        '200':
+          description: Asignaciones vigentes y retiradas del empleado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmployeeRoles' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: assignEmployeeRole
+      summary: Asigna un rol a un empleado activo con identidad vinculada
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignmentInput' }
+      responses:
+        '201':
+          description: Asignación creada; syncStatus refleja el IdP
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssignmentMutation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: EMPLOYEE_INACTIVE, EMPLOYEE_WITHOUT_IDENTITY, ROLE_ALREADY_ASSIGNED, IDEMPOTENCY_CONFLICT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessError' }
+  /security/employees/{id}/roles/{roleName}/revoke:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: roleName
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: revokeEmployeeRole
+      summary: Retira un rol; conserva historial y exige expectedVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevokeInput' }
+      responses:
+        '200':
+          description: Asignación retirada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssignmentMutation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: VERSION_CONFLICT, LAST_ADMINISTRATOR, ASSIGNMENT_NOT_ACTIVE, IDEMPOTENCY_CONFLICT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessError' }
+  /security/history:
+    get:
+      operationId: listSecurityHistory
+      summary: Auditoría append-only de roles y asignaciones
+      parameters:
+        - { name: roleName, in: query, schema: { type: string } }
+        - { name: employeeId, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Página de auditoría
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SecurityHistoryPage' }
+        '400': { $ref: '#/components/responses/Invalid' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Invalid:
+      description: VALIDATION_ERROR
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BusinessError' }
+    Unauthorized:
+      description: Token ausente o inválido
+    Forbidden:
+      description: Permiso insuficiente
+    NotFound:
+      description: ROLE_NOT_FOUND, EMPLOYEE_NOT_FOUND, ASSIGNMENT_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BusinessError' }
+  schemas:
+    BusinessError:
+      type: object
+      required: [statusCode, message, code]
+      properties:
+        statusCode: { type: integer }
+        message: { type: string }
+        code: { type: string }
+    SecurityPermission:
+      type: object
+      required: [id, module, operation, description]
+      properties:
+        id: { type: string, enum: ['employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write'] }
+        module: { type: string }
+        operation: { type: string }
+        description: { type: string }
+    SecurityCatalog:
+      type: object
+      required: [catalog, effective, roles]
+      properties:
+        catalog:
+          type: array
+          items: { $ref: '#/components/schemas/SecurityPermission' }
+        effective:
+          type: array
+          items: { type: string }
+        roles:
+          type: array
+          description: Roles del token reconocidos por el catálogo persistido
+          items: { type: string }
+    Role:
+      type: object
+      required: [name, description, permissions, system, version, syncStatus, syncErrorCode, assignedCount]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        system: { type: boolean }
+        version: { type: integer, minimum: 1 }
+        syncStatus: { type: string, enum: [synced, pending, failed] }
+        syncErrorCode: { type: [string, 'null'], enum: [IDP_UNAVAILABLE, IDP_TIMEOUT, IDP_FORBIDDEN, IDP_RESPONSE_INVALID, ROLE_NAME_CONFLICT, null] }
+        assignedCount: { type: integer, minimum: 0 }
+    RoleAssignment:
+      type: object
+      required: [id, roleName, employeeId, subject, status, syncStatus, version, assignedAt, assignedBy]
+      properties:
+        id: { type: string, format: uuid }
+        roleName: { type: string }
+        employeeId: { type: string, format: uuid }
+        subject: { type: string }
+        status: { type: string, enum: [active, revoked] }
+        syncStatus: { type: string, enum: [synced, pending, failed] }
+        syncErrorCode: { type: [string, 'null'] }
+        assignedAt: { type: string, format: date-time }
+        assignedBy: { type: string }
+        version: { type: integer, minimum: 1 }
+    EmployeeRoles:
+      type: object
+      required: [employeeId, items]
+      properties:
+        employeeId: { type: string, format: uuid }
+        subject: { type: [string, 'null'] }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RoleAssignment' }
+    RoleCreateInput:
+      type: object
+      required: [operationId, name, permissions]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        name: { type: string, pattern: '^[a-z][a-z0-9_]{2,63}$' }
+        description: { type: string, maxLength: 200 }
+        permissions:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { type: string }
+    RoleUpdateInput:
+      type: object
+      required: [operationId, expectedVersion, permissions]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 1 }
+        description: { type: string, maxLength: 200 }
+        permissions:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { type: string }
+    RetryInput:
+      type: object
+      required: [operationId, expectedVersion]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 1 }
+    AssignmentInput:
+      type: object
+      required: [operationId, roleName]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        roleName: { type: string }
+    RevokeInput:
+      type: object
+      required: [operationId, expectedVersion]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 1 }
+    RoleMutation:
+      type: object
+      required: [role, replayed]
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        replayed: { type: boolean }
+    AssignmentMutation:
+      type: object
+      required: [assignment, replayed]
+      properties:
+        assignment: { $ref: '#/components/schemas/RoleAssignment' }
+        replayed: { type: boolean }
+    SecurityHistoryPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, entity, entityId, action, actorSubject, occurredAt, version, snapshot]
+            properties:
+              id: { type: string, format: uuid }
+              entity: { type: string, enum: [role, assignment] }
+              entityId: { type: string }
+              action: { type: string }
+              actorSubject: { type: string }
+              occurredAt: { type: string, format: date-time }
+              version: { type: integer }
+              snapshot: { type: object }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }

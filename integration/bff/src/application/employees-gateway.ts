@@ -1,6 +1,6 @@
 import { BusinessError } from './business-error.js';
 
-/** Only codes published by the CU03/CU04 contracts may leave this BFF. */
+/** Only codes published by the CU03/CU04/CU02 contracts may leave this BFF. */
 const PUBLIC_CODES = new Set([
   'VALIDATION_ERROR',
   'EMPLOYEE_NOT_FOUND',
@@ -18,6 +18,14 @@ const PUBLIC_CODES = new Set([
   'AFFECTS_CONFIRMED_ASSIGNMENT',
   'SHIFT_NOT_FOUND',
   'ABSENCE_NOT_FOUND',
+  'ROLE_NOT_FOUND',
+  'ROLE_DUPLICATE',
+  'ROLE_ALREADY_ASSIGNED',
+  'ASSIGNMENT_NOT_FOUND',
+  'ASSIGNMENT_NOT_ACTIVE',
+  'PERMISSION_ESCALATION',
+  'LAST_ADMINISTRATOR',
+  'EMPLOYEE_WITHOUT_IDENTITY',
 ]);
 
 export interface EmployeePageQuery {
@@ -28,6 +36,12 @@ export interface EmployeePageQuery {
 }
 export interface EmployeeQuery {
   search?: string;
+}
+export interface SecurityHistoryQuery {
+  roleName?: string;
+  employeeId?: string;
+  limit?: number;
+  offset?: number;
 }
 export interface CommandInput {
   operationId: string;
@@ -49,6 +63,16 @@ export interface EmployeesGateway {
   update(id: string, input: CommandInput, token: string): Promise<unknown>;
   deactivate(id: string, input: CommandInput, token: string): Promise<unknown>;
   retryAccess(id: string, input: CommandInput, token: string): Promise<unknown>;
+  permissions(token: string): Promise<unknown>;
+  securityRoles(token: string): Promise<unknown>;
+  securityRole(name: string, token: string): Promise<unknown>;
+  createRole(input: CommandInput, token: string): Promise<unknown>;
+  updateRole(name: string, input: CommandInput, token: string): Promise<unknown>;
+  retryRoleSync(name: string, input: CommandInput, token: string): Promise<unknown>;
+  employeeRoles(employeeId: string, token: string): Promise<unknown>;
+  assignRole(employeeId: string, input: CommandInput, token: string): Promise<unknown>;
+  revokeRole(employeeId: string, roleName: string, input: CommandInput, token: string): Promise<unknown>;
+  securityHistory(query: SecurityHistoryQuery, token: string): Promise<unknown>;
   staffingEmployees(query: EmployeeQuery, token: string): Promise<unknown>;
   schedule(employeeId: string, token: string): Promise<unknown>;
   availability(employeeId: string, date: string, token: string): Promise<unknown>;
@@ -137,6 +161,56 @@ export class HttpEmployeesGateway implements EmployeesGateway {
 
   retryAccess(id: string, input: CommandInput, token: string): Promise<unknown> {
     return this.request(`/employees/${encodeURIComponent(id)}/access/retry`, token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  permissions(token: string): Promise<unknown> {
+    return this.request('/security/permissions', token);
+  }
+
+  securityRoles(token: string): Promise<unknown> {
+    return this.request('/security/roles', token);
+  }
+
+  securityRole(name: string, token: string): Promise<unknown> {
+    return this.request(`/security/roles/${encodeURIComponent(name)}`, token);
+  }
+
+  createRole(input: CommandInput, token: string): Promise<unknown> {
+    return this.request('/security/roles', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  updateRole(name: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request(`/security/roles/${encodeURIComponent(name)}`, token, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  retryRoleSync(name: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request(`/security/roles/${encodeURIComponent(name)}/retry-sync`, token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  employeeRoles(employeeId: string, token: string): Promise<unknown> {
+    return this.request(`/security/employees/${encodeURIComponent(employeeId)}/roles`, token);
+  }
+
+  assignRole(employeeId: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request(`/security/employees/${encodeURIComponent(employeeId)}/roles`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  revokeRole(employeeId: string, roleName: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request(
+      `/security/employees/${encodeURIComponent(employeeId)}/roles/${encodeURIComponent(roleName)}/revoke`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+
+  securityHistory(query: SecurityHistoryQuery, token: string): Promise<unknown> {
+    const parameters = new URLSearchParams();
+    for (const key of ['roleName', 'employeeId', 'limit', 'offset'] as const) {
+      const value = query[key];
+      if (value !== undefined && value !== null) parameters.set(key, String(value));
+    }
+    const suffix = parameters.toString();
+    return this.request(`/security/history${suffix ? `?${suffix}` : ''}`, token);
   }
 
   staffingEmployees(query: EmployeeQuery, token: string): Promise<unknown> {

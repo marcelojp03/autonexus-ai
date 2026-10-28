@@ -35,6 +35,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const employeesUrl = env.EMPLOYEES_API_URL ?? 'http://127.0.0.1:3002';
   const schemaPath = env.BFF_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/employees.graphql');
   const scheduleSchema = env.BFF_SCHEDULE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/schedules.graphql');
+  const securitySchema = env.BFF_SECURITY_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/security.graphql');
   if (issuer !== LOCAL_ISSUER) throw new Error('Invalid configuration: OIDC_ISSUER_URI');
   if (audience !== OWN_AUDIENCE) throw new Error('Invalid configuration: OIDC_AUDIENCE');
   if (!origins.length || origins.some((origin) => !LOCAL_ORIGINS.includes(origin))) {
@@ -51,12 +52,13 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   }
   if (!isAbsolute(schemaPath) || !existsSync(schemaPath)) throw new Error('Invalid configuration: BFF_SCHEMA_PATH');
   if (!isAbsolute(scheduleSchema) || !existsSync(scheduleSchema)) throw new Error('Invalid configuration: BFF_SCHEDULE_SCHEMA_PATH');
+  if (!isAbsolute(securitySchema) || !existsSync(securitySchema)) throw new Error('Invalid configuration: BFF_SECURITY_SCHEMA_PATH');
   return Object.freeze({
     port: port(env.PORT, 3004, 'PORT'),
     employeesUrl: target.origin,
     issuer,
     audience,
     origins: Object.freeze([...new Set(origins)]),
-    schemaPaths: Object.freeze([schemaPath, scheduleSchema]),
+    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema]),
   });
 }

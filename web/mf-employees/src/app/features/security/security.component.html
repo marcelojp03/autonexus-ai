@@ -1,0 +1,155 @@
+<nz-page-header nzTitle="Roles y permisos" nzSubtitle="CU02 · Seguridad"></nz-page-header>
+
+<nz-alert class="panel" nzType="info" nzShowIcon id="security-validity" nzMessage="Cuándo se aplican los cambios" [nzDescription]="validity"></nz-alert>
+
+@if (forbidden()) {
+  <nz-alert class="panel" nzType="warning" nzShowIcon id="security-forbidden" nzMessage="Acceso insuficiente"
+    nzDescription="Esta sección requiere el permiso de consulta de seguridad."></nz-alert>
+}
+@if (error()) {
+  <nz-alert class="panel" nzType="error" nzShowIcon id="security-error" [nzMessage]="error()!"></nz-alert>
+}
+@if (notice()) {
+  <nz-alert class="panel" nzType="success" nzShowIcon nzCloseable id="security-notice" [nzMessage]="notice()!" (nzOnClose)="notice.set(null)"></nz-alert>
+}
+
+@if (!forbidden()) {
+  <nz-table #roleTable [nzData]="roles()" [nzLoading]="loading()" nzSize="middle" id="security-roles"
+    aria-label="Roles de seguridad">
+    <thead>
+      <tr><th>Rol</th><th>Descripción</th><th>Permisos</th><th>Tipo</th><th>Versión</th><th>Sincronización</th><th>Asignados</th><th>Acciones</th></tr>
+    </thead>
+    <tbody>
+      @for (role of roleTable.data; track role.name) {
+        <tr [attr.data-role-name]="role.name">
+          <td><strong>{{ role.name }}</strong></td>
+          <td>{{ role.description || '—' }}</td>
+          <td>
+            <div class="tags">
+              @for (permission of role.permissions; track permission) {
+                <nz-tag [attr.data-role-permission]="permission">{{ permission }}</nz-tag>
+              }
+              @if (!role.permissions.length) { <span>—</span> }
+            </div>
+          </td>
+          <td><nz-tag [nzColor]="role.system ? 'blue' : 'default'">{{ role.system ? 'Inicial' : 'Personalizado' }}</nz-tag></td>
+          <td>{{ role.version }}</td>
+          <td>
+            <nz-tag [nzColor]="syncColor(role.syncStatus)" [attr.data-role-sync]="role.syncStatus">{{ syncLabel(role.syncStatus) }}</nz-tag>
+            @if (syncDetail(role)) { <div class="field">{{ syncDetail(role) }}</div> }
+          </td>
+          <td>{{ role.assignedCount }}</td>
+          <td class="actions">
+            @if (canWriteSecurity()) {
+              <button nz-button nzType="link" nzSize="small" type="button" [attr.data-role-edit]="role.name" (click)="startEdit(role)">Editar</button>
+              @if (role.syncStatus !== 'synced') {
+                <button nz-button nzType="link" nzSize="small" type="button" [attr.data-role-retry]="role.name" [disabled]="saving()" (click)="retry(role)">Reintentar sincronización</button>
+              }
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </nz-table>
+
+  @if (canWriteSecurity()) {
+    <h3 class="panel">{{ editing() ? 'Editar rol ' + editing()!.name : 'Nuevo rol' }}</h3>
+    <div class="toolbar">
+      <label class="field">Nombre
+        <input nz-input id="security-role-name" [value]="draftName" [disabled]="!!editing()" (input)="draftName = $any($event.target).value"
+          placeholder="minúsculas, guion bajo" />
+      </label>
+      <label class="field">Descripción
+        <input nz-input id="security-role-description" [value]="draftDescription" (input)="draftDescription = $any($event.target).value" placeholder="Opcional" />
+      </label>
+      <button nz-button nzType="primary" type="button" id="security-save" [disabled]="saving()" (click)="save()">
+        {{ editing() ? 'Guardar cambios' : 'Crear rol' }}
+      </button>
+      <button nz-button type="button" id="security-cancel" (click)="cancelEdit()">Limpiar</button>
+    </div>
+
+    <div class="matrix" id="security-permissions">
+      @for (group of permissionsByModule(); track group.module) {
+        <fieldset>
+          <legend>{{ group.module }}</legend>
+          @for (item of group.items; track item.id) {
+            <label nz-checkbox [nzChecked]="hasPermission(item.id)" [attr.data-permission]="item.id"
+              (nzCheckedChange)="togglePermission(item.id, $event)">{{ item.description }}</label>
+          }
+        </fieldset>
+      }
+    </div>
+  }
+
+  <h3 class="panel">Asignaciones por empleado</h3>
+  @if (employeeDenied()) {
+    <nz-alert nzType="warning" nzShowIcon id="security-employee-denied"
+      nzMessage="Sin permiso para buscar empleados"
+      nzDescription="La búsqueda de empleados requiere el permiso de consulta de empleados."></nz-alert>
+  } @else {
+    <div class="toolbar">
+      <label class="field">Buscar empleado
+        <input nz-input id="security-employee-search" [value]="employeeSearch()" (input)="employeeSearch.set($any($event.target).value)"
+          (keyup.enter)="searchEmployees()" placeholder="Nombre o documento" />
+      </label>
+      <button nz-button type="button" id="security-employee-search-button" (click)="searchEmployees()">Buscar</button>
+    </div>
+
+    <nz-table #found [nzData]="employees()" nzSize="small" id="security-employee-results" aria-label="Empleados encontrados">
+      <thead><tr><th>Empleado</th><th>Estado</th><th>Acceso</th><th>Acciones</th></tr></thead>
+      <tbody>
+        @for (employee of found.data; track employee.id) {
+          <tr [attr.data-employee-row]="employee.id">
+            <td>{{ fullName(employee) }}</td>
+            <td><nz-tag [nzColor]="employee.status === 'active' ? 'green' : 'default'">{{ employee.status === 'active' ? 'Activo' : 'Inactivo' }}</nz-tag></td>
+            <td><nz-tag [nzColor]="employee.accessStatus === 'synced' ? 'blue' : 'orange'">{{ employee.accessStatus }}</nz-tag></td>
+            <td class="actions">
+              <button nz-button nzType="link" nzSize="small" type="button" [attr.data-select-employee]="employee.id" (click)="selectEmployee(employee.id)">Seleccionar</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </nz-table>
+
+    @if (selectedEmployee(); as employee) {
+      <div class="toolbar">
+        <strong>Empleado seleccionado: {{ fullName(employee) }}</strong>
+        <label class="field">Asignar rol
+          <nz-select style="min-width: 220px" id="security-assign-role" [ngModel]="selectedRole()" (ngModelChange)="selectedRole.set($event)" nzPlaceHolder="Elegí un rol">
+            @for (role of roles(); track role.name) {
+              <nz-option [nzValue]="role.name" [nzLabel]="role.name"></nz-option>
+            }
+          </nz-select>
+        </label>
+        <button nz-button nzType="primary" type="button" id="security-assign-button" [disabled]="saving() || !selectedRole()" (click)="assign()">Asignar</button>
+        <span class="field">Identidad: {{ employeeRoles()?.subject ?? 'sin vincular' }}</span>
+      </div>
+
+      <nz-table #assignmentTable [nzData]="activeAssignments()" nzSize="middle" id="security-assignments" aria-label="Roles asignados">
+        <thead><tr><th>Rol</th><th>Estado</th><th>Desde</th><th>Versión</th><th>Sincronización</th><th>Acciones</th></tr></thead>
+        <tbody>
+          @for (assignment of assignmentTable.data; track assignment.id) {
+            <tr [attr.data-assignment-role]="assignment.roleName">
+              <td>{{ assignment.roleName }}</td>
+              <td><nz-tag nzColor="green">{{ assignment.status === 'active' ? 'Activo' : 'Retirado' }}</nz-tag></td>
+              <td>{{ assignment.assignedAt.slice(0, 10) }}</td>
+              <td>{{ assignment.version }}</td>
+              <td><nz-tag [nzColor]="syncColor(assignment.syncStatus)">{{ syncLabel(assignment.syncStatus) }}</nz-tag></td>
+              <td class="actions">
+                @if (canWriteSecurity()) {
+                  <button nz-button nzType="link" nzSize="small" nzDanger type="button" nz-popconfirm
+                    nzPopconfirmTitle="¿Retirar este rol del empleado?" nzOkText="Retirar" nzCancelText="Cancelar"
+                    [attr.data-revoke-role]="assignment.roleName" [disabled]="saving()"
+                    (nzOnConfirm)="revoke(assignment)">Retirar</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </nz-table>
+      @if (!activeAssignments().length) {
+        <nz-empty id="security-no-assignments" nzNotFoundContent="El empleado no tiene roles activos"></nz-empty>
+      }
+    }
+  }
+}

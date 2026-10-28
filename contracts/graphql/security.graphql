@@ -1,0 +1,101 @@
+"""CU02 security contract. Query/Mutation extend the employees schema; every root field
+has an explicit server permission policy resolved from the Employees catalog."""
+
+type SecurityPermission {
+  id: String!
+  module: String!
+  operation: String!
+  description: String!
+}
+type SecurityCatalog {
+  catalog: [SecurityPermission!]!
+  effective: [String!]!
+  roles: [String!]!
+}
+type Role {
+  name: String!
+  description: String!
+  permissions: [String!]!
+  system: Boolean!
+  version: Int!
+  syncStatus: String!
+  syncErrorCode: String
+  assignedCount: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type RoleAssignment {
+  id: UUID!
+  roleName: String!
+  employeeId: UUID!
+  subject: String!
+  status: String!
+  syncStatus: String!
+  syncErrorCode: String
+  assignedAt: DateTime!
+  assignedBy: String!
+  version: Int!
+}
+type EmployeeRoles {
+  employeeId: UUID!
+  subject: String
+  items: [RoleAssignment!]!
+}
+type SecurityHistoryEntry {
+  id: UUID!
+  entity: String!
+  entityId: String!
+  action: String!
+  actorSubject: String!
+  occurredAt: DateTime!
+  version: Int!
+}
+type SecurityHistoryPage {
+  items: [SecurityHistoryEntry!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+type RoleResult { role: Role! replayed: Boolean! }
+type RoleAssignmentResult { assignment: RoleAssignment! replayed: Boolean! }
+
+input RoleCreateInput {
+  operationId: UUID!
+  name: String!
+  description: String
+  permissions: [String!]!
+}
+input RoleUpdateInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  description: String
+  permissions: [String!]!
+}
+input RoleRetryInput {
+  operationId: UUID!
+  expectedVersion: Int!
+}
+input RoleAssignmentInput {
+  operationId: UUID!
+  roleName: String!
+}
+input RoleRevocationInput {
+  operationId: UUID!
+  expectedVersion: Int!
+}
+
+extend type Query {
+  securityCatalog: SecurityCatalog!
+  securityRoles: [Role!]!
+  securityRole(name: String!): Role!
+  employeeRoles(employeeId: UUID!): EmployeeRoles!
+  securityHistory(roleName: String, employeeId: UUID, limit: Int, offset: Int): SecurityHistoryPage!
+}
+
+extend type Mutation {
+  createRole(input: RoleCreateInput!): RoleResult!
+  updateRole(name: String!, input: RoleUpdateInput!): RoleResult!
+  retryRoleSync(name: String!, input: RoleRetryInput!): RoleResult!
+  assignRole(employeeId: UUID!, input: RoleAssignmentInput!): RoleAssignmentResult!
+  revokeRole(employeeId: UUID!, roleName: String!, input: RoleRevocationInput!): RoleAssignmentResult!
+}

@@ -3,6 +3,7 @@ import { databaseEnvironment } from '../config/environment.js';
 import { CreateEmployeesSchema1792886400000 } from './migrations/1792886400000-create-employees-schema.js';
 import { CreateEmployeeManagement1793023200000 } from './migrations/1793023200000-create-employee-management.js';
 import { CreateScheduling1793109000000 } from './migrations/1793109000000-create-scheduling.js';
+import { CreateSecurity1793196000000 } from './migrations/1793196000000-create-security.js';
 
 export function dataSourceOptions(): DataSourceOptions {
   return {
@@ -11,7 +12,7 @@ export function dataSourceOptions(): DataSourceOptions {
     synchronize: false,
     migrationsRun: false,
     entities: [],
-    migrations: [CreateEmployeesSchema1792886400000, CreateEmployeeManagement1793023200000, CreateScheduling1793109000000],
+    migrations: [CreateEmployeesSchema1792886400000, CreateEmployeeManagement1793023200000, CreateScheduling1793109000000, CreateSecurity1793196000000],
     migrationsTableName: 'employees_migrations',
     logging: false,
     installExtensions: false,

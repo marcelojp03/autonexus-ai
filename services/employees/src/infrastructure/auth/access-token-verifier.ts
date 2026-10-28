@@ -1,7 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { AuthConfiguration } from '../config/auth-environment.js';
-import { WORKSHOP_ROLES, type VerifiedIdentity } from './auth-policy.js';
+import type { VerifiedIdentity } from './auth-policy.js';
 
 export class AccessTokenVerifier {
   private keyResolver?: JWTVerifyGetKey;
@@ -27,8 +27,10 @@ export class AccessTokenVerifier {
       if (payload.typ !== 'Bearer' || !payload.sub?.trim()) throw new Error('Invalid access token');
       const access = payload.realm_access;
       const realmRoles = typeof access === 'object' && access !== null && 'roles' in access ? access.roles : undefined;
-      const roles = WORKSHOP_ROLES.filter((role) => Array.isArray(realmRoles) && realmRoles.includes(role));
-      return { subject: payload.sub, roles };
+      const roles = Array.isArray(realmRoles)
+        ? [...new Set(realmRoles.filter((role): role is string => typeof role === 'string' && /^[a-z][a-z0-9_]{2,63}$/.test(role)))]
+        : [];
+      return { subject: payload.sub, roles, permissions: [], recognized: [] };
     } catch {
       throw new UnauthorizedException();
     }

@@ -32,11 +32,14 @@ try{
   assert.equal(client.publicClient,false);assert.equal(client.serviceAccountsEnabled,true);assert.equal(client.fullScopeAllowed,false);
   assert.equal(client.standardFlowEnabled,false);assert.equal(client.directAccessGrantsEnabled,false);assert.equal(client.implicitFlowEnabled,false);
   const management=(await api('/clients?clientId=realm-management'))[0];
-  const role=await api('/clients/'+management.id+'/roles/manage-users');
+  const granted=['manage-users','view-realm','manage-realm'];
+  const roles=[];
+  for(const name of granted)roles.push(await api('/clients/'+management.id+'/roles/'+name));
   const account=await api('/clients/'+client.id+'/service-account-user');
   for(const path of ['/users/'+account.id+'/role-mappings/clients/'+management.id,'/clients/'+client.id+'/scope-mappings/clients/'+management.id]){
-    const existing=await api(path);assert.ok(existing.every(item=>item.name==='manage-users'),'Unexpected service account authority');
-    if(!existing.some(item=>item.id===role.id))await api(path,'POST',[role]);
+    const existing=await api(path);assert.ok(existing.every(item=>granted.includes(item.name)),'Unexpected service account authority');
+    const missing=roles.filter(item=>!existing.some(current=>current.id===item.id));
+    if(missing.length)await api(path,'POST',missing);
   }
   const profile=await api('/users/profile');
   const attribute={name:'employeeId',displayName:'Employee UUID',multivalued:false,permissions:{view:['admin'],edit:['admin']},validations:{length:{min:36,max:36},pattern:{pattern:'^[0-9a-f-]{36}$'}}};
@@ -49,9 +52,9 @@ try{
   else writeFileSync(privateFile,JSON.stringify(credentials),{flag:'wx',mode:0o600});
   const technical=await (await request('/realms/autonexus/protocol/openid-connect/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'client_credentials',client_id:clientId,client_secret:credentials.clientSecret})})).json();
   const claims=JSON.parse(Buffer.from(technical.access_token.split('.')[1],'base64url'));
-  assert.ok(claims.resource_access?.['realm-management']?.roles.includes('manage-users'));
+  assert.ok(granted.every(name=>claims.resource_access?.['realm-management']?.roles.includes(name)));
   assert.ok(!claims.realm_access?.roles.some(role=>['administrador','mecanico','recepcionista','jefe_taller','responsable_financiero'].includes(role)));
   assert.ok(originalEnv.equals(readFileSync(resolve(directory,'.env'))));assert.ok(fixtures.equals(readFileSync(resolve(directory,'.local/test-accounts.json'))));
   console.log('PASS dedicated client_credentials, explicit manage-users scope/assignment, admin-only employeeId, private client secret preserved, CU01 private bytes unchanged');
-  console.log('LIMIT manage-users is realm-wide at IdP; the adapter restricts writes by stable employee ownership. No automatic workshop roles or credentials.');
+  console.log('LIMIT manage-users/view-realm/manage-realm are realm-wide at the IdP; the role adapter only calls role endpoints and verifies employee ownership before mappings. No automatic workshop roles or credentials.');
 }catch{console.error('FAIL employees technical identity provisioning; private diagnostics omitted');process.exitCode=1;}

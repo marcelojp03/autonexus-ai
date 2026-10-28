@@ -12,29 +12,45 @@ import {
   type SelectionSetNode,
 } from 'graphql';
 import { BusinessError, publicMessage } from './business-error.js';
-import type { CommandInput, EmployeePageQuery, EmployeeQuery, EmployeesGateway, StaffingCommand } from './employees-gateway.js';
+import type { CommandInput, EmployeePageQuery, EmployeeQuery, EmployeesGateway, SecurityHistoryQuery, StaffingCommand } from './employees-gateway.js';
 
-type Role = 'administrador' | 'jefe_taller';
+/** Closed permission catalog published by the Employees owner. */
+type Permission =
+  | 'employees:read' | 'employees:write'
+  | 'schedules:read' | 'schedules:write'
+  | 'security:read' | 'security:write';
+
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
-/** Root-field policy: CU03 employee operations stay administrator-only. */
-const ROOT_POLICY: Readonly<Record<string, readonly Role[]>> = Object.freeze({
-  employees: ['administrador'],
-  employee: ['administrador'],
-  employeeHistory: ['administrador'],
-  createEmployee: ['administrador'],
-  updateEmployee: ['administrador'],
-  deactivateEmployee: ['administrador'],
-  retryEmployeeAccess: ['administrador'],
-  staffingEmployees: ['administrador', 'jefe_taller'],
-  employeeSchedule: ['administrador', 'jefe_taller'],
-  employeeAvailability: ['administrador', 'jefe_taller'],
-  createShift: ['administrador', 'jefe_taller'],
-  updateShift: ['administrador', 'jefe_taller'],
-  deactivateShift: ['administrador', 'jefe_taller'],
-  createAbsence: ['administrador', 'jefe_taller'],
-  cancelAbsence: ['administrador', 'jefe_taller'],
+/** Root-field permission policy: CU03 stays employees:write (administrator only). */
+const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.freeze({
+  employees: 'employees:read',
+  employee: 'employees:read',
+  employeeHistory: 'employees:read',
+  createEmployee: 'employees:write',
+  updateEmployee: 'employees:write',
+  deactivateEmployee: 'employees:write',
+  retryEmployeeAccess: 'employees:write',
+  staffingEmployees: 'schedules:read',
+  employeeSchedule: 'schedules:read',
+  employeeAvailability: 'schedules:read',
+  createShift: 'schedules:write',
+  updateShift: 'schedules:write',
+  deactivateShift: 'schedules:write',
+  createAbsence: 'schedules:write',
+  cancelAbsence: 'schedules:write',
+  securityCatalog: null,
+  securityRoles: 'security:read',
+  securityRole: 'security:read',
+  employeeRoles: 'security:read',
+  securityHistory: 'security:read',
+  createRole: 'security:write',
+  updateRole: 'security:write',
+  retryRoleSync: 'security:write',
+  assignRole: 'security:write',
+  revokeRole: 'security:write',
 });
+const CACHE_TTL_MS = 30000;
 const MAX_QUERY_LENGTH = 4000;
 const MAX_VARIABLES_BYTES = 65536;
 const MAX_DEPTH = 6;
@@ -60,6 +76,7 @@ export class BadRequest extends Error {
 
 export class EmployeesGraphql {
   private readonly schema: GraphQLSchema;
+  private readonly cache = new Map<string, { expires: number; permissions: ReadonlySet<string> }>();
 
   constructor(private readonly gateway: EmployeesGateway, schemaPaths: readonly string[]) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
@@ -69,8 +86,16 @@ export class EmployeesGraphql {
     const document = this.document(request);
     const { operationName, variables } = this.operation(document, request);
     const roots = this.rootFields((document.definitions[0] as OperationDefinitionNode).selectionSet);
-    if (!roots.every(field => ROOT_POLICY[field]!.some(role => identity.roles.includes(role)))) {
+    const required = roots.map(field => FIELD_PERMISSION[field]);
+    if (required.some(permission => permission === undefined)) {
       return { errors: [{ message: publicMessage('FORBIDDEN'), extensions: { code: 'FORBIDDEN', statusCode: 403 } }] };
+    }
+    const needed = required.filter((permission): permission is Permission => typeof permission === 'string');
+    if (needed.length) {
+      const granted = await this.effectivePermissions(identity, token);
+      if (!needed.every(permission => granted.has(permission))) {
+        return { errors: [{ message: publicMessage('FORBIDDEN'), extensions: { code: 'FORBIDDEN', statusCode: 403 } }] };
+      }
     }
     const result = await execute({
       schema: this.schema,
@@ -83,6 +108,20 @@ export class EmployeesGraphql {
     const errors = result.errors?.map(error => this.toBody(error));
     if (errors?.length) return { ...(result.data ? { data: result.data } : {}), errors };
     return { data: result.data };
+  }
+
+  /** Resolved by the owner from the token roles plus the persisted assignments; fails closed. */
+  private async effectivePermissions(identity: CallerIdentity, token: string): Promise<ReadonlySet<string>> {
+    const key = identity.subject + '|' + [...identity.roles].sort().join(',');
+    const now = Date.now();
+    const cached = this.cache.get(key);
+    if (cached && cached.expires > now) return cached.permissions;
+    const response = (await this.gateway.permissions(token)) as { effective?: unknown };
+    const effective = Array.isArray(response?.effective) ? response.effective : [];
+    const permissions: ReadonlySet<string> = new Set(effective.filter((item): item is string => typeof item === 'string'));
+    if (this.cache.size > 500) this.cache.clear();
+    this.cache.set(key, { expires: now + CACHE_TTL_MS, permissions });
+    return permissions;
   }
 
   private document(request: GraphqlRequest): DocumentNode {
@@ -108,7 +147,7 @@ export class EmployeesGraphql {
         const field = selection as FieldNode;
         const name = field.name.value;
         if (name.startsWith('__')) throw new BadRequest('BAD_REQUEST');
-        if (depth === 1 && !(name in ROOT_POLICY)) throw new BadRequest('BAD_REQUEST');
+        if (depth === 1 && !(name in FIELD_PERMISSION)) throw new BadRequest('BAD_REQUEST');
         if (field.selectionSet) this.inspect(field.selectionSet, depth + 1, budget);
       } else if (selection.kind === 'InlineFragment') {
         this.inspect(selection.selectionSet, depth, budget);
@@ -158,6 +197,16 @@ export class EmployeesGraphql {
       deactivateShift: (args: { id: string; input: StaffingCommand }) => this.gateway.deactivateShift(args.id, args.input, token),
       createAbsence: (args: { employeeId: string; input: CommandInput }) => this.gateway.createAbsence(args.employeeId, args.input, token),
       cancelAbsence: (args: { id: string; input: StaffingCommand }) => this.gateway.cancelAbsence(args.id, args.input, token),
+      securityCatalog: () => this.gateway.permissions(token),
+      securityRoles: () => this.gateway.securityRoles(token),
+      securityRole: (args: { name: string }) => this.gateway.securityRole(args.name, token),
+      employeeRoles: (args: { employeeId: string }) => this.gateway.employeeRoles(args.employeeId, token),
+      securityHistory: (args: SecurityHistoryQuery) => this.gateway.securityHistory(args ?? {}, token),
+      createRole: (args: { input: CommandInput }) => this.gateway.createRole(args.input, token),
+      updateRole: (args: { name: string; input: CommandInput }) => this.gateway.updateRole(args.name, args.input, token),
+      retryRoleSync: (args: { name: string; input: CommandInput }) => this.gateway.retryRoleSync(args.name, args.input, token),
+      assignRole: (args: { employeeId: string; input: CommandInput }) => this.gateway.assignRole(args.employeeId, args.input, token),
+      revokeRole: (args: { employeeId: string; roleName: string; input: CommandInput }) => this.gateway.revokeRole(args.employeeId, args.roleName, args.input, token),
     };
   }
 

@@ -3,6 +3,7 @@
 Contrato empresarial temprano CU03: [employees.md](employees.md), con REST/SDL, administrador obligatorio, identidad técnica client_credentials y sincronización opcional sin roles automáticos. No acredita BFF, CU02 ni CU03 web completo; mantiene intacto este contrato de sesión CU01.
 
 Especificación aprobada: docs/compose/spec/cu01-keycloak.md. Este contrato versiona composición de sesión, claims y recursos técnicos; no contiene lógica de dominio/ORM ni implementa CU02.
+Desde CU02 la autorización de las operaciones empresariales se resuelve por **permiso** contra un catálogo cerrado persistido en Empleados; el rol `administrador` conserva la autoridad previa y `jefe_taller` mantiene solo la planificación de CU04. Ver [permissions.md](permissions.md). Los roles del realm siguen siendo la entrada, pero un rol que no existe en el catálogo no aporta permisos (falla cerrado).
 
 Issuer exacto local: http://127.0.0.1:8180/realms/autonexus. Firmas RS256 con JWKS confiable del realm; exp obligatorio y tolerancia5s. Audiencias propias: autonexus-operations-api y autonexus-employees-api. Access tokens con ambas audiencias desde clientes públicos PKCE; IDtokens no reciben audiencias API. Roles realm: administrador,recepcionista,mecanico,jefe_taller,responsable_financiero; no se infiere herencia empresarial.
 

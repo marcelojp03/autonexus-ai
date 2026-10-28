@@ -1,5 +1,29 @@
 # Estado comprobado
 
+## CU02 — Roles y permisos entregados y verificados (2026-10-27)
+
+Rama `work/marcelo`. Se sustituye la autorización por nombre de rol fijo por un **catálogo cerrado de seis permisos** (`employees:read|write`, `schedules:read|write`, `security:read|write`) resuelto en el servidor, con roles y asignaciones persistidos en el esquema propio de Empleados (migración `1793196000000`) y materializados en Keycloak como realm roles. `contracts/auth/permissions.md` y `docs/decisions/012-cu02-roles-permissions.md` fijan la semántica.
+
+Los cinco roles iniciales se siembran como `system=true` reproduciendo la autoridad previa: `administrador` los seis permisos, `jefe_taller` horarios, los otros tres ninguno. CU03 sigue siendo administrador-only y CU04 no amplía su alcance. Los permisos efectivos son la unión de los roles del token que existen en el catálogo, filtrados por las asignaciones vigentes del subject cuando está vinculado a un empleado: retirar un rol deja de otorgar permisos en la siguiente petición aunque el JWT lo mencione, sin prometer revocación de tokens.
+
+Backend: `GET /security/permissions`, roles (lista y detalle), alta y modificación de roles con `operationId`/`expectedVersion`, `retry-sync`, asignaciones por empleado, retiro con historial y auditoría append-only. Reglas: sin escalamiento (`PERMISSION_ESCALATION`), nunca sin administrador (`LAST_ADMINISTRATOR` con `pg_advisory_xact_lock`), empleado activo con identidad para asignar, idempotencia y versionado. La identidad técnica suma `view-realm` y `manage-realm` a `manage-users`; el adaptador solo usa endpoints de roles.
+
+BFF: `contracts/graphql/security.graphql` con diez campos raíz y política por **permiso** (no por nombre de rol); los permisos del actor se resuelven contra `GET /security/permissions` con caché de 30 s y fallo cerrado (503 si no puede resolver). `mf-employees` incorpora la sección `/employees/security` con tabla de roles, matriz de permisos, asignación/retiro por empleado, reintento de sincronización y el aviso explícito de la ventana de vigencia. El Shell agrega el enlace "Seguridad".
+
+| Verificación | Resultado |
+| --- | --- |
+| `services/employees` `pnpm test` / build | PASS 89 pruebas (dominio, casos de uso, verificación de token) y build exit0 |
+| API real CU02 (`scripts/cu02/verify-security-real.mjs`) | PASS 13 etapas/exit0: permisos efectivos, rol materializado en el IdP, asignación con identidad, dos reglas de último administrador, escalamiento con token limitado, unión de asignaciones, revocación efectiva sobre un token ya emitido, retry, auditoría, inactividad |
+| BFF `pnpm test` / `test:e2e` / build | PASS 16 unitarias + 13 HTTP y build exit0 |
+| BFF real por GraphQL (`scripts/cu02/verify-security-bff-real.mjs`) | PASS 7 etapas/exit0: catálogo, roles, denegación del jefe, alta, asignación, auditoría, retiro y CU03 aún administrador-only |
+| Navegador real (`scripts/cu02/verify-security-web.mjs`) | PASS 9 etapas/exit0: crear rol, asignarlo desde la UI, retirarlo con confirmación, auditoría en el propietario, jefe denegado por el servidor y consola limpia |
+| Regresión CU03 (navegador) | PASS 11 etapas/exit0 |
+| Regresión CU04 (navegador) | PASS 8 etapas/exit0 |
+| Regresión CU01 API (`scripts/verify-cu01-api.mjs`) | PASS 10 comprobaciones/exit0 |
+
+Hallazgos corregidos durante la verificación: `UPDATE ... RETURNING` llegaba como `[rows, affected]` y rompía el mapeo; un `UPDATE` con un parámetro no referenciado producía error de bind; el contrato de `/technical/session` se rompió al añadirle `permissions` y el smoke CU01 lo detectó (se retiró; los permisos se publican solo en `/security/permissions`). Todos con corrección y nueva ejecución.
+
+Límites: sin permisos por registro; CU02 asigna roles pero no habilita credenciales de acceso; `Operaciones` conserva su política técnica por nombre de rol; la disponibilidad de CU04 sigue siendo informativa para CU15. Revisión registrada al final de la entrega.
 ## CU03 web — BFF e interfaz entregados localmente (2026-10-27)
 
 Rama `work/marcelo`, base main425ed03. Decisión009 habilita alcance no exclusivo: se implementaron BFF y pantallas sin esperar al participante2. Backend CU03 sigue siendo el de main; esta entrega agrega el recorrido web y no modifica reglas de negocio del servicio.

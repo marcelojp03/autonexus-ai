@@ -3,6 +3,7 @@ import { Component } from '@angular/core';
 import { RouterLink, Routes } from '@angular/router';
 import { employeesRoutes } from '../features/employees/routes';
 import { scheduleRoutes } from '../features/schedules/routes';
+import { securityRoutes } from '../features/security/routes';
 
 @Component({
   selector: 'anx-integrated-not-found',
@@ -17,6 +18,7 @@ export const integratedRoutes: Routes = [
   { path: '', redirectTo: 'list', pathMatch: 'full' },
   ...employeesRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...scheduleRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
+  ...securityRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   { path: 'widgets', canActivate: [sessionGuard], loadChildren: () => import('../routes/widgets/routes').then(module => module.routes) },
   { path: 'dashboard', canActivate: [sessionGuard], loadChildren: () => import('../routes/dashboard/routes').then(module => module.routes) },
   { path: '**', component: IntegratedNotFound }

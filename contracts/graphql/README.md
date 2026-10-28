@@ -51,3 +51,15 @@ La selección GraphQL puede ser parcial; REST devuelve el shape completo. No se 
 Todas las operaciones requieren access token del usuario con audiencia `autonexus-employees-api` y rol `administrador`; el BFF reenvía ese mismo token a Empleados. Los errores de negocio se exponen en `errors[].extensions={code,statusCode}` con mensajes saneados. El BFF no crea audiencia propia ni realiza token exchange: eso sigue pendiente de acuerdo.
 
 El microfrontend `mf-employees` consume estas operaciones a través de `SessionPort.requestBusiness` y nunca recibe el token. Contrato de transporte: `contracts/auth/README.md`; decisiones010.
+
+## Implementación CU02 — roles y permisos (2026-10-27)
+
+`security.graphql` extiende el mismo SDL ejecutado por `integration/bff`. Campos raíz y permiso exigido:
+
+| Campo | Permiso |
+| --- | --- |
+| `securityCatalog` | ninguno (solo token con rol del catálogo) |
+| `securityRoles`, `securityRole`, `employeeRoles`, `securityHistory` | `security:read` |
+| `createRole`, `updateRole`, `retryRoleSync`, `assignRole`, `revokeRole` | `security:write` |
+
+La política del BFF ya no usa nombres de rol: cada campo raíz declara un permiso y el BFF resuelve los permisos del actor con `GET /security/permissions` reenviando su token (caché 30 s). Si la resolución falla responde `SERVICE_UNAVAILABLE` y no autoriza. El CRUD de empleados sigue exigiendo `employees:write`, que solo posee el rol `administrador`: habilitar CU02 no amplía CU03. Catálogo y semántica: [auth/permissions.md](../auth/permissions.md).
