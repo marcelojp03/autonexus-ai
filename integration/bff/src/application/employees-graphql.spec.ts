@@ -71,6 +71,12 @@ describe('EmployeesGraphql allowlist and error mapping', () => {
     expect(gateway.list).not.toHaveBeenCalled();
   });
 
+  it('rejects a root inline fragment that would hide the field policy', async () => {
+    const { graphql, gateway } = build();
+    await expect(graphql.run({ query: '{ ... { employees { total } } }' }, ADMIN, 'token')).rejects.toBeInstanceOf(BadRequest);
+    expect(gateway.list).not.toHaveBeenCalled();
+  });
+
   it('rejects too many root selections and oversized input', async () => {
     const { graphql } = build();
     const many = Array.from({ length: 130 }, (_, index) => `a${index}: employees { total }`).join(' ');

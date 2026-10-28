@@ -71,7 +71,7 @@ export class SecurityController {
   @Post('employees/:id/roles')
   @RequirePermissions('security:write')
   assignRole(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
-    return this.security.assignRole(id, body, request.identity.subject);
+    return this.security.assignRole(id, body, request.identity.subject, request.identity.permissions);
   }
 
   @Post('employees/:id/roles/:roleName/revoke')

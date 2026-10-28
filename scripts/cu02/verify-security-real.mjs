@@ -28,7 +28,7 @@ const suffix = randomUUID().slice(0, 8);
 const supervisor = 'supervisor_' + suffix;
 const limited = 'limitado_' + suffix;
 const createdRoles = [supervisor, limited];
-let employeeId, subject, password;
+let employeeId, subject, password, secondEmployeeId;
 const db = new Client({ host: env.DB_HOST, port: Number(env.DB_PORT), database: env.DB_NAME, user: env.DB_USER, password: env.DB_PASSWORD });
 
 const call = async (path, { method = 'GET', body, token, expected = 200 } = {}) => {
@@ -208,6 +208,57 @@ try {
   assert.equal(reduceOnlyAdministrator.code, 'LAST_ADMINISTRATOR');
   stages.push('second-reduction-guard');
 
+  // Concurrency: two administrators exist; removing both at once must leave exactly one.
+  const secondDocument = 'CU2B-' + suffix;
+  const second = await call('/employees', {
+    method: 'POST',
+    body: {
+      operationId: randomUUID(), firstName: 'Synthetic', lastName: 'Concurrent', document: secondDocument,
+      email: secondDocument.toLowerCase() + '@example.invalid', phone: '+591 70000004',
+      jobTitle: 'Supervisor', startDate: '2020-01-01', specialties: [], access: { requested: true },
+    },
+    token: admin,
+    expected: 201,
+  });
+  secondEmployeeId = second.employee.id;
+  let secondRecord = second.employee;
+  for (let attempt = 0; attempt < 20 && secondRecord.access.status !== 'synced'; attempt += 1) {
+    await new Promise(done => setTimeout(done, 500));
+    secondRecord = await call('/employees/' + secondEmployeeId, { token: admin });
+  }
+  assert.equal(secondRecord.access.status, 'synced');
+  const firstAdmin = await call(`/security/employees/${employeeId}/roles`, {
+    method: 'POST', body: { operationId: randomUUID(), roleName: 'administrador' }, token: admin, expected: 201,
+  });
+  const secondAdmin = await call(`/security/employees/${secondEmployeeId}/roles`, {
+    method: 'POST', body: { operationId: randomUUID(), roleName: 'administrador' }, token: admin, expected: 201,
+  });
+  const attemptRevoke = async (id, version) => {
+    const response = await fetch(`http://127.0.0.1:3002/security/employees/${id}/roles/administrador/revoke`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + admin },
+      body: JSON.stringify({ operationId: randomUUID(), expectedVersion: version }),
+      signal: AbortSignal.timeout(20000),
+    });
+    return { status: response.status, body: await response.json().catch(() => null) };
+  };
+  const concurrent = await Promise.all([
+    attemptRevoke(employeeId, firstAdmin.assignment.version),
+    attemptRevoke(secondEmployeeId, secondAdmin.assignment.version),
+  ]);
+  const statuses = concurrent.map(item => item.status).sort();
+  assert.deepEqual(statuses, [200, 409], 'exactly one concurrent revocation may succeed: ' + JSON.stringify(concurrent));
+  const blocked = concurrent.find(item => item.status === 409);
+  assert.ok(['LAST_ADMINISTRATOR', 'CONCURRENT_OPERATION'].includes(blocked.body.code), 'safe contention code expected');
+  const remaining = await db.query(
+    `SELECT count(DISTINCT e.id)::int AS count FROM employees.security_role_assignments a
+     JOIN employees.security_roles r ON r.name = a.role_name
+     JOIN employees.employee_records e ON e.id = a.employee_id
+     WHERE a.revoked_at IS NULL AND 'security:write' = ANY(r.permissions) AND e.record->>'status' = 'active'`,
+  );
+  assert.ok(remaining.rows[0].count >= 1, 'one administrator must remain');
+  stages.push('concurrent-revocation-keeps-one-administrator');
+
   const assignment = await call(`/security/employees/${employeeId}/roles`, {
     method: 'POST',
     body: { operationId: randomUUID(), roleName: supervisor },
@@ -280,9 +331,13 @@ try {
   process.exitCode = 1;
 } finally {
   try {
-    if (employeeId) {
-      await db.query('DELETE FROM employees.security_history WHERE employee_id=$1', [employeeId]);
-      await db.query('DELETE FROM employees.security_role_assignments WHERE employee_id=$1', [employeeId]);
+    for (const id of [employeeId, secondEmployeeId].filter(Boolean)) {
+      await db.query(
+        "UPDATE employees.employee_records SET record=jsonb_set(record,'{status}','\"inactive\"') WHERE id=$1 AND record->>'status'='active'",
+        [id],
+      );
+      await db.query('DELETE FROM employees.security_history WHERE employee_id=$1', [id]);
+      await db.query('DELETE FROM employees.security_role_assignments WHERE employee_id=$1', [id]);
     }
     for (const name of createdRoles) {
       await db.query('DELETE FROM employees.security_history WHERE role_name=$1 AND employee_id IS NULL', [name]);

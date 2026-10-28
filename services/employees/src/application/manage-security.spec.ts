@@ -17,7 +17,7 @@ function repository(overrides: Partial<SecurityRepository> = {}) {
   const base = {
     permissions: vi.fn(async () => ({ roles: ['administrador'], recognized: ['administrador'], permissions: ['security:read', 'schedules:read'] })),
     roles: vi.fn(async () => [] as RoleView[]),
-    role: vi.fn(async () => pendingRole('supervisor')),
+    role: vi.fn(async () => ({ ...pendingRole('supervisor'), permissions: ['schedules:read'] as RoleView['permissions'] })),
     createRole: vi.fn(async (name: string, draft: { description: string; permissions: readonly string[] }) => ({ role: { ...pendingRole(name, draft.permissions), description: draft.description }, replayed: false })),
     updateRole: vi.fn(async (name: string, draft: { permissions: readonly string[] }, version: number) => ({
       role: { ...pendingRole(name, draft.permissions), version: version + 1 }, replayed: false,
@@ -25,6 +25,7 @@ function repository(overrides: Partial<SecurityRepository> = {}) {
     saveRoleSync: vi.fn(async (name: string, status: SyncStatus, errorCode: string | null) => ({
       ...pendingRole(name), syncStatus: status, syncErrorCode: errorCode as RoleView['syncErrorCode'],
     })),
+    retryRoleSync: vi.fn(async (name: string) => ({ role: { ...pendingRole(name), syncStatus: 'pending' as SyncStatus }, replayed: false })),
     unsyncedAssignments: vi.fn(async () => [] as AssignmentView[]),
     employeeRoles: vi.fn(async () => ({ employeeId: 'employee-1', subject: 'subject-1', items: [] })),
     assignRole: vi.fn(async () => ({ assignment: pendingAssignment(), replayed: false })),
@@ -112,13 +113,16 @@ describe('ManageSecurity', () => {
     const idp = gateway();
     const security = new ManageSecurity(repo, idp);
     const result = await security.retryRoleSync('supervisor', { operationId: '4f5c1f9e-0000-4000-8000-000000000005', expectedVersion: 1 }, 'actor');
+    expect(repo.retryRoleSync).toHaveBeenCalledWith('supervisor', 1, 'actor', '4f5c1f9e-0000-4000-8000-000000000005');
     expect(idp.upsertRole).toHaveBeenCalled();
     expect(idp.assignRole).toHaveBeenCalledWith('employee-1', 'subject-1', 'supervisor');
     expect(result.role.syncStatus).toBe('synced');
   });
 
   it('rejects a retry whose version is stale', async () => {
-    const repo = repository({ role: vi.fn(async () => ({ ...pendingRole('supervisor'), version: 3 })) });
+    const repo = repository({
+      retryRoleSync: vi.fn(async () => { throw new SecurityError(409, 'VERSION_CONFLICT'); }),
+    });
     const security = new ManageSecurity(repo, gateway());
     expect(await code(() => security.retryRoleSync('supervisor', { operationId: '4f5c1f9e-0000-4000-8000-000000000006', expectedVersion: 2 }, 'actor')))
       .toBe('VERSION_CONFLICT');
@@ -128,7 +132,7 @@ describe('ManageSecurity', () => {
     const repo = repository();
     const idp = gateway();
     const security = new ManageSecurity(repo, idp);
-    const result = await security.assignRole('11111111-1111-4111-8111-111111111111', { operationId: '4f5c1f9e-0000-4000-8000-000000000007', roleName: 'supervisor' }, 'actor');
+    const result = await security.assignRole('11111111-1111-4111-8111-111111111111', { operationId: '4f5c1f9e-0000-4000-8000-000000000007', roleName: 'supervisor' }, 'actor', ['security:write', 'schedules:read']);
     expect(idp.assignRole).toHaveBeenCalledWith('employee-1', 'subject-1', 'supervisor');
     expect(result.assignment.syncStatus).toBe('synced');
   });
@@ -145,6 +149,14 @@ describe('ManageSecurity', () => {
     expect(idp.revokeRole).toHaveBeenCalledWith('employee-1', 'subject-1', 'supervisor');
     expect(result.assignment.status).toBe('revoked');
     expect(result.assignment.syncStatus).toBe('synced');
+  });
+
+  it('blocks assigning a role with permissions the actor does not hold', async () => {
+    const repo = repository();
+    const security = new ManageSecurity(repo, gateway());
+    expect(await code(() => security.assignRole('11111111-1111-4111-8111-111111111111', { operationId: '4f5c1f9e-0000-4000-8000-000000000009', roleName: 'supervisor' }, 'actor', ['security:write'])))
+      .toBe('PERMISSION_ESCALATION');
+    expect(repo.assignRole).not.toHaveBeenCalled();
   });
 
   it('validates the history page bounds', async () => {

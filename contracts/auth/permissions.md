@@ -51,7 +51,7 @@ El paso 3 es lo que hace que retirar una asignación tenga efecto en la siguient
 - **Sin escalamiento**: un actor no puede crear ni modificar un rol con permisos que no posee (`PERMISSION_ESCALATION`, 409).
 - **Nunca sin administrador**: con `pg_advisory_xact_lock` sobre `security:administrators`, se cuentan dentro de la misma transacción las asignaciones vigentes a empleados activos cuyos roles otorgan `security:write`. Retirar la última o reducir el último rol que lo otorga responde `LAST_ADMINISTRATOR` (409). Dos peticiones concurrentes no pueden dejar la plataforma sin administrador.
 - **Idempotencia**: `operationId` obligatorio con huella actor+acción+destino+contenido+versión; replay sin efectos; contenido distinto `IDEMPOTENCY_CONFLICT`.
-- **Auditoría**: `security_history` append-only con actor, versión y snapshot público. Sin tokens, secretos ni cuerpos del IdP.
+- **Auditoría**: `security_history` solo se inserta: no existe endpoint de modificación ni de borrado y el servicio no ejecuta UPDATE/DELETE sobre ella. Sin tokens, secretos ni cuerpos del IdP. La inmutabilidad se garantiza en la aplicación; reforzarla en la base requiere un rol de aplicación sin UPDATE/DELETE, fuera de este alcance.
 
 ## Ventana de vigencia
 

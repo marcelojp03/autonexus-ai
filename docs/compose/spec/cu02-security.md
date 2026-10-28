@@ -7,9 +7,9 @@ source: work/marcelo
 
 **What was built** — CU02 de punta a punta sobre Empleados, el BFF y `mf-employees`: catálogo cerrado de seis permisos, roles y asignaciones persistidos en el esquema propio de Empleados (migración `1793196000000`) y materializados en Keycloak como realm roles, autorización por permiso en REST y GraphQL, sección `/employees/security` con matriz de permisos, asignación/retiro por empleado y reintento de sincronización. Reglas de seguridad: sin escalamiento, nunca sin administrador (con lock y validación dentro de la transacción), empleado activo con identidad para asignar, idempotencia, versionado y auditoría append-only. Los cinco roles iniciales conservan la autoridad previa: CU03 sigue administrador-only y CU04 no gana alcance.
 
-**Verification** — Empleados 89 pruebas y build; API real 13 etapas (permisos efectivos, materialización en el IdP, dos reglas de último administrador, escalamiento con token limitado, revocación efectiva sobre un token ya emitido, retry, auditoría); BFF 16 unitarias + 13 HTTP y BFF real 7 etapas por GraphQL; navegador real 9 etapas; regresión CU03 11, CU04 8 y CU01 API 10, todas exit 0. El smoke CU01 detectó que añadir `permissions` a `/technical/session` rompía su contrato y se revirtió.
+**Verification** — Empleados 90 pruebas y build; API real 14 etapas (incluye un retiro concurrente real) (permisos efectivos, materialización en el IdP, dos reglas de último administrador, escalamiento con token limitado, revocación efectiva sobre un token ya emitido, retry, auditoría); BFF 17 unitarias + 13 HTTP y BFF real 7 etapas por GraphQL; navegador real 9 etapas; regresión CU03 11, CU04 8 y CU01 API 10, todas exit 0. El smoke CU01 detectó que añadir `permissions` a `/technical/session` rompía su contrato y se revirtió.
 
-**Review** — Registro en `docs/context/STATUS.md`: revisión directa declarada como tal si el revisor independiente no arranca.
+**Review** — Revisión independiente de `a2e1451..b2fe58f`: cero críticos y seis hallazgos mayores, todos corregidos y re-verificados (fragmento inline en la raíz del BFF, identidad vigente en la resolución de permisos, administradores resolubles, reconciliación de revocaciones, escalamiento al asignar, idempotencia del reintento y conteo de asignaciones). Detalle en `docs/context/STATUS.md`.
 
 # CU02 — Administrar roles y permisos
 

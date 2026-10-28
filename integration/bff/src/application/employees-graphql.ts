@@ -150,6 +150,8 @@ export class EmployeesGraphql {
         if (depth === 1 && !(name in FIELD_PERMISSION)) throw new BadRequest('BAD_REQUEST');
         if (field.selectionSet) this.inspect(field.selectionSet, depth + 1, budget);
       } else if (selection.kind === 'InlineFragment') {
+        // A root inline fragment would hide the field names from the permission policy.
+        if (depth === 1) throw new BadRequest('BAD_REQUEST');
         this.inspect(selection.selectionSet, depth, budget);
       } else {
         throw new BadRequest('BAD_REQUEST');

@@ -118,7 +118,7 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
       await runner.startTransaction();
       for (const key of keys) {
         const rows = await runner.query('SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS acquired', [key]) as Array<{ acquired: boolean }>;
-        if (!rows[0]?.acquired) throw new SecurityError(503, 'PERSISTENCE_UNAVAILABLE');
+        if (!rows[0]?.acquired) throw new SecurityError(409, 'CONCURRENT_OPERATION');
       }
       const result = await work(runner);
       await runner.commitTransaction();
@@ -169,6 +169,11 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
     );
   }
 
+  /**
+   * Effective permissions. A subject linked to an employee only gets the roles assigned to that
+   * employee under its *current* identity; an unlinked subject (infrastructure/test account) only
+   * gets the seeded `system` roles, never a role created through CU02.
+   */
   async permissions(subject: string, roles: readonly string[]): Promise<EffectivePermissions> {
     if (roles.length === 0) return { roles, recognized: [], permissions: [] };
     return this.read(async runner => {
@@ -177,12 +182,15 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
          FROM employees.security_roles r
          WHERE r.name = ANY($1::text[])
            AND (
-             NOT EXISTS (SELECT 1 FROM employees.employee_records e WHERE e.subject = $2)
+             (
+               r.system
+               AND NOT EXISTS (SELECT 1 FROM employees.employee_records e WHERE e.subject = $2)
+             )
              OR EXISTS (
                SELECT 1 FROM employees.security_role_assignments a
                JOIN employees.employee_records e ON e.id = a.employee_id
-               WHERE a.role_name = r.name AND a.revoked_at IS NULL AND a.subject = $2
-                 AND e.record->>'status' = 'active'
+               WHERE a.role_name = r.name AND a.revoked_at IS NULL
+                 AND e.subject = $2 AND e.record->>'status' = 'active'
              )
            )
          ORDER BY r.name`,
@@ -264,7 +272,7 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
       if (!draft.permissions.includes('security:write') && rows[0].permissions.includes('security:write')) {
         await this.assertAdministratorsRemain(runner, null);
       }
-      const role = roleView({ ...rows[0], description: draft.description, permissions: [...draft.permissions], version, sync_status: 'pending' } as RoleRow);
+      const role = await this.readRole(runner, name);
       await this.audit(runner, 'role', name, name, null, 'role-updated', actor, version, role);
       const result: RoleMutation = { role, replayed: false };
       await this.remember(runner, operationId, fingerprint, result);
@@ -281,17 +289,57 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
       );
       const row = returned(result)[0] as RoleRow | undefined;
       if (!row) throw new SecurityError(404, 'ROLE_NOT_FOUND');
-      const role = roleView(row);
+      const role = await this.readRole(runner, name);
       await this.audit(runner, 'role', name, name, null, action, actor, role.version, role);
       return role;
     });
   }
 
+  /** Idempotent retry claim. IdP work happens after this commit; a replay returns the stored state. */
+  async retryRoleSync(name: string, expectedVersion: number, actor: string, operationId: string): Promise<RoleMutation> {
+    const fingerprint = this.fingerprint({ actor, action: 'retry-role-sync', name, expectedVersion });
+    return this.transactional(['security:role:' + name], async runner => {
+      const rows = await runner.query(`SELECT ${ROLE_COLUMNS} FROM employees.security_roles WHERE name=$1`, [name]) as RoleRow[];
+      if (!rows[0]) throw new SecurityError(404, 'ROLE_NOT_FOUND');
+      const replayed = await this.replay<RoleMutation>(runner, operationId, fingerprint);
+      if (replayed) return { role: replayed.role, replayed: true };
+      if (rows[0].version !== expectedVersion) throw new SecurityError(409, 'VERSION_CONFLICT');
+      await runner.query(
+        "UPDATE employees.security_roles SET sync_status='pending', sync_error_code=NULL, updated_at=$2 WHERE name=$1",
+        [name, new Date().toISOString()],
+      );
+      const role = await this.readRole(runner, name);
+      await this.audit(runner, 'role', name, name, null, 'role-synced', actor, role.version, role);
+      const result: RoleMutation = { role, replayed: false };
+      await this.remember(runner, operationId, fingerprint, result);
+      return result;
+    });
+  }
+  /** Single role projection with the live assignment count. */
+  private async readRole(runner: QueryRunner, name: string): Promise<RoleView> {
+    const rows = await runner.query(
+      `SELECT ${ROLE_COLUMNS},
+         (SELECT count(*)::int FROM employees.security_role_assignments a WHERE a.role_name=r.name AND a.revoked_at IS NULL) AS assigned_count
+       FROM employees.security_roles r WHERE r.name=$1`,
+      [name],
+    ) as RoleRow[];
+    if (!rows[0]) throw new SecurityError(404, 'ROLE_NOT_FOUND');
+    return roleView(rows[0]);
+  }
+
+  /**
+   * Assignments pending reconciliation with the IdP, including revocations that failed, resolved
+   * against the employee's *current* identity so a rotated subject is reconciled too.
+   */
   async unsyncedAssignments(roleName: string): Promise<readonly AssignmentView[]> {
     return this.read(async runner => {
       const rows = await runner.query(
-        `SELECT ${ASSIGNMENT_COLUMNS} FROM employees.security_role_assignments
-         WHERE role_name=$1 AND revoked_at IS NULL AND sync_status<>'synced' ORDER BY assigned_at`,
+        `SELECT a.id, a.role_name, a.employee_id, e.subject, a.version, a.sync_status, a.sync_error_code,
+                a.assigned_at, a.assigned_by, a.revoked_at
+         FROM employees.security_role_assignments a
+         JOIN employees.employee_records e ON e.id = a.employee_id
+         WHERE a.role_name=$1 AND a.sync_status<>'synced' AND (a.revoked_at IS NULL OR a.sync_status='failed')
+         ORDER BY a.assigned_at`,
         [roleName],
       ) as AssignmentRow[];
       return rows.map(assignmentView);
@@ -425,7 +473,7 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
        JOIN employees.security_roles r ON r.name = a.role_name
        JOIN employees.employee_records e ON e.id = a.employee_id
        WHERE a.revoked_at IS NULL AND 'security:write' = ANY(r.permissions)
-         AND e.record->>'status' = 'active'
+         AND e.record->>'status' = 'active' AND e.subject IS NOT NULL
          AND ($1::uuid IS NULL OR a.id <> $1)`,
       [excludingAssignmentId],
     ) as Array<{ count: number }>;

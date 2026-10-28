@@ -12,9 +12,9 @@ BFF: `contracts/graphql/security.graphql` con diez campos raíz y política por 
 
 | Verificación | Resultado |
 | --- | --- |
-| `services/employees` `pnpm test` / build | PASS 89 pruebas (dominio, casos de uso, verificación de token) y build exit0 |
-| API real CU02 (`scripts/cu02/verify-security-real.mjs`) | PASS 13 etapas/exit0: permisos efectivos, rol materializado en el IdP, asignación con identidad, dos reglas de último administrador, escalamiento con token limitado, unión de asignaciones, revocación efectiva sobre un token ya emitido, retry, auditoría, inactividad |
-| BFF `pnpm test` / `test:e2e` / build | PASS 16 unitarias + 13 HTTP y build exit0 |
+| `services/employees` `pnpm test` / build | PASS 90 pruebas (dominio, casos de uso, verificación de token) y build exit0 |
+| API real CU02 (`scripts/cu02/verify-security-real.mjs`) | PASS 14 etapas/exit0: permisos efectivos, rol materializado en el IdP, asignación con identidad, dos reglas de último administrador, escalamiento con token limitado, retiro concurrente que deja exactamente un administrador, unión de asignaciones, revocación efectiva sobre un token ya emitido, retry, auditoría, inactividad |
+| BFF `pnpm test` / `test:e2e` / build | PASS 17 unitarias + 13 HTTP y build exit0 |
 | BFF real por GraphQL (`scripts/cu02/verify-security-bff-real.mjs`) | PASS 7 etapas/exit0: catálogo, roles, denegación del jefe, alta, asignación, auditoría, retiro y CU03 aún administrador-only |
 | Navegador real (`scripts/cu02/verify-security-web.mjs`) | PASS 9 etapas/exit0: crear rol, asignarlo desde la UI, retirarlo con confirmación, auditoría en el propietario, jefe denegado por el servidor y consola limpia |
 | Regresión CU03 (navegador) | PASS 11 etapas/exit0 |
@@ -23,7 +23,9 @@ BFF: `contracts/graphql/security.graphql` con diez campos raíz y política por 
 
 Hallazgos corregidos durante la verificación: `UPDATE ... RETURNING` llegaba como `[rows, affected]` y rompía el mapeo; un `UPDATE` con un parámetro no referenciado producía error de bind; el contrato de `/technical/session` se rompió al añadirle `permissions` y el smoke CU01 lo detectó (se retiró; los permisos se publican solo en `/security/permissions`). Todos con corrección y nueva ejecución.
 
-Límites: sin permisos por registro; CU02 asigna roles pero no habilita credenciales de acceso; `Operaciones` conserva su política técnica por nombre de rol; la disponibilidad de CU04 sigue siendo informativa para CU15. Revisión registrada al final de la entrega.
+Revisión **independiente** del rango `a2e1451..b2fe58f` (subagente revisor, sin fallo de herramienta): cero críticos y seis hallazgos mayores, todos evaluados y corregidos en el commit de correcciones. Correcciones aplicadas: la política por campo del BFF es eludible con un fragmento inline en la raíz (ahora se rechaza, con prueba); la resolución de permisos usaba la foto del `subject` guardada al asignar en vez de la identidad actual del empleado y admitía roles nuevos para sujetos sin vínculo (ahora exige `e.subject` vigente y limita la rama sin vínculo a los roles iniciales); el invariante de último administrador no exigía identidad resoluble; una revocación fallida no se reconciliaba con el reintento; el escalamiento no se comprobaba al asignar; `retry-sync` no era idempotente; y `assignedCount` quedaba en 0 tras actualizar un rol. La contención de locks pasa de `503` a `409 CONCURRENT_OPERATION` y ahora está verificada con un retiro concurrente real. Se mantiene declarado como límite que la inmutabilidad de la auditoría es de aplicación, no de base.
+Límites: sin permisos por registro; CU02 asigna roles pero no habilita credenciales de acceso; `Operaciones` conserva su política técnica por nombre de rol; la disponibilidad de CU04 sigue siendo informativa para CU15; la inmutabilidad de `security_history` es de aplicación.
+
 ## CU03 web — BFF e interfaz entregados localmente (2026-10-27)
 
 Rama `work/marcelo`, base main425ed03. Decisión009 habilita alcance no exclusivo: se implementaron BFF y pantallas sin esperar al participante2. Backend CU03 sigue siendo el de main; esta entrega agrega el recorrido web y no modifica reglas de negocio del servicio.

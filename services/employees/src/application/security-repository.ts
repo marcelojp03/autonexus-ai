@@ -32,6 +32,8 @@ export interface SecurityRepository {
   createRole(name: string, draft: RoleDraft, actor: string, operationId: string): Promise<RoleMutation>;
   updateRole(name: string, draft: RoleDraft, expectedVersion: number, actor: string, operationId: string): Promise<RoleMutation>;
   saveRoleSync(name: string, status: SyncStatus, errorCode: SyncErrorCode | null, actor: string, action: string): Promise<RoleView>;
+  /** Idempotent retry claim: validates version, marks pending and replays the stored result. */
+  retryRoleSync(name: string, expectedVersion: number, actor: string, operationId: string): Promise<RoleMutation>;
   unsyncedAssignments(roleName: string): Promise<readonly AssignmentView[]>;
   employeeRoles(employeeId: string): Promise<EmployeeRoles>;
   assignRole(employeeId: string, roleName: string, actor: string, operationId: string): Promise<AssignmentMutation>;

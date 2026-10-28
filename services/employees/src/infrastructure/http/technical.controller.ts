@@ -1,5 +1,5 @@
 import { Controller, Get, Req } from '@nestjs/common';
-import { RequireAuthenticated, RequirePermissions, type AuthenticatedRequest } from '../auth/auth-policy.js';
+import { RequireAuthenticated, RequirePermissions, WORKSHOP_ROLES, type AuthenticatedRequest } from '../auth/auth-policy.js';
 
 @Controller('technical')
 export class TechnicalController {
@@ -11,7 +11,7 @@ export class TechnicalController {
       resource: 'session',
       service: 'employees',
       subject: request.identity.subject,
-      roles: request.identity.roles,
+      roles: request.identity.roles.filter((role): role is typeof WORKSHOP_ROLES[number] => (WORKSHOP_ROLES as readonly string[]).includes(role)),
     };
   }
 

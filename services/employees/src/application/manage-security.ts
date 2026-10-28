@@ -1,6 +1,7 @@
 import { PERMISSION_CATALOG, type Permission } from '../domain/permissions.js';
 import {
   SecurityError,
+  type AssignmentView,
   assertNoEscalation,
   expectedVersionOf,
   roleDraft,
@@ -101,20 +102,23 @@ export class ManageSecurity {
 
   async retryRoleSync(name: unknown, body: unknown, actorSubject: string): Promise<RoleMutation> {
     const input = command(body, RETRY_KEYS);
-    const role = await this.repository.role(roleName(name));
-    if (role.version !== expectedVersionOf(input.expectedVersion)) throw new SecurityError(409, 'VERSION_CONFLICT');
-    operation(input.operationId);
-    const mutation = await this.repository.saveRoleSync(role.name, 'pending', null, actorSubject, 'role-synced');
-    const synced = await this.syncRole({ role: mutation, replayed: false }, actorSubject);
-    for (const assignment of await this.repository.unsyncedAssignments(role.name)) {
-      await this.syncAssignment(assignment.id, assignment.employeeId, assignment.subject, role.name);
+    const mutation = await this.repository.retryRoleSync(
+      roleName(name), expectedVersionOf(input.expectedVersion), actorSubject, operation(input.operationId),
+    );
+    const synced = await this.syncRole(mutation, actorSubject);
+    if (mutation.replayed) return synced;
+    for (const assignment of await this.repository.unsyncedAssignments(mutation.role.name)) {
+      await this.syncAssignment(assignment);
     }
     return synced;
   }
 
-  async assignRole(employeeId: unknown, body: unknown, actorSubject: string): Promise<AssignmentMutation> {
+  async assignRole(employeeId: unknown, body: unknown, actorSubject: string, actorPermissions: readonly Permission[]): Promise<AssignmentMutation> {
     const input = command(body, ASSIGN_KEYS);
-    const mutation = await this.repository.assignRole(uuid(employeeId), roleName(input.roleName), actorSubject, operation(input.operationId));
+    const target = await this.repository.role(roleName(input.roleName));
+    // An actor cannot hand out a role with permissions it does not hold itself.
+    assertNoEscalation(target.permissions, actorPermissions);
+    const mutation = await this.repository.assignRole(uuid(employeeId), target.name, actorSubject, operation(input.operationId));
     return this.syncAssignmentMutation(mutation);
   }
 
@@ -143,7 +147,7 @@ export class ManageSecurity {
   private async syncAssignmentMutation(mutation: AssignmentMutation): Promise<AssignmentMutation> {
     if (mutation.replayed) return mutation;
     const assignment = mutation.assignment;
-    const updated = await this.syncAssignment(assignment.id, assignment.employeeId, assignment.subject, assignment.roleName);
+    const updated = await this.syncAssignment(assignment);
     return { assignment: updated, replayed: false };
   }
 
@@ -162,12 +166,17 @@ export class ManageSecurity {
     return mutation;
   }
 
-  private async syncAssignment(id: string, employeeId: string, subject: string, roleNameValue: string) {
+  /** Applies the assignment or its revocation, depending on the persisted state. */
+  private async syncAssignment(assignment: AssignmentView) {
     try {
-      await this.identityProvider.assignRole(employeeId, subject, roleNameValue);
-      return this.repository.saveAssignmentSync(id, 'synced', null);
+      if (assignment.status === 'revoked') {
+        await this.identityProvider.revokeRole(assignment.employeeId, assignment.subject, assignment.roleName);
+      } else {
+        await this.identityProvider.assignRole(assignment.employeeId, assignment.subject, assignment.roleName);
+      }
+      return this.repository.saveAssignmentSync(assignment.id, 'synced', null);
     } catch (error) {
-      return this.repository.saveAssignmentSync(id, 'failed', syncCode(error));
+      return this.repository.saveAssignmentSync(assignment.id, 'failed', syncCode(error));
     }
   }
 }

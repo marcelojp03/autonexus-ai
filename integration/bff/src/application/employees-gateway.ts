@@ -26,6 +26,7 @@ const PUBLIC_CODES = new Set([
   'PERMISSION_ESCALATION',
   'LAST_ADMINISTRATOR',
   'EMPLOYEE_WITHOUT_IDENTITY',
+  'CONCURRENT_OPERATION',
 ]);
 
 export interface EmployeePageQuery {
