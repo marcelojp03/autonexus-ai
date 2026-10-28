@@ -14,6 +14,7 @@
     <nav aria-label="Módulos">
       <a href="/employees" data-module="employees" data-shell-link>Empleados</a>
       <a href="/operations" data-module="operations" data-shell-link>Operaciones</a>
+      <a href="/finance" data-module="finance" data-shell-link>Finanzas</a>
     </nav>
   </header>
   <aside class="demo-banner"><strong>Páginas de ejemplo del template</strong> · La sesión es real; los gráficos no representan operaciones del taller.</aside>
@@ -43,13 +44,16 @@
     <a href="/operations/customers" data-operations-link data-shell-link>Clientes</a>
     <a href="/operations/vehicles" data-operations-link data-shell-link>Vehículos</a>
     <a href="/operations/catalog" data-operations-link data-shell-link>Catálogo</a>
-    <a href="/finance" data-finance-link data-shell-link hidden>Finanzas</a>
+    <a href="/operations/receptions" data-operations-link data-shell-link>Recepción</a>
+    <a href="/operations/orders" data-operations-link data-shell-link>Órdenes</a>
+    <a href="/finance" data-finance-link data-shell-link>Cotizaciones</a>
     <a href="/employees/widgets" data-page="widgets" data-shell-link>Widgets</a>
     <a href="/employees/dashboard/v1" data-page="dashboard/v1" data-shell-link>Panel demo</a>
   </nav>
   <main id="main" tabindex="-1">
     <p id="load-status" role="status" aria-live="polite"></p>
-    <section id="route-error" hidden><h1>Ruta no encontrada</h1><p>Selecciona Empleados u Operaciones para continuar.</p></section>
+    <section id="route-error" hidden><h1>Ruta no encontrada</h1><p>Selecciona Empleados, Operaciones o Finanzas para continuar.</p></section>
+    <p id="module-access" role="status" hidden></p>
     <section id="mf-employees" aria-label="Empleados" hidden></section>
     <section id="mf-operations" aria-label="Demostración de Operaciones" hidden></section>
     <section id="mf-finance" aria-label="Finanzas" hidden></section>

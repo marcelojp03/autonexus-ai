@@ -1,5 +1,13 @@
 # MF02 Operaciones
 
+## T21 — recepción y órdenes (2026-10-28)
+
+Se suman /operations/receptions y /operations/orders al Shell y /#/receptions, /#/orders al arranque independiente. CU11 registra vehículo/propietario, cita opcional, kilometraje, motivo, síntomas y condiciones visibles; lista versión y si tiene orden. CU12 crea desde recepción, con descripción, prioridad, notas y servicios/cantidades; muestra número, estado, versión, tarifas y duraciones copiadas. No confirma el servicio ni asigna mecánico. IA, fotografías/S3 y offline siguen pendientes.
+
+Todo sale por SessionPort.requestBusiness y BFF GraphQL; las búsquedas auxiliares tienen errores independientes y no bloquean la consulta de órdenes si faltan permisos de recepción/catálogo. El servidor valida cada identificador, incluso los ingresados directamente. Un reintento del mismo contenido conserva operationId y los errores no vacían el formulario.
+
+Verificación T21: intake.spec.ts 9/9 en Chromium, tipos de aplicación y pruebas, build integrado; recorrido real en scripts/finance/verify-t21-web.mjs con persistencia tras recarga, duplicado de recepción, tarifas copiadas y continuidad hasta cotización/decisión en React. Resultados actuales en docs/context/STATUS.md. Las menciones posteriores a pantallas empresariales futuras describen fases históricas.
+
 ## Runtime vigente de CU01 integrado
 
 Ejecutar esta aplicación desde su carpeta en la raíz principal autonexus-ai. CU01 ya está en main b8d8079; las referencias a .worktrees/cu01-keycloak en la evidencia posterior son históricas. Ambos Compose se administran desde infra/compose e infra/keycloak de raíz, conservando privados y volúmenes. Ubicaciones, comandos y límites: docs/decisions/006-cu01-main-runtime.md y scripts/cu01/README.md (rutas desde la raíz). No se hizo push ni se eliminaron ramas/worktrees.

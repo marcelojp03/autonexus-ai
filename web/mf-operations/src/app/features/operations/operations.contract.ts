@@ -81,8 +81,8 @@ export const CREATE_SERVICE = `mutation CreateService($input: CreateServiceInput
 export const UPDATE_SERVICE = `mutation UpdateService($id: UUID!, $input: UpdateServiceInput!) { updateService(id: $id, input: $input) { service { ${SERVICE} } replayed } }`;
 export const DEACTIVATE_SERVICE = `mutation DeactivateService($id: UUID!, $input: OperationsCommandInput!) { deactivateService(id: $id, input: $input) { service { ${SERVICE} } replayed } }`;
 
-export const APPOINTMENTS = `query Appointments($limit: Int, $offset: Int, $from: DateTime, $to: DateTime, $status: AppointmentStatus) {
-  appointments(limit: $limit, offset: $offset, from: $from, to: $to, status: $status) { items { ${APPOINTMENT} } total limit offset }
+export const APPOINTMENTS = `query Appointments($limit: Int, $offset: Int, $from: DateTime, $to: DateTime, $status: AppointmentStatus, $vehicleId: UUID) {
+  appointments(limit: $limit, offset: $offset, from: $from, to: $to, status: $status, vehicleId: $vehicleId) { items { ${APPOINTMENT} } total limit offset }
 }`;
 export const CREATE_APPOINTMENT = `mutation CreateAppointment($input: CreateAppointmentInput!) { createAppointment(input: $input) { appointment { ${APPOINTMENT} } replayed } }`;
 export const RESCHEDULE_APPOINTMENT = `mutation RescheduleAppointment($id: UUID!, $input: RescheduleAppointmentInput!) { rescheduleAppointment(id: $id, input: $input) { appointment { ${APPOINTMENT} } replayed } }`;
@@ -117,3 +117,24 @@ export const toLocalInput = (iso: string): string => {
 
 export const localDate = (value: string): string => toLocalInput(value).slice(0, 10);
 export const localTime = (value: string): string => toLocalInput(value).slice(11, 16);
+
+export interface Reception {
+  id: string; vehicleId: string; vehiclePlate: string; customerId: string; customerName: string;
+  appointmentId: string | null; mileage: number; reason: string; symptoms: string | null;
+  visibleConditions: string | null; hasOrder: boolean; receivedAt: string; version: number;
+}
+export interface WorkOrder {
+  id: string; number: string; receptionId: string; vehicleId: string; vehiclePlate: string;
+  customerId: string; customerName: string; description: string;
+  priority: 'baja' | 'normal' | 'alta' | 'urgente'; notes: string | null;
+  status: 'pending_quote' | 'quote_requested' | 'quote_approved' | 'cancelled';
+  version: number; createdAt: string; updatedAt: string;
+  items: { serviceId: string; serviceName: string; quantity: number; estimatedMinutes: number; referenceRate: number }[];
+}
+const RECEPTION = 'id vehicleId vehiclePlate customerId customerName appointmentId mileage reason symptoms visibleConditions hasOrder receivedAt version';
+const ORDER = 'id number receptionId vehicleId vehiclePlate customerId customerName description priority notes status version createdAt updatedAt items { serviceId serviceName quantity estimatedMinutes referenceRate }';
+export const RECEPTIONS = `query Receptions($limit: Int, $offset: Int, $vehicleId: UUID, $open: Boolean) { receptions(limit: $limit, offset: $offset, vehicleId: $vehicleId, open: $open) { items { ${RECEPTION} } total limit offset } }`;
+export const RECEPTION_DETAIL = `query Reception($id: UUID!) { reception(id: $id) { ${RECEPTION} } }`;
+export const CREATE_RECEPTION = `mutation CreateReception($input: CreateReceptionInput!) { createReception(input: $input) { reception { ${RECEPTION} } replayed } }`;
+export const ORDERS = `query Orders($limit: Int, $offset: Int, $status: WorkOrderStatus) { orders(limit: $limit, offset: $offset, status: $status) { items { ${ORDER} } total limit offset } }`;
+export const CREATE_WORK_ORDER = `mutation CreateWorkOrder($input: CreateWorkOrderInput!) { createWorkOrder(input: $input) { order { ${ORDER} } replayed } }`;

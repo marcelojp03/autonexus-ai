@@ -1,5 +1,13 @@
 # Contrato local CU01
 
+## Extensión T21 — Finanzas React
+
+IntegratedProps ya admite /finance y /mfs/finance/. El Shell comparte su SessionPort con React igual que con Angular; requestBusiness es el único transporte empresarial. No se entregan tokens ni credenciales como props, ni se crea SDK/login en el integrado. Desmontar no termina la sesión padre.
+
+El helper browser-auth admite application=finance para el documento independiente en http://127.0.0.1:4204: cliente público autonexus-mf-finance, callback exacto /auth/callback, retorno validado /finance, Code+PKCE S256 y tokens en RAM. Scopes basic/profile/roles proveen subject, usuario y roles; scope-mappings explícitos del taller y audiencias autonexus-finance-api, autonexus-employees-api (validación BFF) y autonexus-operations-api. El BFF admite ese origen exacto además de 4200/4201/4202; no se añade localhost ni wildcard.
+
+La recarga y el paso independiente→Shell reutilizan la cookie SSO de Keycloak; cada documento mantiene su propietario y no intercambia tokens por storage. Roles/permisos no se derivan de cargo o especialidad.
+
 Contrato empresarial temprano CU03: [employees.md](employees.md), con REST/SDL, administrador obligatorio, identidad técnica client_credentials y sincronización opcional sin roles automáticos. No acredita BFF, CU02 ni CU03 web completo; mantiene intacto este contrato de sesión CU01.
 
 Especificación aprobada: docs/compose/spec/cu01-keycloak.md. Este contrato versiona composición de sesión, claims y recursos técnicos; no contiene lógica de dominio/ORM ni implementa CU02.

@@ -1,4 +1,5 @@
 import type { IntegratedProps } from '../../../contracts/auth/session';
+import { connectIntegratedRouter } from '../../integrated-routing';
 import { SESSION_PORT } from './app/auth/session';
 import { canPresentSession } from './app/auth/session-policy';
 import { APP_BASE_HREF } from '@angular/common';
@@ -51,6 +52,7 @@ const lifecycles = singleSpaAngular<IntegrationProps>({
       );
       if (!canPresentSession(props.session.snapshot())) throw new Error('Session changed during mount');
       mountedApp.bootstrap(IntegratedApp, host);
+      mountedApp.onDestroy(connectIntegratedRouter(mountedApp.injector.get(Router), props.basePath));
       return mountedApp;
     } catch (error) {
       mountedApp?.destroy();

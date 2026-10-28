@@ -1,6 +1,6 @@
 import type { BusinessFailure, BusinessResult, SessionPort, SessionSnapshot, TechnicalResult, WorkshopRole } from '../../contracts/auth/session.ts';
 
-export type BrowserApplication = 'shell' | 'employees' | 'operations';
+export type BrowserApplication = 'shell' | 'employees' | 'operations' | 'finance';
 export interface BrowserOidcAdapter {
   init(options: { flow: 'standard'; pkceMethod: 'S256'; useNonce: boolean; responseMode: 'fragment'; checkLoginIframe: boolean; enableLogging: boolean; redirectUri: string; logoutMethod: 'POST' }): Promise<boolean>;
   login(options: { redirectUri: string }): Promise<void>;
@@ -25,7 +25,8 @@ export function safeReturnTo(value: unknown, application: BrowserApplication): s
   try { decoded = decodeURIComponent(value); } catch { return null; }
   if (/[\\%\u0000-\u0020]/.test(decoded) || /%2f|%3f|%23/i.test(value.split(/[?#]/)[0]!) || /(?:^|\/)\.{1,2}(?:\/|[?#]|$)/.test(decoded)) return null;
   if (/(?:[?&#])(?:code|state|session_state|iss|error|error_description|access_token|id_token|refresh_token|token|session_code|nonce|redirect_uri|client_id|response_type|response_mode)(?:=|&|$)/i.test(decoded)) return null;
-  if (application === 'shell') return /^\/(employees|operations)(?:\/|[?]|$)/.test(decoded) && !decoded.includes('#') ? value : null;
+  if (application === 'shell') return /^\/(employees|operations|finance)(?:\/|[?]|$)/.test(decoded) && !decoded.includes('#') ? value : null;
+  if (application === 'finance') return (decoded === '/finance' || decoded.startsWith('/finance/') || decoded.startsWith('/finance?')) && !decoded.includes('#') ? value : null;
   return /^\/#\/(?:widgets|dashboard(?:\/[^?#]*)?|exception(?:\/[^?#]*)?)(?:[?].*)?$/.test(decoded) ? value : null;
 }
 
@@ -51,7 +52,7 @@ function parseBusinessResult(value: unknown): BusinessResult {
 export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin: string; application: BrowserApplication }): BrowserSessionOwner {
   const { origin, application } = options;
   const callback = origin + '/auth/callback';
-  const defaultRoute = application === 'shell' ? '/employees' : '/#/widgets';
+  const defaultRoute = application === 'shell' ? '/employees' : application === 'finance' ? '/finance' : '/#/widgets';
   const storageKey = `autonexus:returnTo:${application}`;
   let current: Readonly<SessionSnapshot> = Object.freeze({ mode: 'oidc', phase: 'initializing', authenticated: false, identity: null });
   let epoch = 0;

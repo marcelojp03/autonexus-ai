@@ -1,6 +1,37 @@
 # Estado comprobado
 
-## Recepción, órdenes y Finanzas con Laravel (2026-10-28)
+## T21 — React y pantallas de recepción, órdenes y cotizaciones (2026-10-28)
+
+Implementación y verificación completas en work/marcelo desde la base publicada f63ed9803dc3ec147d51b94ea847fc515628fe62. Revisión e integración/publicación de cierre pendientes. No se crearon ramas/worktrees ni se reinicializaron proyectos.
+
+| Capa | Estado observado |
+| --- | --- |
+| Backend CU11/CU12 y CU13/CU14 | Se conserva la entrega previa de Operaciones y Finanzas con bases propietarias; sin cambios en dominio, migraciones ni persistencia en T21 |
+| BFF | Reutiliza los contratos existentes; corrige propagación de errores CU11/CU12 y filtro open, y permite el origen independiente 4204; permisos por campo intactos |
+| Shell y React | Finance registrado en modules, rutas/hosts/props propios, ESM con exports reales, CSS/portales aislados y sesión compartida; arranque independiente empresarial en 4204 |
+| Pantallas Operaciones | Recepción textual con cita opcional, kilometraje y condiciones; consulta/creación de órdenes con prioridad, servicios, tarifas/duraciones copiadas, número, versión y estado |
+| Pantallas Finanzas | Órdenes, creación/revisión y desglose servidor, versiones superseded, selección explícita para aprobar/rechazar y evidencia obligatoria; UUID para referencias de cliente/vehículo |
+
+| Verificación T21 | Resultado |
+| --- | --- |
+| React, Vitest focalizado integrado/lifecycles/standalone | PASS 25/25, Node 22.22.3, un worker, testTimeout=15000 |
+| React, ESLint de los nueve archivos JS/JSX modificados | PASS, cero errores/advertencias; sin desactivar reglas |
+| Angular, intake.spec.ts en Chromium | PASS 9/9; tipos y builds integrados de ambos Angular PASS |
+| Shell, pruebas de sesión/rutas/sincronización | PASS 25/25; tsc, staging de tres módulos y build PASS |
+| BFF, unitarias / HTTP / tipos / build | PASS 32 + 13; tsc --noEmit y nest build exit 0 |
+| Recorrido empresarial scripts/finance/verify-t21-web.mjs | PASS 8 etapas/exit 0: dos recepciones/órdenes en Angular, dos cotizaciones en React, v2 y v1 superseded, rechazo/aprobación seleccionados, evidencia, recarga, referencias UUID y error real al revisar una aprobada desde vista obsoleta |
+| Montaje/rutas scripts/finance/verify-react-integration.mjs | PASS 12 etapas/exit 0: exports del ESM servido, MOUNTED y mount con host/basePath reales, unmount/remount, cuatro rutas previas de Operaciones, historial propio y cruzado, Empleados/horarios/seguridad, recarga y escritorio/móvil sin fuga CSS |
+| Independiente scripts/finance/verify-standalone-web.mjs | PASS 4 etapas/exit 0: cliente PKCE propio, GraphQL real, recarga SSO, paso al Shell sin segundo ingreso, logout y desmontaje |
+| Regresión BFF scripts/operations/verify-flow-bff-real.mjs | PASS 6 etapas/exit 0: recepción → orden → cotización → decisión y denegación por permiso |
+| Instalación Finance frozen y detector de interfaz | PASS frozen con lock intacto; detector [] en las superficies nuevas |
+
+Los tres verificadores de navegador usan Keycloak, APIs y PostgreSQL reales, sin mocks ni inyección de marcadores. La aprobación no cambió el estado de la orden: siguió pending_quote, sin mecánico. Recepción no puede crear cotizaciones; el mecánico queda denegado en Finance. Consola/pageerror limpios; se conserva en diagnóstico una cancelación ERR_ABORTED de recurso Angular al navegar, sin HTTP fallidos. Capturas desktop/mobile y diagnósticos locales en output/playwright/, logs/exit en output/t21/ (ignorados).
+
+Hallazgos corregidos: ESM servido sin exports por tree shaking; Finance fuera de modules y basePath incorrecto; retorno OIDC excluía /finance; decisiones ligadas a la primera pending, referencias por nombre/placa y evidencia ficticia de fallback; códigos nuevos y open omitidos por BFF; cliente independiente sin claims sub/usuario por scopes basic/profile ausentes; Router Angular desincronizado de enlaces del Shell (observado en ejecución y reconciliado con API pública y cleanup); hooks React con resets sincrónicos/ref cleanup. La corrida conjunta inicial React dio 24/25 por agotar 5 s de una interacción; la ejecución aislada con 15 s dio 25/25 sin cambiar aserciones. Se mantienen avisos de pseudoelementos de jsdom y tamaño del bundle (~1,025 MB integrado antes de gzip), no se ocultan ni se elevan presupuestos del build.
+
+Límites: CU11 aquí cubre registro textual, no fotografías/S3 ni inspección IA; offline, cobros, indicadores, CU05 con asignaciones y Saga CU15 siguen pendientes. Aprobar no confirma el servicio. La persistencia existente se conserva: Spring usa JDBC/Flyway, Nest TypeORM con SQL explícito y entities:[], Laravel Query Builder, y BFF sin base. Decisión 015; especificación operations-flow.
+
+## Base backend — recepción, órdenes y Finanzas con Laravel (2026-10-28)
 
 **Resumen vigente.** Operaciones suma CU11 recepción e inspección y CU12 orden de trabajo; Finanzas nace como servicio Laravel con PostgreSQL propio para CU13 cotizaciones versionadas y CU14 decisión del cliente. El catálogo pasó a **21 permisos** con actores por CU; Finanzas valida el token con OpenSSL y JWKS, audiencia `autonexus-finance-api` y permisos resueltos contra Empleados con caché de 30 s. Una orden nace `pending_quote` y **no asigna mecánico**; aprobar una cotización **no confirma el servicio**: eso es CU15, cuyo contrato queda en `contracts/rest/saga.md`.
 
@@ -13,7 +44,7 @@
 | BFF `pnpm test` / `test:e2e` / build | PASS 22 unitarias + 13 HTTP y build exit0 |
 | BFF real (`scripts/operations/verify-flow-bff-real.mjs`) | PASS 6 etapas/exit0: recepción → orden → cotización → decisión por GraphQL con denegaciones por permiso |
 
-**React (T21) al 2026-10-28:** el template se copió a `web/mf-finance` (React 19 + Vite 8 + Ant Design 6, sin `.git` anidado, conservando `AGENTS.md` y `README.md`), se adaptó `package.json`/`vite.config.js`, se añadieron lifecycles explícitos de single-spa (`src/spa.jsx`) y una pantalla de cotizaciones que consume `SessionPort.requestBusiness` sin login propio, y el Shell se amplió con el host `#mf-finance`, la ruta `/finance`, el staging de `/mfs/finance/` y `IntegratedProps` extendido. **El build integrado compila y `/mfs/finance/main.js` responde 200, pero el montaje dentro del Shell no se verificó con el navegador**: el módulo queda deliberadamente **no registrado** en `modules` (lista `pendingModules`) para no romper la navegación verificada, y el enlace permanece oculto. Pantallas de recepción/orden en `mf-operations` y el recorrido completo en pantallas **no se completaron**. No se declaran entregadas. Tampoco hay inspección asistida por IA, fotografías en S3, cobros ni indicadores. CU15 sigue sin implementar.
+**Histórico React (T21) en f63ed98:** se publicó únicamente la base técnica compilada, con Finance aún fuera de modules y pantallas de recepción/orden pendientes. Ese estado es la base de la continuación T21 documentada arriba; no describe la entrega actual. IA, fotografías/S3, cobros e indicadores siguen pendientes, y CU15 no se implementó.
 
 **Persistencia documentada:** Operaciones usa `JdbcClient` con SQL parametrizado y Flyway; Empleados usa TypeORM para conexión, transacciones y migraciones con SQL explícito y `entities: []`; Finanzas usa el Query Builder de Laravel con SQL explícito; el BFF no tiene ORM. No existen entidades ORM mapeadas.
 

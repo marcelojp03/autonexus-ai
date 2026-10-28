@@ -56,7 +56,7 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     createAbsence: vi.fn(),
     cancelAbsence: vi.fn(),
     permissions: vi.fn(async (bearer: string) => ({ catalog: [], effective: effectiveFor(bearer), roles: [] })),
-    securityRoles: vi.fn(async () => []),
+    securityRoles: vi.fn(async (): Promise<unknown[]> => []),
     securityRole: vi.fn(),
     createRole: vi.fn(),
     updateRole: vi.fn(),

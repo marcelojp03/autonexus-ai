@@ -7,6 +7,11 @@ const PUBLIC_CODES = new Set([
   'VEHICLE_NOT_FOUND',
   'SERVICE_NOT_FOUND',
   'APPOINTMENT_NOT_FOUND',
+  'RECEPTION_NOT_FOUND',
+  'ORDER_NOT_FOUND',
+  'VEHICLE_ALREADY_IN_RECEPTION',
+  'MILEAGE_REGRESSION',
+  'ORDER_ALREADY_EXISTS',
   'DUPLICATE_DOCUMENT',
   'DUPLICATE_PLATE',
   'DUPLICATE_SERVICE',
@@ -36,6 +41,7 @@ export interface OperationsPageQuery {
   from?: string;
   to?: string;
   active?: boolean;
+  open?: boolean;
 }
 export interface OperationsCommand {
   operationId: string;
@@ -116,7 +122,7 @@ export class HttpOperationsGateway implements OperationsGateway {
 
   private suffix(query: OperationsPageQuery): string {
     const parameters = new URLSearchParams();
-    for (const key of ['limit', 'offset', 'status', 'search', 'customerId', 'vehicleId', 'from', 'to', 'active'] as const) {
+    for (const key of ['limit', 'offset', 'status', 'search', 'customerId', 'vehicleId', 'from', 'to', 'active', 'open'] as const) {
       const value = query[key];
       if (value !== undefined && value !== null) parameters.set(key, String(value));
     }

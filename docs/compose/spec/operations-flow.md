@@ -1,6 +1,5 @@
 ---
 status: in-progress
-status: designed
 updated: 2026-10-28
 source: work/marcelo
 ---
@@ -93,6 +92,10 @@ Contrato de CU15 preparado en `contracts/rest/saga.md`: pasos, idempotencia por 
 - `mf-operations` (Angular) suma `/receptions` y `/orders`.
 - `mf-finance` (React) se integra al Shell por single-spa con la sesión existente: no hay login propio ni tokens en storage; usa el mismo `SessionPort` publicado por el Shell. Primero como base técnica (montaje, layout, navegación y health de sesión); luego `/quotes` y la decisión.
 - El Shell muestra las páginas de cada módulo según el módulo activo y los permisos resueltos en servidor.
+
+T21 retoma la base publicada en f63ed9803dc3ec147d51b94ea847fc515628fe62, sin reinicializar aplicaciones y conservando work/marcelo. Finanzas pertenece al mismo registro tipado de módulos, hosts, navegación y props que Angular; recibe basePath=/finance y assetBase=/mfs/finance/. El bundle ESM servido debe exportar realmente bootstrap/mount/unmount, y el navegador debe observar MOUNTED, desmontaje, regreso, enlace directo y recarga con SSO. El template React conserva su diseño dentro de ShadowRoot, incluidos estilos y portales.
+
+La selección de cotización es explícita por ID/orden/versión; toda decisión exige evidencia real no vacía. customerReference y vehicleReference son los UUID de Operaciones, nunca nombre/placa. Fechas calendario usan America/La_Paz, y los cálculos, impuesto predeterminado y moneda proceden de Finanzas. Las revisiones conservan versiones superseded e historial. No se acredita T21 hasta recepción → orden → cotización seleccionada → decisión desde las pantallas reales, más permisos, persistencia y errores.
 
 ### [S2.9] Persistencia documentada
 

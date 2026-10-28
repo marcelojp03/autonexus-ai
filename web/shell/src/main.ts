@@ -4,7 +4,7 @@ import Keycloak from 'keycloak-js';
 import { browserOidcConfig, createBrowserSession } from '../../browser-auth/session';
 import type { IntegratedProps } from '../../../contracts/auth/session';
 import type { AppProps, LifeCycles } from 'single-spa';
-import { matchesModule, moduleForPath, modules } from './routes';
+import { matchesModule, moduleForPath, moduleProps, modules } from './routes';
 import type { ModuleId } from './routes';
 
 type IntegrationProps = IntegratedProps;
@@ -24,14 +24,32 @@ const loginButton = document.querySelector<HTMLButtonElement>('#session-login')!
 const logoutButton = document.querySelector<HTMLButtonElement>('#session-logout')!;
 const technicalOutput = document.querySelector<HTMLElement>('#technical-result')!;
 let diagnosticEpoch = 0;
+let permissionSubject: string | undefined;
+let financeAccess: 'loading' | 'allowed' | 'forbidden' | 'unavailable' = 'loading';
+const canAccess = (module: ModuleId) => canMount() && (module !== 'finance' || financeAccess === 'allowed');
+async function loadModuleAccess(subject: string): Promise<void> {
+  try {
+    const result = await session.requestBusiness('query ModuleAccess { securityCatalog { effective } }');
+    if (permissionSubject !== subject) return;
+    const data = result.data as { securityCatalog?: { effective?: string[] } } | undefined;
+    financeAccess = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective)
+      ? data.securityCatalog.effective.includes('quotes:read') ? 'allowed' : 'forbidden'
+      : 'unavailable';
+  } catch { if (permissionSubject === subject) financeAccess = 'unavailable'; }
+  renderNavigation();
+  await triggerAppChange();
+}
 
 function renderNavigation(): void {
   const module = moduleForPath(location.pathname);
   const snapshot = session.snapshot();
   const allowed = canMount();
-  document.title = (module === 'employees' ? 'Empleados' : module === 'operations' ? 'Operaciones' : 'Sesión') + ' · AutoNexus';
+  document.title = (module === 'employees' ? 'Empleados' : module === 'operations' ? 'Operaciones' : module === 'finance' ? 'Finanzas' : 'Sesión') + ' · AutoNexus';
   document.getElementById('route-error')!.hidden = !allowed || !!module;
-  for (const id of modules) hosts[id].hidden = !allowed || id !== module;
+  for (const id of modules) hosts[id].hidden = !canAccess(id) || id !== module;
+  const accessNotice = document.querySelector<HTMLElement>('#module-access')!;
+  accessNotice.hidden = !allowed || module !== 'finance' || financeAccess === 'allowed';
+  accessNotice.textContent = financeAccess === 'forbidden' ? 'Acceso insuficiente: no tenés permiso para consultar cotizaciones.' : financeAccess === 'unavailable' ? 'No se pudieron verificar los permisos de Finanzas. Recargá para reintentar.' : 'Comprobando permisos de Finanzas…';
   document.querySelector<HTMLElement>('#session-identity')!.textContent = snapshot.identity ? snapshot.identity.username + ' · ' + snapshot.identity.roles.join(', ') : '';
   document.querySelector<HTMLElement>('#session-status')!.textContent = snapshot.notice ?? (snapshot.phase === 'initializing' ? 'Comprobando sesión…' : snapshot.authenticated ? allowed ? 'Sesión iniciada.' : 'Acceso insuficiente: la cuenta no tiene un rol del taller. Cierra sesión para cambiar de cuenta.' : 'Ingresa para acceder a los módulos del taller.');
   loginButton.hidden = snapshot.authenticated || snapshot.phase === 'initializing';
@@ -47,8 +65,9 @@ function renderNavigation(): void {
   document.querySelectorAll<HTMLElement>('[data-operations-link]').forEach((link) => {
     link.hidden = !allowed || module !== 'operations';
   });
+  document.querySelectorAll<HTMLElement>('[data-finance-link]').forEach((link) => { link.hidden = !allowed || module !== 'finance'; });
   document.querySelectorAll<HTMLAnchorElement>('[data-page]').forEach((link) => {
-    link.hidden = !module || !allowed;
+    link.hidden = !module || !allowed || module === 'finance';
     if (!module) return;
     link.href = '/' + module + '/' + link.dataset.page;
     if (location.pathname === new URL(link.href).pathname) link.setAttribute('aria-current', 'page');
@@ -56,7 +75,7 @@ function renderNavigation(): void {
   });
   const name = '@autonexus/' + module;
   const message = module ? errors.get(name) : undefined;
-  status.textContent = !module || !allowed ? '' : message ?? (getAppStatus(name) === MOUNTED ? '' : 'Cargando módulo…');
+  status.textContent = !module || !canAccess(module) ? '' : message ?? (getAppStatus(name) === MOUNTED ? '' : 'Cargando módulo…');
   status.hidden = !status.textContent;
   if (module) hosts[module].setAttribute('aria-busy', String(!message && getAppStatus(name) !== MOUNTED));
 }
@@ -64,7 +83,7 @@ function renderNavigation(): void {
 function instrument(app: string, remote: Remote): LifeCycles<IntegrationProps> {
   let mounted = false;
   const wrap = (phase: 'bootstrap' | 'mount' | 'unmount') => async (props: Props) => {
-    window.dispatchEvent(new CustomEvent('autonexus:lifecycle', { detail: { app, phase: phase + ':start' } }));
+    window.dispatchEvent(new CustomEvent('autonexus:lifecycle', { detail: { app, phase: phase + ':start', host: props.domElement?.id, connected: props.domElement?.isConnected, basePath: props.basePath } }));
     try {
       if (phase === 'mount' && !canMount()) return;
       if (phase === 'unmount' && !mounted) return;
@@ -96,10 +115,14 @@ for (const module of modules) {
       renderNavigation();
       const source = '/mfs/' + module + '/main.js';
       const remote: Remote = await import(/* @vite-ignore */ source);
+      for (const phase of ['bootstrap', 'mount', 'unmount'] as const) {
+        const steps = remote[phase];
+        if (!(typeof steps === 'function' || (Array.isArray(steps) && steps.length && steps.every(step => typeof step === 'function')))) throw new Error('El módulo ' + module + ' no exporta el ciclo ' + phase);
+      }
       return instrument(name, remote);
     },
-    activeWhen: (url) => canMount() && matchesModule(url.pathname, module),
-      customProps: { domElement: hosts[module], basePath: (module === 'employees' ? '/employees' : '/operations') as IntegrationProps['basePath'], assetBase: ('/mfs/' + module + '/') as IntegrationProps['assetBase'], session },
+    activeWhen: (url) => canAccess(module) && matchesModule(url.pathname, module),
+    customProps: { domElement: hosts[module], ...moduleProps(module), session },
   });
 }
 document.querySelectorAll<HTMLAnchorElement>('[data-shell-link]').forEach((link) => {
@@ -111,7 +134,8 @@ document.querySelectorAll<HTMLAnchorElement>('[data-shell-link]').forEach((link)
   });
 });
 addErrorHandler((error) => {
-  errors.set(error.appOrParcelName, 'No se pudo cargar esta demostración. Puedes navegar al otro módulo.');
+  console.error('Error al cargar el microfrontend:', error);
+  errors.set(error.appOrParcelName, 'No se pudo cargar el módulo. Podés navegar a otro módulo o recargar para reintentar.');
   renderNavigation();
 });
 window.addEventListener('single-spa:before-routing-event', renderNavigation);
@@ -132,6 +156,12 @@ document.querySelectorAll<HTMLButtonElement>('[data-technical-service]').forEach
   });
 });
 session.subscribe(() => {
+  const subject = session.snapshot().identity?.subject;
+  if (subject !== permissionSubject) {
+    permissionSubject = subject;
+    financeAccess = 'loading';
+    if (subject) void loadModuleAccess(subject);
+  }
   if (!session.snapshot().authenticated) { diagnosticEpoch++; technicalOutput.textContent = ''; }
   renderNavigation();
   void triggerAppChange();

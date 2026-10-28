@@ -36,20 +36,25 @@ export default defineConfig(({ mode }) => ({
   },
 
   server: {
-    port: 5173,
-    open: true,
+    host: '127.0.0.1',
+    port: 4204,
+    strictPort: true,
   },
 
   preview: {
-    port: 4173,
+    host: '127.0.0.1',
+    port: 4204,
+    strictPort: true,
   },
 
   build: {
-    outDir: mode === 'integrated' ? 'dist/integrated' : 'dist',
+    outDir: mode === 'integrated' ? 'dist/integrated' : 'dist/standalone',
     sourcemap: false,
     chunkSizeWarningLimit: 700,
     rollupOptions: mode === 'integrated'
       ? {
+          // The public lifecycle exports must survive entry tree shaking.
+          preserveEntrySignatures: 'strict',
           input: fileURLToPath(new URL('./src/spa.jsx', import.meta.url)),
           output: { entryFileNames: 'main.js', chunkFileNames: 'assets/[name]-[hash].js', assetFileNames: 'assets/[name]-[hash][extname]' },
         }

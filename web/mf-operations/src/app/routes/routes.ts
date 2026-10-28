@@ -13,6 +13,8 @@ export const routes: Routes = [
     data: {},
     children: [
       { path: '', redirectTo: 'appointments', pathMatch: 'full' },
+      { path: 'receptions', loadComponent: () => import('../features/operations/receptions.component').then(m => m.ReceptionsComponent) },
+      { path: 'orders', loadComponent: () => import('../features/operations/orders.component').then(m => m.OrdersComponent) },
       { path: 'appointments', loadComponent: () => import('../features/operations/appointments.component').then(m => m.AppointmentsComponent) },
       { path: 'customers', loadComponent: () => import('../features/operations/customers.component').then(m => m.CustomersComponent) },
       { path: 'vehicles', loadComponent: () => import('../features/operations/vehicles.component').then(m => m.VehiclesComponent) },

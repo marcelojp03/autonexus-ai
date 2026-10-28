@@ -47,6 +47,12 @@ function build(rejected?: Error) {
     createAppointment: vi.fn(async () => ({ appointment: { id: EMPLOYEE_ID }, replayed: false })),
     rescheduleAppointment: vi.fn(),
     cancelAppointment: vi.fn(),
+    receptions: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    reception: vi.fn(),
+    createReception: vi.fn(),
+    orders: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    order: vi.fn(),
+    createWorkOrder: vi.fn(),
   };
   const gateway = {
     list: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),

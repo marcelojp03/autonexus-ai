@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { SESSION_PORT } from '../../auth/session';
+import { CREATE_RECEPTION, CREATE_WORK_ORDER, RECEPTIONS, RECEPTION_DETAIL, ORDERS, type Reception, type WorkOrder } from './operations.contract';
 import {
   APPOINTMENTS, CANCEL_APPOINTMENT, CREATE_APPOINTMENT, CREATE_CUSTOMER, CREATE_SERVICE, CREATE_VEHICLE,
   CUSTOMERS, DEACTIVATE_CUSTOMER, DEACTIVATE_SERVICE, DEACTIVATE_VEHICLE, RESCHEDULE_APPOINTMENT, SERVICES,
@@ -98,6 +99,22 @@ export class OperationsApi {
     }).then(data => data.cancelAppointment.appointment);
   }
 
+  receptions(query: Record<string, unknown>): Promise<Page<Reception>> {
+    return this.run<{ receptions: Page<Reception> }>(RECEPTIONS, query).then(data => data.receptions);
+  }
+  reception(id: string): Promise<Reception> {
+    return this.run<{ reception: Reception }>(RECEPTION_DETAIL, { id }).then(data => data.reception);
+  }
+  orders(query: Record<string, unknown>): Promise<Page<WorkOrder>> {
+    return this.run<{ orders: Page<WorkOrder> }>(ORDERS, query).then(data => data.orders);
+  }
+  createReception(input: Record<string, unknown>): Promise<Reception> {
+    return this.run<{ createReception: { reception: Reception } }>(CREATE_RECEPTION, { input }).then(data => data.createReception.reception);
+  }
+  createWorkOrder(input: Record<string, unknown>): Promise<WorkOrder> {
+    return this.run<{ createWorkOrder: { order: WorkOrder } }>(CREATE_WORK_ORDER, { input }).then(data => data.createWorkOrder.order);
+  }
+
   private async run<T>(query: string, variables?: Readonly<Record<string, unknown>>): Promise<T> {
     if (!this.session) throw new OperationsFailure({ code: 'NO_SESSION_PORT', statusCode: 401, message: 'Esta vista requiere la sesión del Shell.' });
     const result = await this.session.requestBusiness(query, variables);
@@ -109,6 +126,14 @@ export class OperationsApi {
 
 const FAILURES: Readonly<Record<string, string>> = Object.freeze({
   FORBIDDEN: 'No tenés permiso para esta operación.',
+  UNAUTHENTICATED: 'La sesión expiró. Recuperá la sesión desde el Shell y reintentá.',
+  UNAUTHORIZED: 'La sesión expiró. Recuperá la sesión desde el Shell y reintentá.',
+  MILEAGE_REGRESSION: 'El kilometraje es inferior al último registrado. Corregilo y reintentá.',
+  VEHICLE_ALREADY_IN_RECEPTION: 'El vehículo ya tiene una recepción sin orden. Consultá las recepciones existentes.',
+  RECEPTION_NOT_FOUND: 'La recepción no existe. Revisá su identificador.',
+  ORDER_NOT_FOUND: 'La orden no existe. Actualizá la lista.',
+  ORDER_ALREADY_EXISTS: 'La recepción ya tiene una orden. Actualizá las listas para consultarla.',
+  IDEMPOTENCY_CONFLICT: 'El identificador de operación ya se usó con otros datos. Revisá el registro antes de reintentar.',
   VALIDATION_ERROR: 'Revisá los datos: hay un campo inválido.',
   DUPLICATE_DOCUMENT: 'Ya existe un cliente con ese documento.',
   DUPLICATE_PLATE: 'Ya existe un vehículo con esa placa.',

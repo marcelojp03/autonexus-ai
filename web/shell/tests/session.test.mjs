@@ -23,6 +23,31 @@ test('return routes accept only owned paths and reject OAuth metadata and escape
   for (const path of ['/#/widgets', '/#/dashboard/v1?tab=test']) assert.equal(safeReturnTo(path, 'employees'), path);
   assert.equal(safeReturnTo('/#/passport/callback?code=x', 'employees'), null);
 });
+
+test('finance routes work for Shell and standalone without widening return destinations', () => {
+  for (const application of ['shell', 'finance']) {
+    for (const path of ['/finance', '/finance/quotes?orderId=unit']) assert.equal(safeReturnTo(path, application), path);
+    for (const path of ['/finance-other', '/finance/../employees', '/finance/%2e%2e/employees', '/finance%2fquotes', '/finance?code=unit', '/finance?%61ccess_token=x', '/finance#token=x', '//outside.invalid', '/finance/%252e%252e/']) assert.equal(safeReturnTo(path, application), null);
+  }
+  assert.equal(safeReturnTo('/employees', 'finance'), null);
+  assert.equal(safeReturnTo('/#/widgets', 'finance'), null);
+});
+
+test('finance callback defaults safely and restores only finance metadata', async () => {
+  for (const [storedRoute, expected] of [[null, '/finance'], ['/finance/quotes?orderId=unit', '/finance/quotes?orderId=unit'], ['/employees', '/finance'], ['/finance?code=unit', '/finance']]) {
+    const stored = browser('/auth/callback#code=unit&state=unit');
+    if (storedRoute) stored.set('autonexus:returnTo:finance', storedRoute);
+    const o = createBrowserSession(fake(), { origin: location.origin, application: 'finance' });
+    try { await o.start(); assert.equal(location.pathname + location.search, expected); assert.equal(location.hash, ''); assert.equal(stored.size, 0); } finally { o.dispose(); }
+  }
+});
+
+test('finance protected deep link starts login once with route-only storage', async () => {
+  const stored = browser('/finance/quotes?orderId=unit'); const sdk = fake(false); let count = 0;
+  sdk.login = async options => { count++; assert.equal(options.redirectUri, location.origin + '/auth/callback'); };
+  const o = createBrowserSession(sdk, { origin: location.origin, application: 'finance' });
+  try { await o.start(); await o.start(); assert.equal(count, 1); assert.deepEqual([...stored], [['autonexus:returnTo:finance', '/finance/quotes?orderId=unit']]); } finally { o.dispose(); }
+});
 test('anonymous root does not loop; protected route stores only validated return metadata', async () => {
   const stored = browser('/'); const sdk = fake(false); let calls = 0;
   sdk.login = async () => { calls++; };

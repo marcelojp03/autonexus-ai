@@ -1,0 +1,41 @@
+<nz-page-header nzTitle="Recepción de vehículos" nzSubtitle="CU11 · Condiciones iniciales"></nz-page-header>
+<nav class="actions"><a routerLink="../orders" id="reception-orders-link">Consultar órdenes</a></nav>
+<nz-alert class="panel" nzType="info" nzMessage="El servidor valida vehículo y cliente activos. Esta recepción registra textos; IA, fotografías, S3 y modo offline están pendientes."></nz-alert>
+@if (error()) { <nz-alert role="alert" class="panel" nzType="error" id="reception-error" [nzMessage]="error()!"></nz-alert> }
+@if (notice()) { <nz-alert role="status" class="panel" nzType="success" id="reception-notice" [nzMessage]="notice()!"></nz-alert> }
+<div class="toolbar">
+  <label><input type="checkbox" id="reception-open" [(ngModel)]="openOnly" /> Solo sin orden</label>
+  <button nz-button id="reception-refresh" [disabled]="loading()" (click)="offset = 0; load()">Actualizar recepciones</button>
+</div>
+<nz-table #table id="reception-table" [nzData]="rows()" [nzLoading]="loading()" [nzFrontPagination]="false" [nzShowPagination]="false" [nzScroll]="{ x: '1000px' }" nzNoResult="Sin recepciones para mostrar">
+<thead><tr><th>Fecha</th><th>Vehículo / cliente</th><th>Kilometraje</th><th>Inspección</th><th>Versión</th><th>Orden</th></tr></thead>
+<tbody>@for (row of table.data; track row.id) {
+<tr [attr.data-reception-id]="row.id" [attr.data-has-order]="row.hasOrder">
+<td>{{ localDate(row.receivedAt) }} {{ localTime(row.receivedAt) }}</td><td>{{ row.vehiclePlate }} · {{ row.customerName }}<p>{{ row.id }}</p></td>
+<td>{{ row.mileage }} km</td><td>{{ row.reason }}<p>Síntomas: {{ row.symptoms || 'Sin registrar' }}</p><p>Condiciones: {{ row.visibleConditions || 'Sin registrar' }}</p><p>Cita: {{ row.appointmentId || 'Sin cita' }}</p></td>
+<td>{{ row.version }}</td><td>{{ row.hasOrder ? 'Con orden' : 'Sin orden' }}
+@if (!row.hasOrder) { <a routerLink="../orders" [queryParams]="{ receptionId: row.id }" [attr.data-reception-create-order]="row.id">Crear orden</a> }</td></tr>
+}</tbody></nz-table>
+<div class="actions"><button nz-button id="reception-prev" [disabled]="loading() || offset === 0" (click)="offset = offset - 20; load()">Anterior</button>
+<span role="status">{{ offset + 1 }}–{{ offset + rows().length }} de {{ total() }}</span>
+<button nz-button id="reception-next" [disabled]="loading() || offset + 20 >= total()" (click)="offset = offset + 20; load()">Siguiente</button></div>
+<h2>Registrar recepción</h2>
+@if (lookupError()) { <nz-alert role="status" class="panel" nzType="warning" id="reception-lookup-error" [nzMessage]="lookupError()!"></nz-alert> }
+<div class="toolbar"><label class="field" for="reception-search">Buscar vehículo activo por placa<input nz-input id="reception-search" [(ngModel)]="search" /></label>
+<button nz-button id="reception-search-vehicle" (click)="searchVehicles()">Buscar vehículo</button></div>
+<form #form="ngForm" (ngSubmit)="save()"><fieldset [disabled]="saving()">
+<div class="toolbar"><label class="field" for="reception-vehicle">Vehículo y propietario<select id="reception-vehicle" [ngModel]="vehicleId" (ngModelChange)="selectVehicle($event)" name="vehicleOption"><option value="">Elegí un vehículo</option>
+@for (vehicle of vehicles(); track vehicle.id) { <option [value]="vehicle.id">{{ vehicle.plate }} · {{ vehicle.make }} {{ vehicle.model }} · {{ vehicle.customerName }}</option> }</select></label>
+<label class="field" for="reception-vehicle-id">Identificador de vehículo (si ya lo conocés)<input nz-input id="reception-vehicle-id" name="vehicleId" required [ngModel]="vehicleId" (ngModelChange)="selectVehicle($event)" /></label></div>
+<p>El propietario se obtiene del vehículo; no se puede cambiar desde la recepción.</p>
+<div class="toolbar"><button nz-button type="button" id="reception-load-appointments" [disabled]="!vehicleId" (click)="loadAppointments()">Buscar citas del vehículo</button>
+<label class="field" for="reception-appointment-option">Cita programada (opcional)<select id="reception-appointment-option" name="appointmentOption" [(ngModel)]="appointmentId"><option value="">Sin cita</option>
+@for (appointment of appointments(); track appointment.id) { <option [value]="appointment.id">{{ localDate(appointment.startsAt) }} {{ localTime(appointment.startsAt) }} · {{ appointment.serviceName }}</option> }</select></label>
+<label class="field" for="reception-appointment">Identificador de cita (opcional)<input nz-input id="reception-appointment" name="appointmentId" [(ngModel)]="appointmentId" /></label></div>
+@if (appointmentError()) { <nz-alert class="panel" role="status" id="reception-appointment-error" nzType="warning" [nzMessage]="appointmentError()!"></nz-alert> }
+<div class="toolbar"><label class="field" for="reception-mileage">Kilometraje<input nz-input type="number" id="reception-mileage" name="mileage" [(ngModel)]="mileage" required min="0" max="2000000" step="1" /></label>
+<label class="field" for="reception-reason">Motivo de consulta<input nz-input id="reception-reason" name="reason" [(ngModel)]="reason" required minlength="3" maxlength="300" /></label></div>
+<div class="toolbar"><label class="field" for="reception-symptoms">Síntomas reportados (opcional)<textarea nz-input id="reception-symptoms" name="symptoms" [(ngModel)]="symptoms" maxlength="1000" rows="3"></textarea></label>
+<label class="field" for="reception-conditions">Condiciones visibles (opcional)<textarea nz-input id="reception-conditions" name="conditions" [(ngModel)]="visibleConditions" maxlength="1000" rows="3"></textarea></label></div>
+<button nz-button nzType="primary" type="submit" id="reception-save" [disabled]="form.invalid || saving()" [nzLoading]="saving()">Confirmar recepción</button>
+</fieldset></form>

@@ -89,22 +89,47 @@ for (const definition of publicClients) {
   assert.equal(existing.length, 1, 'client must exist: ' + definition.clientId);
   const client = await api('/clients/' + existing[0].id);
   assert.equal(client.publicClient, true);
-  const mappers = await api('/clients/' + client.id + '/protocol-mappers/models');
-  if (!mappers.some(mapper => mapper.name === audience)) {
-    await api('/clients/' + client.id + '/protocol-mappers/models', 'POST', {
-      name: audience,
-      protocol: 'openid-connect',
-      protocolMapper: 'oidc-audience-mapper',
-      config: {
-        'included.client.audience': audience,
-        'access.token.claim': 'true',
-        'id.token.claim': 'false',
-        'introspection.token.claim': 'true',
-      },
-    });
+  if (definition.clientId === 'autonexus-mf-finance') {
+    const scopes = await api('/client-scopes');
+    const defaults = await api('/clients/' + client.id + '/default-client-scopes');
+    // Keycloak 26 publishes sub through basic, username through profile.
+    // Roles/audiences alone cannot establish a SessionPort identity.
+    for (const name of ['basic', 'profile', 'roles']) {
+      const scope = scopes.find(item => item.name === name);
+      assert.ok(scope, 'required realm client scope must exist: ' + name);
+      if (!defaults.some(item => item.id === scope.id)) {
+        await api('/clients/' + client.id + '/default-client-scopes/' + scope.id, 'PUT');
+      }
+    }
+    const confirmedScopes = await api('/clients/' + client.id + '/default-client-scopes');
+    assert.ok(['basic', 'profile', 'roles'].every(name => confirmedScopes.some(scope => scope.name === name)), 'finance identity and role scopes required');
+    const assigned = await api('/clients/' + client.id + '/scope-mappings/realm');
+    for (const name of ['administrador', 'recepcionista', 'mecanico', 'jefe_taller', 'responsable_financiero']) {
+      if (!assigned.some(role => role.name === name)) {
+        await api('/clients/' + client.id + '/scope-mappings/realm', 'POST', [await api('/roles/' + name)]);
+      }
+    }
   }
-  const confirmed = await api('/clients/' + client.id + '/protocol-mappers/models');
-  assert.ok(confirmed.some(mapper => mapper.name === audience), 'audience mapper expected');
+  const audiences = definition.clientId === 'autonexus-mf-finance'
+    ? [audience, 'autonexus-employees-api', 'autonexus-operations-api'] : [audience];
+  for (const audience of audiences) {
+    const mappers = await api('/clients/' + client.id + '/protocol-mappers/models');
+    if (!mappers.some(mapper => mapper.name === audience)) {
+      await api('/clients/' + client.id + '/protocol-mappers/models', 'POST', {
+        name: audience,
+        protocol: 'openid-connect',
+        protocolMapper: 'oidc-audience-mapper',
+        config: {
+          'included.client.audience': audience,
+          'access.token.claim': 'true',
+          'id.token.claim': 'false',
+          'introspection.token.claim': 'true',
+        },
+      });
+    }
+    const confirmed = await api('/clients/' + client.id + '/protocol-mappers/models');
+    assert.ok(confirmed.some(mapper => mapper.name === audience), 'audience mapper expected');
+  }
 }
 
 console.log('PASS finance audience and public client provisioned; existing clients preserved');

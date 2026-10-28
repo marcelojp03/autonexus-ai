@@ -1,5 +1,13 @@
 # Shell y PWA — primera integración local
 
+## T21 — tres módulos reales (2026-10-28)
+
+El registro tipado modules incluye employees, operations y finance. Finanzas se monta en /finance con host #mf-finance, basePath=/finance y ESM /mfs/finance/main.js; staging copia dist/integrated/ de React además de los dos Angular. Antes de envolver los lifecycles, el loader valida que bootstrap/mount/unmount sean funciones exportadas. El cliente no considera HTTP 200 prueba suficiente de montaje.
+
+El Shell conserva cabecera, navegación y único SessionPort. Finance consulta permisos efectivos en el BFF antes de montar (quotes:read); fallo cerrado y aviso de acceso insuficiente, sin ACL por nombre de rol. Las APIs/BFF siguen autorizando cada operación. Se agregan Recepción y Órdenes a la navegación de Operaciones; Finanzas no recibe enlaces de páginas demo Angular.
+
+Retorno OIDC seguro incluye /finance. React integra CSS y portales en ShadowRoot y destruye su árbol sin logout al salir. El cliente independiente de React usa el mismo helper de sesión en 4204 con propietario por documento, no en el modo integrado. Diagnósticos de single-spa incluyen host/basePath sin credenciales. Los verificadores de scripts/finance conservan errores, recursos fallidos y estados incluso al fallar; no inyectan marcadores ni sustituyen bundles. La evidencia empresarial vigente está en docs/context/STATUS.md; el detalle de dos módulos que sigue es histórico.
+
 ## Runtime vigente de CU01 integrado
 
 Ejecutar esta aplicación desde su carpeta en la raíz principal autonexus-ai. CU01 ya está en main b8d8079; las referencias a .worktrees/cu01-keycloak en la evidencia posterior son históricas. Ambos Compose se administran desde infra/compose e infra/keycloak de raíz, conservando privados y volúmenes. Ubicaciones, comandos y límites: docs/decisions/006-cu01-main-runtime.md y scripts/cu01/README.md (rutas desde la raíz). No se hizo push ni se eliminaron ramas/worktrees.

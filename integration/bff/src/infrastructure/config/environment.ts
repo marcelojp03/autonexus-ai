@@ -4,7 +4,7 @@ import { loadEnvFile } from 'node:process';
 
 const LOCAL_ISSUER = 'http://127.0.0.1:8180/realms/autonexus';
 const OWN_AUDIENCE = 'autonexus-employees-api';
-const LOCAL_ORIGINS = [4200, 4201, 4202].map((port) => `http://127.0.0.1:${port}`);
+const LOCAL_ORIGINS = [4200, 4201, 4202, 4204].map((port) => `http://127.0.0.1:${port}`);
 
 export function loadLocalEnvironment(): void {
   if (existsSync('.env')) loadEnvFile('.env');

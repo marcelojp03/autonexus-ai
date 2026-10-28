@@ -1,24 +1,11 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-// Self hosted so the first paint does not wait on fonts.googleapis.com, which
-// also keeps the app working offline and avoids sending visitor IP addresses to
-// a third party.
+import Keycloak from 'keycloak-js';
 import '@fontsource-variable/inter';
-import App from './App.jsx';
-import ErrorBoundary from '@/components/ErrorBoundary';
-import { ThemeModeProvider } from '@/context/ThemeModeContext.jsx';
-import { AuthProvider } from '@/context/AuthContext.jsx';
-import '@/i18n';
-import './index.css';
+import { browserOidcConfig, createBrowserSession } from '../../browser-auth/session.ts';
+import { mount, unmount } from './spa.jsx';
+import { startStandalone } from './standalone.js';
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <ThemeModeProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </ThemeModeProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+const owner = createBrowserSession(new Keycloak(browserOidcConfig('finance')), { origin: location.origin, application: 'finance' });
+const app = startStandalone({ owner, element: document.getElementById('root'), mount, unmount });
+window.addEventListener('pagehide', () => { void app.dispose(); }, { once: true });
+window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
+if (import.meta.hot) import.meta.hot.dispose(() => { void app.dispose(); });
