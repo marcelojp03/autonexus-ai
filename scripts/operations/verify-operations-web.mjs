@@ -50,6 +50,8 @@ const selectOption = async (page, selectId, text) => {
 
 try {
   await db.connect();
+  // Free the smoke slot from stale synthetic bookings of earlier runs.
+  await db.query("UPDATE operations.appointments SET status='cancelled', cancel_reason=coalesce(cancel_reason,'stale-smoke') WHERE status='scheduled' AND starts_at >= '2026-12-20T00:00:00Z' AND starts_at < '2026-12-21T00:00:00Z'");
   browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
@@ -114,8 +116,8 @@ try {
 
   await page.goto(shell + '/operations/appointments', { waitUntil: 'domcontentloaded' });
   await page.locator('#appointment-table').waitFor({ state: 'visible', timeout: 30000 });
-  await page.locator('#appointment-from').fill('2026-12-01');
-  await page.locator('#appointment-to').fill('2026-12-31');
+  await page.locator('#appointment-from').fill('2026-12-20');
+  await page.locator('#appointment-to').fill('2026-12-20');
   await page.locator('#appointment-search-button').click();
   await selectOption(page, 'appointment-customer', 'Smoke Cliente' + suffix);
   await selectOption(page, 'appointment-vehicle', plate);
@@ -163,6 +165,14 @@ try {
 
   console.log(JSON.stringify({ pass: true, stages, ids, document, plate, serviceName }));
 } catch (error) {
+  try {
+    const page = browser?.contexts()[0]?.pages()[0];
+    if (page) {
+      const notice = await page.locator('#appointment-notice, #appointment-error').first().textContent().catch(() => null);
+      const rows = await page.locator('#appointment-table tbody tr').allTextContents().catch(() => []);
+      console.error(JSON.stringify({ diag: { notice, rows: rows.slice(0, 3) } }));
+    }
+  } catch { /* diagnosis only */ }
   console.error(JSON.stringify({ pass: false, stage: stages.length, message: String(error?.message ?? error).slice(0, 320) }));
   process.exitCode = 1;
 } finally {

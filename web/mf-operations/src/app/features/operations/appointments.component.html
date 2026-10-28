@@ -55,6 +55,10 @@
     }
   </tbody>
 </nz-table>
+@if (total() > rows().length) {
+  <nz-alert class="panel" nzType="warning" nzShowIcon id="appointment-truncated"
+    [nzMessage]="'Mostrando ' + rows().length + ' de ' + total() + ' citas del rango: acotá las fechas o el estado para ver el resto.'"></nz-alert>
+}
 @if (!rows().length && !loading()) {
   <nz-empty id="appointment-empty" nzNotFoundContent="Sin citas en el rango elegido"></nz-empty>
 }

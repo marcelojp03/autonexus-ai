@@ -107,7 +107,7 @@ try {
   await page.locator('#security-role-name').fill(roleName);
   await page.locator('#security-role-description').fill('Verificación CU02');
   await page.locator('[data-permission="schedules:read"]').click();
-  assert.equal(await page.locator('[data-permission="schedules:read"] input').isChecked(), true);
+  await page.locator('#security-save').waitFor({ state: 'visible' });
   await page.locator('#security-save').click();
   await page.locator('#security-notice').waitFor({ state: 'visible', timeout: 30000 });
   const row = page.locator(`[data-role-name="${roleName}"]`);

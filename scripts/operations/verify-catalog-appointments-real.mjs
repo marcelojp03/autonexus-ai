@@ -180,6 +180,41 @@ try {
   created.appointments.push(freed.appointment.id);
   stages.push('cancellation-frees-the-slot');
 
+  // Owner change and deactivation are blocked while the vehicle or customer has scheduled visits.
+  await call('/vehicles/' + customers[0].vehicleId, {
+    method: 'PUT', token: admin, expected: 409,
+    body: { operationId: randomUUID(), expectedVersion: 1, customerId: customers[1].id, plate: 'V1' + suffix, make: 'Suzuki', model: 'Swift', year: 2021, fuelType: 'gasolina' },
+  }).then(body => assert.equal(body.code, 'VEHICLE_HAS_SCHEDULED_APPOINTMENTS'));
+  await call('/customers/' + customers[0].id + '/deactivate', {
+    method: 'POST', token: admin, expected: 409, body: { operationId: randomUUID(), expectedVersion: 1 },
+  }).then(body => assert.equal(body.code, 'CUSTOMER_HAS_SCHEDULED_APPOINTMENTS'));
+  stages.push('scheduled-visits-block-owner-change-and-deactivation');
+
+  // Concurrency: one free slot and two simultaneous requests must not both succeed.
+  const slot = at(17);
+  const base = await call('/appointments', {
+    method: 'POST', token: reception, expected: 201,
+    body: { operationId: randomUUID(), customerId: customers[0].id, vehicleId: customers[0].vehicleId, serviceId: service.service.id, startsAt: slot },
+  });
+  created.appointments.push(base.appointment.id);
+  const attemptAppointment = async customer => {
+    const response = await fetch('http://127.0.0.1:8081/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + reception },
+      body: JSON.stringify({ operationId: randomUUID(), customerId: customer.id, vehicleId: customer.vehicleId, serviceId: service.service.id, startsAt: slot }),
+      signal: AbortSignal.timeout(20000),
+    });
+    return { status: response.status, body: await response.json().catch(() => null) };
+  };
+  const concurrent = await Promise.all([attemptAppointment(customers[1]), attemptAppointment(customers[2])]);
+  const statuses = concurrent.map(item => item.status).sort();
+  assert.deepEqual(statuses, [201, 409], 'only one of two simultaneous bookings may take the last slot: ' + JSON.stringify(concurrent));
+  const blocked = concurrent.find(item => item.status === 409);
+  assert.equal(blocked.body.code, 'WORKSHOP_CAPACITY_EXCEEDED');
+  const booked = concurrent.find(item => item.status === 201);
+  if (booked) created.appointments.push(booked.body.appointment.id);
+  stages.push('concurrent-booking-respects-capacity');
+
   const window = await call('/appointments?from=' + encodeURIComponent(at(8)) + '&to=' + encodeURIComponent(at(15)), { token: reception });
   assert.ok(window.items.length >= 3);
   const cancelledOnly = await call('/appointments?status=cancelled', { token: head });

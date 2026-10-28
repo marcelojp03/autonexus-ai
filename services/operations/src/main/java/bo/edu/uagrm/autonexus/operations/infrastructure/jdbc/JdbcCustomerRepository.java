@@ -99,7 +99,7 @@ public class JdbcCustomerRepository extends OperationsStore implements CustomerR
                 .update();
         if (rows == 0) throw OperationsError.conflict("DUPLICATE_DOCUMENT");
         Customer created = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("customer", id, "created", actor, 1, created);
         return new Mutation<>(created, false);
     }
@@ -130,9 +130,18 @@ public class JdbcCustomerRepository extends OperationsStore implements CustomerR
                 .update();
         if (rows == 0) throw OperationsError.conflict("VERSION_CONFLICT");
         Customer updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("customer", id, "updated", actor, version, updated);
         return new Mutation<>(updated, false);
+    }
+
+    private void requireNoScheduledAppointments(UUID customerId) {
+        int scheduled = jdbc.sql("""
+                        SELECT count(*) FROM operations.appointments
+                         WHERE customer_id = ? AND status = 'scheduled'
+                        """)
+                .param(customerId).query(Integer.class).single();
+        if (scheduled > 0) throw OperationsError.conflict("CUSTOMER_HAS_SCHEDULED_APPOINTMENTS");
     }
 
     @Override
@@ -144,9 +153,10 @@ public class JdbcCustomerRepository extends OperationsStore implements CustomerR
         Customer current = get(id);
         if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
         if ("inactive".equals(current.status())) {
-            remember(operationId, print, id);
+            if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
             return new Mutation<>(current, false);
         }
+        requireNoScheduledAppointments(id);
         int version = expectedVersion + 1;
         int rows = jdbc.sql("""
                         UPDATE operations.customers SET status = 'inactive', version = ?, updated_at = ?, updated_by = ?
@@ -156,7 +166,7 @@ public class JdbcCustomerRepository extends OperationsStore implements CustomerR
                 .update();
         if (rows == 0) throw OperationsError.conflict("VERSION_CONFLICT");
         Customer updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("customer", id, "deactivated", actor, version, updated);
         return new Mutation<>(updated, false);
     }

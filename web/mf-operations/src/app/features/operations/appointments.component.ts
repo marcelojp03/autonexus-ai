@@ -15,8 +15,10 @@ import {
   type Appointment, type Customer, type ServiceItem, type Vehicle,
 } from '../operations/operations.contract';
 
-const today = (): string => new Date().toISOString().slice(0, 10);
-const daysFrom = (days: number): string => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+/** Default window in the workshop zone (UTC-4), not in UTC. */
+const workshopInstant = (offsetDays = 0): Date => new Date(Date.now() + offsetDays * 86400000 - 4 * 3600000);
+const today = (): string => workshopInstant().toISOString().slice(0, 10);
+const daysFrom = (days: number): string => workshopInstant(days).toISOString().slice(0, 10);
 
 @Component({
   selector: 'anx-appointments',
@@ -36,6 +38,7 @@ export class AppointmentsComponent implements OnInit {
   readonly localTime = localTime;
 
   readonly rows = signal<Appointment[]>([]);
+  readonly total = signal(0);
   readonly customers = signal<Customer[]>([]);
   readonly services = signal<ServiceItem[]>([]);
   readonly vehicles = signal<Vehicle[]>([]);
@@ -71,6 +74,7 @@ export class AppointmentsComponent implements OnInit {
         ...(this.status ? { status: this.status } : {}),
       });
       this.rows.set(page.items);
+      this.total.set(page.total);
     } catch (failure) {
       this.error.set(explain(failure));
     } finally {

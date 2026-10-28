@@ -18,9 +18,12 @@ abstract class OperationsStore {
         this.json = json;
     }
 
+    /** Unit separator: it never appears in validated text, so distinct contents never collide. */
+    private static final char SEPARATOR = '\u001F';
+
     protected static String fingerprint(Object... parts) {
         StringBuilder builder = new StringBuilder();
-        for (Object part : parts) builder.append(part == null ? "" : part.toString()).append('|');
+        for (Object part : parts) builder.append(part == null ? "" : part.toString()).append(SEPARATOR);
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(builder.toString().getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();
@@ -48,10 +51,25 @@ abstract class OperationsStore {
         }
     }
 
-    protected void remember(UUID operationId, String fingerprint, UUID entityId) {
-        jdbc.sql("INSERT INTO operations.operations_operations(operation_id, fingerprint, result) VALUES(?,?,?::jsonb)")
+    /**
+     * Records the operation result. Returns true when this call stored it and false when a
+     * concurrent request stored the same operation first (a replay). A different fingerprint is a
+     * conflict, never a silent replay.
+     */
+    protected boolean remember(UUID operationId, String fingerprint, UUID entityId) {
+        int rows = jdbc.sql("""
+                        INSERT INTO operations.operations_operations(operation_id, fingerprint, result)
+                        VALUES(?,?,?::jsonb) ON CONFLICT (operation_id) DO NOTHING
+                        """)
                 .params(operationId, fingerprint, "{\"id\":\"" + entityId + "\"}")
                 .update();
+        if (rows == 1) return true;
+        String stored = jdbc.sql("SELECT fingerprint FROM operations.operations_operations WHERE operation_id = ?")
+                .param(operationId).query(String.class).optional().orElse(null);
+        if (stored == null || !stored.equals(fingerprint)) {
+            throw bo.edu.uagrm.autonexus.operations.domain.OperationsError.conflict("IDEMPOTENCY_CONFLICT");
+        }
+        return false;
     }
 
     protected void audit(String entity, UUID entityId, String action, String actor, int version, Object snapshot) {

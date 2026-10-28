@@ -179,6 +179,8 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
         var replay = replayed(operationId, print);
         if (replay.isPresent()) return new Mutation<>(get(replay.get()), true);
         jdbc.sql(SLOT_LOCK).query((rs, index) -> null).list();
+        var afterLock = replayed(operationId, print);
+        if (afterLock.isPresent()) return new Mutation<>(get(afterLock.get()), true);
         requireAssignable(draft.customerId(), draft.vehicleId());
         Instant endsAt = draft.startsAt().plus(serviceDuration(draft.serviceId()));
         requireSlot(draft.vehicleId(), draft.serviceId(), draft.startsAt(), endsAt, null);
@@ -195,7 +197,7 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
                 .update();
         if (rows == 0) throw OperationsError.conflict("APPOINTMENT_DUPLICATE");
         Appointment created = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("appointment", id, "scheduled", actor, 1, created);
         return new Mutation<>(created, false);
     }
@@ -211,6 +213,8 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
         if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
         if (!"scheduled".equals(current.status())) throw OperationsError.conflict("APPOINTMENT_NOT_SCHEDULED");
         jdbc.sql(SLOT_LOCK).query((rs, index) -> null).list();
+        var afterLock = replayed(operationId, print);
+        if (afterLock.isPresent()) return new Mutation<>(get(afterLock.get()), true);
         requireAssignable(current.customerId(), current.vehicleId());
         Instant endsAt = startsAt.plus(serviceDuration(current.serviceId()));
         requireSlot(current.vehicleId(), current.serviceId(), startsAt, endsAt, id);
@@ -225,7 +229,7 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
                 .update();
         if (rows == 0) throw OperationsError.conflict("VERSION_CONFLICT");
         Appointment updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("appointment", id, "rescheduled", actor, version, updated);
         return new Mutation<>(updated, false);
     }
@@ -239,7 +243,7 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
         Appointment current = get(id);
         if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
         if ("cancelled".equals(current.status())) {
-            remember(operationId, print, id);
+            if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
             return new Mutation<>(current, false);
         }
         jdbc.sql(SLOT_LOCK).query((rs, index) -> null).list();
@@ -253,7 +257,7 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
                 .update();
         if (rows == 0) throw OperationsError.conflict("VERSION_CONFLICT");
         Appointment updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("appointment", id, "cancelled", actor, version, updated);
         return new Mutation<>(updated, false);
     }

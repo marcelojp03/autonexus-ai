@@ -67,7 +67,7 @@ PostgreSQL propio (`autonexus_operations`), migraciones Flyway versionadas, `syn
 - `vehicle_owners(id uuid pk, vehicle_id fk, customer_id fk, from_at timestamptz, to_at timestamptz null, changed_by)` — trazabilidad de cambios de propietario, append-only.
 - `service_catalog(id uuid pk, name unique lower(name), description, category, estimated_minutes, reference_rate numeric(10,2), active, version, timestamps, actor)`.
 - `appointments(id uuid pk, customer_id fk, vehicle_id fk, service_id fk, starts_at timestamptz, ends_at timestamptz, status scheduled|cancelled, notes null, cancel_reason null, version, timestamps, actor)`.
-- `appointment_events(id uuid pk, appointment_id fk, action scheduled|rescheduled|cancelled, actor_subject, occurred_at, version, snapshot jsonb)` — auditoría append-only.
+- La auditoría de citas usa `operations_history` (`entity='appointment'`) con las acciones `scheduled`, `rescheduled` y `cancelled`; no se duplica en una tabla específica.
 - `operations_operations(operation_id uuid pk, fingerprint text, result jsonb)` — idempotencia.
 - `operations_history(id uuid pk, entity, entity_id, action, actor_subject, occurred_at, version, snapshot jsonb)` — auditoría de clientes y vehículos.
 
@@ -77,7 +77,7 @@ Reglas: `unique` sobre documento normalizado y placa normalizada; claves foráne
 
 **Cliente (CU06).** Obligatorios: nombres, apellidos, documento y teléfono. Textos recortados y con espacios colapsados; 1–100 caracteres para nombres/apellidos; documento `^[0-9A-Z]{4,20}$` tras normalizar (mayúsculas, sin espacios ni guiones); teléfono 7–25 del conjunto `0-9 + ( ) . -` con al menos un dígito; correo opcional válido (dot-atom ASCII, ≤254); dirección opcional ≤200. Documento duplicado ⇒ `409 DUPLICATE_DOCUMENT`. Búsqueda literal por nombre, apellido o documento (sin regex). Listado paginado `limit 1..100`, `offset ≥0`, orden `createdAt ASC, id ASC`. Desactivar conserva historial; un cliente inactivo no admite vehículos ni citas nuevas.
 
-**Vehículo (CU07).** Obligatorios: cliente, placa, marca, modelo, año, combustible. Placa normalizada a mayúsculas sin espacios/guiones, `^[0-9A-Z]{5,10}$`; duplicada ⇒ `409 DUPLICATE_PLATE`. Marca/modelo 1–60; año entre 1950 y el año actual + 1; combustible `gasolina|diesel|gas|electrico|hibrido`; color opcional ≤40. El cliente debe existir (`404 CUSTOMER_NOT_FOUND`) y estar activo (`409 CUSTOMER_INACTIVE`). Cambiar de cliente actualiza `vehicles.customer_id`, cierra la fila vigente de `vehicle_owners` y abre otra, conservando el historial. Un vehículo inactivo no admite citas nuevas.
+**Vehículo (CU07).** Obligatorios: cliente, placa, marca, modelo, año, combustible. Placa normalizada a mayúsculas sin espacios/guiones, `^[0-9A-Z]{5,10}$`; duplicada ⇒ `409 DUPLICATE_PLATE`. Marca/modelo 1–60; año entre 1950 y el año actual + 1; combustible `gasolina|diesel|gas|electrico|hibrido`; color opcional ≤40. El cliente debe existir (`404 CUSTOMER_NOT_FOUND`) y estar activo (`409 CUSTOMER_INACTIVE`). Cambiar de cliente actualiza `vehicles.customer_id`, cierra la fila vigente de `vehicle_owners` y abre otra, conservando el historial. El cambio de propietario y la desactivación de un vehículo con citas programadas se rechazan (`VEHICLE_HAS_SCHEDULED_APPOINTMENTS`); desactivar un cliente con citas programadas también (`CUSTOMER_HAS_SCHEDULED_APPOINTMENTS`), para no dejar citas sin propietario ni reprogramación posible. Un vehículo inactivo no admite citas nuevas.
 
 **Servicio (CU09).** Nombre único sin distinguir mayúsculas, 3–80; descripción 1–300; categoría `mantenimiento|reparacion|diagnostico|otros`; `estimatedMinutes` entero 15–480; `referenceRate` decimal ≥0 ≤9 999 999,99 con dos decimales; duplicado ⇒ `409 DUPLICATE_SERVICE`; duración o tarifa inválida ⇒ `400 VALIDATION_ERROR`. Desactivar lo retira de citas nuevas conservando las existentes y el historial; no hay borrado.
 
@@ -99,7 +99,7 @@ Reprogramar exige `expectedVersion` y repite todas las validaciones de disponibi
 | `GET /vehicles` | `vehicles:read` | `limit,offset,status,customerId,search` | página de `Vehicle` |
 | `GET /vehicles/:id` | `vehicles:read` | — | `Vehicle` |
 | `POST /vehicles` | `vehicles:write` | `{operationId,customerId,plate,make,model,year,fuelType,color?}` | 201 `{vehicle,replayed}` |
-| `PUT /vehicles/:id` | `vehicles:write` | `{operationId,expectedVersion,...}` | 200 `{vehicle,ownerChanged,replayed}` |
+| `PUT /vehicles/:id` | `vehicles:write` | `{operationId,expectedVersion,...}` | 200 `{vehicle,replayed}` |
 | `POST /vehicles/:id/deactivate` | `vehicles:write` | `{operationId,expectedVersion}` | 200 `{vehicle,replayed}` |
 | `GET /services` | `catalog:read` | `limit,offset,active,search` | página de `Service` |
 | `GET /services/:id` | `catalog:read` | — | `Service` |

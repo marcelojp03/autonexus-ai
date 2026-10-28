@@ -96,7 +96,7 @@ public class JdbcServiceRepository extends OperationsStore implements ServiceRep
                 .update();
         if (rows == 0) throw OperationsError.conflict("DUPLICATE_SERVICE");
         ServiceOffering created = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("service", id, "created", actor, 1, created);
         return new Mutation<>(created, false);
     }
@@ -125,7 +125,7 @@ public class JdbcServiceRepository extends OperationsStore implements ServiceRep
                 .update();
         if (rows == 0) throw OperationsError.conflict("VERSION_CONFLICT");
         ServiceOffering updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("service", id, "updated", actor, version, updated);
         return new Mutation<>(updated, false);
     }
@@ -139,7 +139,7 @@ public class JdbcServiceRepository extends OperationsStore implements ServiceRep
         ServiceOffering current = get(id);
         if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
         if (!current.active()) {
-            remember(operationId, print, id);
+            if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
             return new Mutation<>(current, false);
         }
         int version = expectedVersion + 1;
@@ -151,7 +151,7 @@ public class JdbcServiceRepository extends OperationsStore implements ServiceRep
                 .update();
         if (rows == 0) throw OperationsError.conflict("VERSION_CONFLICT");
         ServiceOffering updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("service", id, "deactivated", actor, version, updated);
         return new Mutation<>(updated, false);
     }

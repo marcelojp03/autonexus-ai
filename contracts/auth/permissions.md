@@ -68,6 +68,6 @@ El paso 3 es lo que hace que retirar una asignación tenga efecto en la siguient
 
 ## Ventana de vigencia
 
-- Cambio de permisos o retiro de asignación: efecto en la siguiente petición a Empleados; en Operaciones y en el BFF hasta 30 s por su caché.
+- Cambio de permisos o retiro de asignación: efecto en la siguiente petición a Empleados; en Operaciones y en el BFF hasta 30 s por su caché. Ese caché también recuerda un vacío: si Empleados no responde, la denegación se mantiene hasta 30 s aunque el servicio vuelva antes.
 - Un JWT ya emitido conserva su lista de roles hasta `exp+5 s` (60 s + 5 s). Como los permisos se resuelven contra el catálogo y las asignaciones persistidas, un rol retirado deja de otorgar permisos en la siguiente petición, pero **no** se revocan tokens ni sesiones abiertas.
 - Un empleado con identidad creada y sin credencial habilitada no puede iniciar sesión: CU02 asigna roles, no habilita acceso.

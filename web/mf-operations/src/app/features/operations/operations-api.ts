@@ -126,6 +126,8 @@ const FAILURES: Readonly<Record<string, string>> = Object.freeze({
   APPOINTMENT_NOT_SCHEDULED: 'La cita ya no está programada.',
   WORKSHOP_CAPACITY_EXCEEDED: 'El taller no tiene capacidad en esa franja.',
   VERSION_CONFLICT: 'Otra persona modificó el registro; recargá y reintentá.',
+  VEHICLE_HAS_SCHEDULED_APPOINTMENTS: 'El vehículo tiene citas programadas: cancelalas o reprogramalas antes de cambiar el propietario o desactivarlo.',
+  CUSTOMER_HAS_SCHEDULED_APPOINTMENTS: 'El cliente tiene citas programadas: cancelalas antes de desactivarlo.',
   SERVICE_UNAVAILABLE: 'El servicio no está disponible en este momento.',
 });
 

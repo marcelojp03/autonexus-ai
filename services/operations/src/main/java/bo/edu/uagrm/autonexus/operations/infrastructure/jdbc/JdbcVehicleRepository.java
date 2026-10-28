@@ -104,6 +104,16 @@ public class JdbcVehicleRepository extends OperationsStore implements VehicleRep
         return rows.get(0);
     }
 
+    /** A vehicle with scheduled appointments cannot change owner nor be deactivated. */
+    private void requireNoScheduledAppointments(UUID vehicleId) {
+        int scheduled = jdbc.sql("""
+                        SELECT count(*) FROM operations.appointments
+                         WHERE vehicle_id = ? AND status = 'scheduled'
+                        """)
+                .param(vehicleId).query(Integer.class).single();
+        if (scheduled > 0) throw OperationsError.conflict("VEHICLE_HAS_SCHEDULED_APPOINTMENTS");
+    }
+
     private void openOwner(UUID vehicleId, UUID customerId, String actor) {
         jdbc.sql("""
                         INSERT INTO operations.vehicle_owners(id, vehicle_id, customer_id, from_at, to_at, changed_by)
@@ -136,7 +146,7 @@ public class JdbcVehicleRepository extends OperationsStore implements VehicleRep
         if (rows == 0) throw OperationsError.conflict("DUPLICATE_PLATE");
         openOwner(id, draft.customerId(), actor);
         Vehicle created = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("vehicle", id, "created", actor, 1, created);
         return new Mutation<>(created, false);
     }
@@ -157,6 +167,7 @@ public class JdbcVehicleRepository extends OperationsStore implements VehicleRep
             if (clash > 0) throw OperationsError.conflict("DUPLICATE_PLATE");
         }
         boolean ownerChanged = !current.customerId().equals(draft.customerId());
+        if (ownerChanged) requireNoScheduledAppointments(id);
         int version = expectedVersion + 1;
         int rows = jdbc.sql("""
                         UPDATE operations.vehicles
@@ -176,7 +187,7 @@ public class JdbcVehicleRepository extends OperationsStore implements VehicleRep
             openOwner(id, draft.customerId(), actor);
         }
         Vehicle updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("vehicle", id, ownerChanged ? "owner-changed" : "updated", actor, version, updated);
         return new Mutation<>(updated, false);
     }
@@ -190,9 +201,10 @@ public class JdbcVehicleRepository extends OperationsStore implements VehicleRep
         Vehicle current = get(id);
         if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
         if ("inactive".equals(current.status())) {
-            remember(operationId, print, id);
+            if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
             return new Mutation<>(current, false);
         }
+        requireNoScheduledAppointments(id);
         int version = expectedVersion + 1;
         int rows = jdbc.sql("""
                         UPDATE operations.vehicles SET status = 'inactive', version = ?, updated_at = ?, updated_by = ?
@@ -202,7 +214,7 @@ public class JdbcVehicleRepository extends OperationsStore implements VehicleRep
                 .update();
         if (rows == 0) throw OperationsError.conflict("VERSION_CONFLICT");
         Vehicle updated = get(id);
-        remember(operationId, print, id);
+        if (!remember(operationId, print, id)) return new Mutation<>(get(id), true);
         audit("vehicle", id, "deactivated", actor, version, updated);
         return new Mutation<>(updated, false);
     }
