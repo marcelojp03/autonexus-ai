@@ -76,3 +76,7 @@ Git: un único monorepositorio en la raíz `autonexus-ai`, rama inicial `main`, 
 Notion es la fuente de decisiones funcionales; el repositorio documenta contratos y estado comprobado. Sus copias están en `docs/reference/`. La propuesta antigua de Google Docs es un antecedente con decisiones superadas.
 El modelo de dominio y sus estados/cardinalidades son propuestas de revisión, no reglas ya aprobadas. Quedan por definir política de reservas, cancelaciones, reasignación, pagos parciales/entrega, vigencia offline, dataset y detalle de evaluación del docente.
 No fijar versiones de frameworks ni contratos de producción sin inicializar y comprobar compatibilidad.
+
+## Persistencia (2026-10-28)
+
+Persistencia sin ORM mapeado: Operaciones usa `JdbcClient` con SQL parametrizado y Flyway; Empleados usa TypeORM para conexión, transacciones y migraciones con SQL explícito y `entities: []`; Finanzas (Laravel) usa el Query Builder con SQL explícito; el BFF no tiene ORM ni acceso directo a bases. DDD, hexagonal y Clean Architecture no exigen entidades ORM.

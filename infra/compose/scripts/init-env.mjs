@@ -8,6 +8,7 @@ const targets = [
   new URL('../.env', import.meta.url),
   new URL('../../../services/operations/.env', import.meta.url),
   new URL('../../../services/employees/.env', import.meta.url),
+  new URL('../../../services/finance/.env', import.meta.url),
 ];
 if (targets.some(existsSync)) throw new Error('Local .env configuration already exists; nothing was overwritten.');
 for (const target of targets) {
@@ -17,12 +18,15 @@ for (const target of targets) {
 const adminPassword = randomBytes(24).toString('base64url');
 const operationsPassword = randomBytes(24).toString('base64url');
 const employeesPassword = randomBytes(24).toString('base64url');
+const financePassword = randomBytes(24).toString('base64url');
 const values = [
   { POSTGRES_PORT: '55432', POSTGRES_ADMIN_USER: 'autonexus_admin', POSTGRES_ADMIN_PASSWORD: adminPassword,
     OPERATIONS_DB: 'autonexus_operations', OPERATIONS_USER: 'autonexus_operations', OPERATIONS_PASSWORD: operationsPassword,
-    EMPLOYEES_DB: 'autonexus_employees', EMPLOYEES_USER: 'autonexus_employees', EMPLOYEES_PASSWORD: employeesPassword },
+    EMPLOYEES_DB: 'autonexus_employees', EMPLOYEES_USER: 'autonexus_employees', EMPLOYEES_PASSWORD: employeesPassword,
+    FINANCE_DB: 'autonexus_finance', FINANCE_USER: 'autonexus_finance', FINANCE_PASSWORD: financePassword },
   { PORT: '8081', DB_HOST: '127.0.0.1', DB_PORT: '55432', DB_NAME: 'autonexus_operations', DB_USER: 'autonexus_operations', DB_PASSWORD: operationsPassword },
   { PORT: '3002', DB_HOST: '127.0.0.1', DB_PORT: '55432', DB_NAME: 'autonexus_employees', DB_USER: 'autonexus_employees', DB_PASSWORD: employeesPassword },
+  { APP_PORT: '8000', DB_HOST: '127.0.0.1', DB_PORT: '55432', DB_NAME: 'autonexus_finance', DB_USER: 'autonexus_finance', DB_PASSWORD: financePassword, EMPLOYEES_API_URL: 'http://127.0.0.1:3002' },
 ];
 const created = [];
 try {
@@ -35,4 +39,4 @@ try {
   for (const target of created) unlinkSync(target);
   throw new Error('Could not create local configuration (' + (error.code ?? 'unknown') + '); partial files were removed.');
 }
-console.log('Created 3 Git-ignored .env files with distinct local credentials. Values were not printed.');
+console.log('Created 4 Git-ignored .env files with distinct local credentials. Values were not printed.');

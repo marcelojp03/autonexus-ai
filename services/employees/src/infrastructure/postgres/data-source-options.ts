@@ -5,6 +5,7 @@ import { CreateEmployeeManagement1793023200000 } from './migrations/179302320000
 import { CreateScheduling1793109000000 } from './migrations/1793109000000-create-scheduling.js';
 import { CreateSecurity1793196000000 } from './migrations/1793196000000-create-security.js';
 import { ExtendPermissionsCatalog1793282400000 } from './migrations/1793282400000-extend-permissions-catalog.js';
+import { ExtendFlowPermissions1793368800000 } from './migrations/1793368800000-extend-flow-permissions.js';
 
 export function dataSourceOptions(): DataSourceOptions {
   return {
@@ -13,7 +14,7 @@ export function dataSourceOptions(): DataSourceOptions {
     synchronize: false,
     migrationsRun: false,
     entities: [],
-    migrations: [CreateEmployeesSchema1792886400000, CreateEmployeeManagement1793023200000, CreateScheduling1793109000000, CreateSecurity1793196000000, ExtendPermissionsCatalog1793282400000],
+    migrations: [CreateEmployeesSchema1792886400000, CreateEmployeeManagement1793023200000, CreateScheduling1793109000000, CreateSecurity1793196000000, ExtendPermissionsCatalog1793282400000, ExtendFlowPermissions1793368800000],
     migrationsTableName: 'employees_migrations',
     logging: false,
     installExtensions: false,

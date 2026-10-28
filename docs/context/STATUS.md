@@ -1,5 +1,22 @@
 # Estado comprobado
 
+## Recepción, órdenes y Finanzas con Laravel (2026-10-28)
+
+**Resumen vigente.** Operaciones suma CU11 recepción e inspección y CU12 orden de trabajo; Finanzas nace como servicio Laravel con PostgreSQL propio para CU13 cotizaciones versionadas y CU14 decisión del cliente. El catálogo pasó a **21 permisos** con actores por CU; Finanzas valida el token con OpenSSL y JWKS, audiencia `autonexus-finance-api` y permisos resueltos contra Empleados con caché de 30 s. Una orden nace `pending_quote` y **no asigna mecánico**; aprobar una cotización **no confirma el servicio**: eso es CU15, cuyo contrato queda en `contracts/rest/saga.md`.
+
+| Verificación | Resultado |
+| --- | --- |
+| Operaciones `mvnw test` / package | PASS 82 pruebas y jar exit0 |
+| API real recepción/orden (`scripts/operations/verify-receptions-orders-real.mjs`) | PASS 7 etapas/exit0: permisos, recepción abierta única, kilometraje, orden con número y copia de tarifa, servicio inactivo, orden duplicada, auditoría |
+| Finanzas: migraciones y PHPUnit | PASS tablas creadas y 6 pruebas del calculador |
+| API real cotizaciones (`scripts/finance/verify-quotes-real.mjs`) | PASS 8 etapas/exit0: cálculo en servidor, descuento máximo, total inconsistente, versionado con `superseded`, aprobación inmutable, expiración, rechazo con evidencia, idempotencia |
+| BFF `pnpm test` / `test:e2e` / build | PASS 22 unitarias + 13 HTTP y build exit0 |
+| BFF real (`scripts/operations/verify-flow-bff-real.mjs`) | PASS 6 etapas/exit0: recepción → orden → cotización → decisión por GraphQL con denegaciones por permiso |
+
+**Pendiente declarado, no completado:** integración de `web/mf-finance` (React 19 + Vite 8 + Ant Design 6, template localizado en `C:\Programacion\templates\react\vitedash-vite-antd-dashboard-template`) con single-spa y la sesión del Shell, y pantallas de recepción/orden en `mf-operations`. No se declaran entregadas. Tampoco hay inspección asistida por IA, fotografías en S3, cobros ni indicadores. CU15 sigue sin implementar.
+
+**Persistencia documentada:** Operaciones usa `JdbcClient` con SQL parametrizado y Flyway; Empleados usa TypeORM para conexión, transacciones y migraciones con SQL explícito y `entities: []`; Finanzas usa el Query Builder de Laravel con SQL explícito; el BFF no tiene ORM. No existen entidades ORM mapeadas.
+
 ## Bloque operativo — CU06, CU07, CU09 y CU10 entregados y verificados (2026-10-28)
 
 **Resumen vigente.** Rama `work/marcelo`. Operaciones (MS01) deja de ser un esqueleto: clientes, vehículos con historial de propietario, catálogo de servicios y citas, con persistencia PostgreSQL propia (Flyway V2–V4), autorización por permiso en REST y BFF, y pantallas en `mf-operations`. El catálogo de CU02 pasó de seis a **catorce permisos**; los roles iniciales se resembraron respetando los actores de cada CU (`administrador` todos, `jefe_taller` suma catálogo y agenda, `recepcionista` clientes/vehículos/citas, `mecanico` y `responsable_financiero` sin permisos). CU03 sigue administrador-only y CU04 no cambia.

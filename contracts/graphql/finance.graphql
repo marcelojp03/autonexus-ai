@@ -1,0 +1,88 @@
+"""Finanzas contract (CU13, CU14). Extends the employees schema executed by integration/bff."""
+
+enum QuoteStatus { pending approved rejected superseded expired }
+
+type QuoteItem {
+  serviceReference: String!
+  description: String!
+  quantity: Int!
+  unitPrice: Float!
+  lineTotal: Float!
+}
+type QuoteDecision {
+  decision: String!
+  decidedBy: String!
+  evidence: String!
+  reason: String
+  decidedAt: DateTime!
+}
+"""An estimated cost. Approval records the client decision but does not confirm the service."""
+type Quote {
+  id: UUID!
+  orderReference: String!
+  orderNumber: String!
+  customerReference: String!
+  vehicleReference: String!
+  vehiclePlate: String!
+  version: Int!
+  status: QuoteStatus!
+  subtotal: Float!
+  discountPercent: Float!
+  discountAmount: Float!
+  taxPercent: Float!
+  taxAmount: Float!
+  total: Float!
+  currency: String!
+  notes: String
+  validUntil: Date!
+  decision: QuoteDecision
+  items: [QuoteItem!]!
+}
+type QuotePage { items: [Quote!]! total: Int! limit: Int! offset: Int! }
+type QuoteResult { quote: Quote! orderStatusHint: String replayed: Boolean! }
+
+input QuoteItemInput {
+  serviceReference: String!
+  description: String!
+  quantity: Int!
+  unitPrice: Float!
+}
+input CreateQuoteInput {
+  operationId: UUID!
+  orderReference: String!
+  orderNumber: String!
+  customerReference: String!
+  vehicleReference: String!
+  vehiclePlate: String!
+  discountPercent: Float
+  taxPercent: Float
+  validUntil: Date!
+  notes: String
+  items: [QuoteItemInput!]!
+}
+input ReviseQuoteInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  discountPercent: Float
+  taxPercent: Float
+  validUntil: Date
+  notes: String
+  items: [QuoteItemInput!]!
+}
+input DecideQuoteInput {
+  operationId: UUID!
+  decision: String!
+  evidence: String!
+  reason: String
+}
+
+extend type Query {
+  quotes(limit: Int, offset: Int, orderReference: String, status: QuoteStatus): QuotePage!
+  quote(id: UUID!): Quote!
+}
+
+extend type Mutation {
+  createQuote(input: CreateQuoteInput!): QuoteResult!
+  reviseQuote(id: UUID!, input: ReviseQuoteInput!): QuoteResult!
+  decideQuote(id: UUID!, input: DecideQuoteInput!): QuoteResult!
+}

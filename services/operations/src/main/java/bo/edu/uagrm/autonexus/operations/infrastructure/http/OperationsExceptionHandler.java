@@ -30,8 +30,12 @@ public class OperationsExceptionHandler {
         return body(400, "VALIDATION_ERROR");
     }
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(OperationsExceptionHandler.class);
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> unexpected() {
+    public ResponseEntity<Map<String, Object>> unexpected(Exception error) {
+        // The client gets a generic body; the cause stays in the service log.
+        LOG.error("Unhandled operations failure: {}", error.toString());
         return body(500, "INTERNAL_ERROR");
     }
 

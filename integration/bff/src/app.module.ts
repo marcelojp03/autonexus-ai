@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BusinessGraphql } from './application/business-graphql.js';
 import { HttpEmployeesGateway } from './application/employees-gateway.js';
 import { HttpOperationsGateway } from './application/operations-gateway.js';
+import { HttpFinanceGateway } from './application/finance-gateway.js';
 import { AccessTokenVerifier } from './infrastructure/auth/token-verifier.js';
 import { AdministratorGuard } from './infrastructure/auth/administrator.guard.js';
 import { bffEnvironment, type BffConfiguration } from './infrastructure/config/environment.js';
@@ -30,10 +31,15 @@ const configuration = (): BffConfiguration => bffEnvironment();
       useFactory: (config: BffConfiguration) => new HttpOperationsGateway(config.operationsUrl),
     },
     {
+      provide: HttpFinanceGateway,
+      inject: ['BFF_CONFIGURATION'],
+      useFactory: (config: BffConfiguration) => new HttpFinanceGateway(config.financeUrl),
+    },
+    {
       provide: BusinessGraphql,
-      inject: [HttpEmployeesGateway, HttpOperationsGateway, 'BFF_CONFIGURATION'],
-      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, config: BffConfiguration) =>
-        new BusinessGraphql(employees, operations, config.schemaPaths),
+      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION'],
+      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration) =>
+        new BusinessGraphql(employees, operations, finance, config.schemaPaths),
     },
   ],
 })

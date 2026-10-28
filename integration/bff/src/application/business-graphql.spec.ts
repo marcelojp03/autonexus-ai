@@ -7,13 +7,17 @@ const schemaPath = resolve(process.cwd(), '../../contracts/graphql/employees.gra
 const schedulePath = resolve(process.cwd(), '../../contracts/graphql/schedules.graphql');
 const securityPath = resolve(process.cwd(), '../../contracts/graphql/security.graphql');
 const operationsPath = resolve(process.cwd(), '../../contracts/graphql/operations.graphql');
+const financePath = resolve(process.cwd(), '../../contracts/graphql/finance.graphql');
 const ADMIN = Object.freeze({ subject: 'synthetic-admin', roles: ['administrador'] as const });
 const HEAD = Object.freeze({ subject: 'synthetic-head', roles: ['jefe_taller'] as const });
+const LIMITED = Object.freeze({ subject: 'synthetic-limited', roles: ['recepcionista'] as const });
 const EMPLOYEE_ID = '11111111-1111-4111-8111-111111111111';
 const ALL = [
   'employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write',
   'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write',
   'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
+  'receptions:read', 'receptions:write', 'orders:read', 'orders:write',
+  'quotes:read', 'quotes:write', 'quotes:decide',
 ];
 const effectiveFor = (token: string): string[] =>
   token === 'head-token' ? ['schedules:read', 'schedules:write']
@@ -73,7 +77,14 @@ function build(rejected?: Error) {
     securityHistory: vi.fn(),
   };
   if (rejected) gateway.list.mockRejectedValueOnce(rejected);
-  return { gateway, operations, graphql: new BusinessGraphql(gateway, operations, [schemaPath, schedulePath, securityPath, operationsPath]) };
+  const finance = {
+    quotes: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    quote: vi.fn(),
+    createQuote: vi.fn(async () => ({ quote: { id: EMPLOYEE_ID }, orderStatusHint: null, replayed: false })),
+    reviseQuote: vi.fn(),
+    decideQuote: vi.fn(async () => ({ quote: { id: EMPLOYEE_ID }, orderStatusHint: 'quote_approved', replayed: false })),
+  };
+  return { gateway, operations, finance, graphql: new BusinessGraphql(gateway, operations, finance, [schemaPath, schedulePath, securityPath, operationsPath, financePath]) };
 }
 
 describe('EmployeesGraphql allowlist and error mapping', () => {
@@ -224,8 +235,9 @@ describe('operations policy (CU06, CU07, CU09, CU10)', () => {
     const blocks = [...source.matchAll(/extend type (?:Query|Mutation) \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join('\n');
     const roots = [...blocks.matchAll(/^ {2}([A-Za-z]+)[(:]/gm)].map((match) => match[1]);
     expect(roots.sort()).toEqual([
-      'appointments', 'appointment', 'cancelAppointment', 'createAppointment', 'createCustomer', 'createService',
-      'createVehicle', 'customer', 'customers', 'deactivateCustomer', 'deactivateService', 'deactivateVehicle',
+      'appointments', 'appointment', 'cancelAppointment', 'createAppointment', 'createCustomer', 'createReception',
+      'createService', 'createVehicle', 'createWorkOrder', 'customer', 'customers', 'deactivateCustomer',
+      'deactivateService', 'deactivateVehicle', 'order', 'orders', 'reception', 'receptions',
       'rescheduleAppointment', 'service', 'services', 'updateCustomer', 'updateService', 'updateVehicle',
       'vehicle', 'vehicles',
     ].sort());
@@ -265,5 +277,31 @@ describe('operations policy (CU06, CU07, CU09, CU10)', () => {
     );
     expect(deniedAppointment.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
     expect(operations.createAppointment).not.toHaveBeenCalled();
+  });
+});
+describe('finanzas policy (CU13, CU14)', () => {
+  it('publishes the finance root fields in the SDL', () => {
+    const source = readFileSync(financePath, 'utf8');
+    const blocks = [...source.matchAll(/extend type (?:Query|Mutation) \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join('\n');
+    const roots = [...blocks.matchAll(/^ {2}([A-Za-z]+)[(:]/gm)].map((match) => match[1]);
+    expect(roots.sort()).toEqual(['quotes', 'quote', 'createQuote', 'reviseQuote', 'decideQuote'].sort());
+  });
+
+  it('routes quotes to the finance owner and enforces quotes:decide', async () => {
+    const { graphql, finance } = build();
+    const listed = await graphql.run({ query: '{ quotes(limit: 5) { total } }' }, ADMIN, 'token');
+    expect(listed.errors).toBeUndefined();
+    expect(finance.quotes).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }), 'token');
+
+    const decided = await graphql.run(
+      {
+        query: 'mutation ($input: DecideQuoteInput!) { decideQuote(id: "' + EMPLOYEE_ID + '", input: $input) { quote { id } orderStatusHint } }',
+        variables: { input: { operationId: EMPLOYEE_ID, decision: 'approved', evidence: 'Presencial' } },
+      },
+      LIMITED,
+      'security-token',
+    );
+    expect(decided.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(finance.decideQuote).not.toHaveBeenCalled();
   });
 });

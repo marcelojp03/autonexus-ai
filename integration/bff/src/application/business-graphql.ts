@@ -14,6 +14,7 @@ import {
 import { BusinessError, publicMessage } from './business-error.js';
 import type { CommandInput, EmployeePageQuery, EmployeeQuery, EmployeesGateway, SecurityHistoryQuery, StaffingCommand } from './employees-gateway.js';
 import type { OperationsCommand, OperationsGateway, OperationsPageQuery } from './operations-gateway.js';
+import type { FinanceGateway, QuoteCommand, QuoteQuery } from './finance-gateway.js';
 
 /** Closed permission catalog published by the Employees owner. */
 type Permission =
@@ -23,7 +24,10 @@ type Permission =
   | 'customers:read' | 'customers:write'
   | 'vehicles:read' | 'vehicles:write'
   | 'catalog:read' | 'catalog:write'
-  | 'appointments:read' | 'appointments:write';
+  | 'appointments:read' | 'appointments:write'
+  | 'receptions:read' | 'receptions:write'
+  | 'orders:read' | 'orders:write'
+  | 'quotes:read' | 'quotes:write' | 'quotes:decide';
 
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
@@ -74,6 +78,17 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.fre
   createAppointment: 'appointments:write',
   rescheduleAppointment: 'appointments:write',
   cancelAppointment: 'appointments:write',
+  receptions: 'receptions:read',
+  reception: 'receptions:read',
+  createReception: 'receptions:write',
+  orders: 'orders:read',
+  order: 'orders:read',
+  createWorkOrder: 'orders:write',
+  quotes: 'quotes:read',
+  quote: 'quotes:read',
+  createQuote: 'quotes:write',
+  reviseQuote: 'quotes:write',
+  decideQuote: 'quotes:decide',
 });
 const CACHE_TTL_MS = 30000;
 const MAX_QUERY_LENGTH = 4000;
@@ -106,6 +121,7 @@ export class BusinessGraphql {
   constructor(
     private readonly gateway: EmployeesGateway,
     private readonly operations: OperationsGateway,
+    private readonly finance: FinanceGateway,
     schemaPaths: readonly string[],
   ) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
@@ -258,6 +274,17 @@ export class BusinessGraphql {
       createAppointment: (args: { input: OperationsCommand }) => this.operations.createAppointment(args.input, token),
       rescheduleAppointment: (args: { id: string; input: OperationsCommand }) => this.operations.rescheduleAppointment(args.id, args.input, token),
       cancelAppointment: (args: { id: string; input: OperationsCommand }) => this.operations.cancelAppointment(args.id, args.input, token),
+      receptions: (args: OperationsPageQuery) => this.operations.receptions(args ?? {}, token),
+      reception: (args: { id: string }) => this.operations.reception(args.id, token),
+      createReception: (args: { input: OperationsCommand }) => this.operations.createReception(args.input, token),
+      orders: (args: OperationsPageQuery) => this.operations.orders(args ?? {}, token),
+      order: (args: { id: string }) => this.operations.order(args.id, token),
+      createWorkOrder: (args: { input: OperationsCommand }) => this.operations.createWorkOrder(args.input, token),
+      quotes: (args: QuoteQuery) => this.finance.quotes(args ?? {}, token),
+      quote: (args: { id: string }) => this.finance.quote(args.id, token),
+      createQuote: (args: { input: QuoteCommand }) => this.finance.createQuote(args.input, token),
+      reviseQuote: (args: { id: string; input: QuoteCommand }) => this.finance.reviseQuote(args.id, args.input, token),
+      decideQuote: (args: { id: string; input: QuoteCommand }) => this.finance.decideQuote(args.id, args.input, token),
     };
   }
 

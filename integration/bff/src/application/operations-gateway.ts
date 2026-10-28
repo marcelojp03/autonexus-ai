@@ -65,6 +65,12 @@ export interface OperationsGateway {
   createAppointment(input: OperationsCommand, token: string): Promise<unknown>;
   rescheduleAppointment(id: string, input: OperationsCommand, token: string): Promise<unknown>;
   cancelAppointment(id: string, input: OperationsCommand, token: string): Promise<unknown>;
+  receptions(query: OperationsPageQuery, token: string): Promise<unknown>;
+  reception(id: string, token: string): Promise<unknown>;
+  createReception(input: OperationsCommand, token: string): Promise<unknown>;
+  orders(query: OperationsPageQuery, token: string): Promise<unknown>;
+  order(id: string, token: string): Promise<unknown>;
+  createWorkOrder(input: OperationsCommand, token: string): Promise<unknown>;
 }
 
 export class HttpOperationsGateway implements OperationsGateway {
@@ -196,5 +202,29 @@ export class HttpOperationsGateway implements OperationsGateway {
 
   cancelAppointment(id: string, input: OperationsCommand, token: string): Promise<unknown> {
     return this.request(`/appointments/${encodeURIComponent(id)}/cancel`, token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  receptions(query: OperationsPageQuery, token: string): Promise<unknown> {
+    return this.request('/receptions' + this.suffix(query), token);
+  }
+
+  reception(id: string, token: string): Promise<unknown> {
+    return this.request(`/receptions/${encodeURIComponent(id)}`, token);
+  }
+
+  createReception(input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request('/receptions', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  orders(query: OperationsPageQuery, token: string): Promise<unknown> {
+    return this.request('/orders' + this.suffix(query), token);
+  }
+
+  order(id: string, token: string): Promise<unknown> {
+    return this.request(`/orders/${encodeURIComponent(id)}`, token);
+  }
+
+  createWorkOrder(input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request('/orders', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
   }
 }

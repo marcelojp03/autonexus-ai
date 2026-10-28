@@ -15,6 +15,8 @@ const ALL = [
   'employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write',
   'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write',
   'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
+  'receptions:read', 'receptions:write', 'orders:read', 'orders:write',
+  'quotes:read', 'quotes:write', 'quotes:decide',
 ];
 /** Mirrors the owner resolution: realm roles plus persisted assignments. */
 const effectiveFor = (bearer: string): string[] => {

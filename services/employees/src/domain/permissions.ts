@@ -14,6 +14,13 @@ export const PERMISSIONS = [
   'catalog:write',
   'appointments:read',
   'appointments:write',
+  'receptions:read',
+  'receptions:write',
+  'orders:read',
+  'orders:write',
+  'quotes:read',
+  'quotes:write',
+  'quotes:decide',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -40,6 +47,13 @@ export const PERMISSION_CATALOG: readonly PermissionDescriptor[] = Object.freeze
   { id: 'catalog:write', module: 'Catálogo', operation: 'write', description: 'Crear, actualizar y desactivar servicios (CU09)' },
   { id: 'appointments:read', module: 'Citas', operation: 'read', description: 'Consultar citas y la agenda del taller (CU10)' },
   { id: 'appointments:write', module: 'Citas', operation: 'write', description: 'Registrar, reprogramar y cancelar citas (CU10)' },
+  { id: 'receptions:read', module: 'Recepción', operation: 'read', description: 'Consultar recepciones e inspecciones del vehículo (CU11)' },
+  { id: 'receptions:write', module: 'Recepción', operation: 'write', description: 'Recepcionar e inspeccionar un vehículo (CU11)' },
+  { id: 'orders:read', module: 'Órdenes', operation: 'read', description: 'Consultar órdenes de trabajo (CU12)' },
+  { id: 'orders:write', module: 'Órdenes', operation: 'write', description: 'Crear y modificar órdenes de trabajo (CU12)' },
+  { id: 'quotes:read', module: 'Cotizaciones', operation: 'read', description: 'Consultar cotizaciones y sus versiones (CU13)' },
+  { id: 'quotes:write', module: 'Cotizaciones', operation: 'write', description: 'Elaborar y versionar cotizaciones (CU13)' },
+  { id: 'quotes:decide', module: 'Cotizaciones', operation: 'decide', description: 'Registrar la aprobación o el rechazo del cliente (CU14)' },
 ]);
 
 const KNOWN = new Set<string>(PERMISSIONS);
@@ -49,8 +63,16 @@ export const isPermission = (value: unknown): value is Permission => typeof valu
 /** Permissions granted by the initial roles; reproduces the policy in force before CU02. */
 export const INITIAL_ROLES: readonly { name: string; description: string; permissions: readonly Permission[] }[] = Object.freeze([
   { name: 'administrador', description: 'Administración completa de la plataforma', permissions: PERMISSIONS },
-  { name: 'jefe_taller', description: 'Planificación de horarios y disponibilidad', permissions: ['schedules:read', 'schedules:write', 'customers:read', 'vehicles:read', 'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write'] },
-  { name: 'recepcionista', description: 'Atención al cliente en recepción', permissions: ['customers:read', 'customers:write', 'vehicles:read', 'vehicles:write', 'catalog:read', 'appointments:read', 'appointments:write'] },
-  { name: 'mecanico', description: 'Trabajo técnico en el taller', permissions: [] },
-  { name: 'responsable_financiero', description: 'Responsabilidad financiera', permissions: [] },
+  { name: 'jefe_taller', description: 'Planificación y supervisión del taller', permissions: [
+    'schedules:read', 'schedules:write', 'customers:read', 'vehicles:read', 'catalog:read', 'catalog:write',
+    'appointments:read', 'appointments:write', 'receptions:read', 'orders:read', 'orders:write',
+    'quotes:read', 'quotes:decide',
+  ] },
+  { name: 'recepcionista', description: 'Atención al cliente en recepción', permissions: [
+    'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write', 'catalog:read',
+    'appointments:read', 'appointments:write', 'receptions:read', 'receptions:write',
+    'orders:read', 'orders:write', 'quotes:read', 'quotes:decide',
+  ] },
+  { name: 'mecanico', description: 'Trabajo técnico en el taller', permissions: ['receptions:read', 'receptions:write'] },
+  { name: 'responsable_financiero', description: 'Responsabilidad financiera', permissions: ['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide'] },
 ]);

@@ -17,6 +17,7 @@ public final class Validation {
     private static final Pattern EMAIL = Pattern.compile("^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$");
     private static final Set<String> FUELS = Set.of("gasolina", "diesel", "gas", "electrico", "hibrido");
     private static final Set<String> CATEGORIES = Set.of("mantenimiento", "reparacion", "diagnostico", "otros");
+    private static final Set<String> PRIORITIES = Set.of("baja", "normal", "alta", "urgente");
 
     private Validation() {}
 
@@ -79,6 +80,18 @@ public final class Validation {
         return normalized;
     }
 
+    public static int mileage(Object value) {
+        if (!(value instanceof Number number) || number.intValue() != number.doubleValue()) throw OperationsError.invalid();
+        int parsed = number.intValue();
+        if (parsed < 0 || parsed > 2000000) throw OperationsError.invalid();
+        return parsed;
+    }
+
+    public static String priority(Object value) {
+        if (!(value instanceof String raw) || !PRIORITIES.contains(raw)) throw OperationsError.invalid();
+        return raw;
+    }
+
     public static int year(Object value, int currentYear) {
         if (!(value instanceof Number number) || number.intValue() != number.doubleValue()) throw OperationsError.invalid();
         int parsed = number.intValue();
@@ -125,6 +138,14 @@ public final class Validation {
         } catch (IllegalArgumentException error) {
             throw OperationsError.invalid();
         }
+    }
+
+    public static int quantity(Object value) {
+        if (value == null) return 1;
+        if (!(value instanceof Number number) || number.intValue() != number.doubleValue()) throw OperationsError.invalid();
+        int parsed = number.intValue();
+        if (parsed < 1 || parsed > 99) throw OperationsError.invalid();
+        return parsed;
     }
 
     public static int expectedVersion(Object value) {

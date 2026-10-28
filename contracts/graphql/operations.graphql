@@ -184,3 +184,85 @@ extend type Mutation {
   rescheduleAppointment(id: UUID!, input: RescheduleAppointmentInput!): AppointmentResult!
   cancelAppointment(id: UUID!, input: CancelAppointmentInput!): AppointmentResult!
 }
+
+"""CU11 reception and visual inspection. Not a work order."""
+type Reception {
+  id: UUID!
+  vehicleId: UUID!
+  vehiclePlate: String!
+  customerId: UUID!
+  customerName: String!
+  appointmentId: UUID
+  mileage: Int!
+  reason: String!
+  symptoms: String
+  visibleConditions: String
+  hasOrder: Boolean!
+  receivedAt: DateTime!
+  version: Int!
+}
+type ReceptionPage { items: [Reception!]! total: Int! limit: Int! offset: Int! }
+
+enum OrderPriority { baja normal alta urgente }
+enum WorkOrderStatus { pending_quote quote_requested quote_approved cancelled }
+
+type WorkOrderItem {
+  serviceId: UUID!
+  serviceName: String!
+  quantity: Int!
+  estimatedMinutes: Int!
+  referenceRate: Float!
+}
+"""CU12 work order. It starts pending quotation and never assigns a mechanic."""
+type WorkOrder {
+  id: UUID!
+  number: String!
+  receptionId: UUID!
+  vehicleId: UUID!
+  vehiclePlate: String!
+  customerId: UUID!
+  customerName: String!
+  description: String!
+  priority: OrderPriority!
+  notes: String
+  status: WorkOrderStatus!
+  version: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  items: [WorkOrderItem!]!
+}
+type WorkOrderPage { items: [WorkOrder!]! total: Int! limit: Int! offset: Int! }
+
+type ReceptionResult { reception: Reception! replayed: Boolean! }
+type WorkOrderResult { order: WorkOrder! replayed: Boolean! }
+
+input CreateReceptionInput {
+  operationId: UUID!
+  vehicleId: UUID!
+  appointmentId: UUID
+  mileage: Int!
+  reason: String!
+  symptoms: String
+  visibleConditions: String
+}
+input RequestedServiceInput { serviceId: UUID! quantity: Int }
+input CreateWorkOrderInput {
+  operationId: UUID!
+  receptionId: UUID!
+  description: String!
+  priority: OrderPriority!
+  notes: String
+  services: [RequestedServiceInput!]!
+}
+
+extend type Query {
+  receptions(limit: Int, offset: Int, vehicleId: UUID, open: Boolean): ReceptionPage!
+  reception(id: UUID!): Reception!
+  orders(limit: Int, offset: Int, status: WorkOrderStatus, customerId: UUID, vehicleId: UUID): WorkOrderPage!
+  order(id: UUID!): WorkOrder!
+}
+
+extend type Mutation {
+  createReception(input: CreateReceptionInput!): ReceptionResult!
+  createWorkOrder(input: CreateWorkOrderInput!): WorkOrderResult!
+}

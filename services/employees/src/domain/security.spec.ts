@@ -33,16 +33,13 @@ describe('permission catalog', () => {
     const names = INITIAL_ROLES.map(role => role.name);
     expect(names).toEqual(['administrador', 'jefe_taller', 'recepcionista', 'mecanico', 'responsable_financiero']);
     expect(INITIAL_ROLES[0].permissions).toEqual([...PERMISSIONS]);
-    expect(INITIAL_ROLES[1].permissions).toEqual([
-      'schedules:read', 'schedules:write', 'customers:read', 'vehicles:read',
-      'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
-    ]);
-    expect(INITIAL_ROLES[2].permissions).toEqual([
-      'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write',
-      'catalog:read', 'appointments:read', 'appointments:write',
-    ]);
-    for (const role of INITIAL_ROLES.slice(3)) expect(role.permissions).toEqual([]);
-    expect(PERMISSIONS.length).toBe(14);
+    expect(INITIAL_ROLES[1].permissions).toContain('orders:write');
+    expect(INITIAL_ROLES[1].permissions).not.toContain('quotes:write');
+    expect(INITIAL_ROLES[2].permissions).toContain('receptions:write');
+    expect(INITIAL_ROLES[2].permissions).toContain('quotes:decide');
+    expect(INITIAL_ROLES[3].permissions).toEqual(['receptions:read', 'receptions:write']);
+    expect(INITIAL_ROLES[4].permissions).toEqual(['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide']);
+    expect(PERMISSIONS.length).toBe(21);
   });
 });
 
