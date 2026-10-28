@@ -66,8 +66,8 @@ try {
 
   const catalog = await graphql(admin, '{ securityCatalog { catalog { id module operation } effective roles } }');
   assert.equal(catalog.errors, undefined);
-  assert.equal(catalog.data.securityCatalog.catalog.length, 6);
-  assert.equal(catalog.data.securityCatalog.effective.length, 6);
+  assert.equal(catalog.data.securityCatalog.catalog.length, 14);
+  assert.equal(catalog.data.securityCatalog.effective.length, 14);
   stages.push('catalog-through-graphql');
 
   const roles = await graphql(admin, '{ securityRoles { name system permissions version syncStatus assignedCount } }');

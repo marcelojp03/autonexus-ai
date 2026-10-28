@@ -1,0 +1,87 @@
+<nz-page-header nzTitle="Vehículos" nzSubtitle="CU07 · Recepción"></nz-page-header>
+
+@if (error()) {
+  <nz-alert class="panel" nzType="error" nzShowIcon id="vehicle-error" [nzMessage]="error()!"></nz-alert>
+}
+@if (notice()) {
+  <nz-alert class="panel" nzType="success" nzShowIcon nzCloseable id="vehicle-notice" [nzMessage]="notice()!" (nzOnClose)="notice.set(null)"></nz-alert>
+}
+
+<div class="toolbar">
+  <label class="field">Buscar
+    <input nz-input id="vehicle-search" [value]="search" (input)="search = $any($event.target).value" (keyup.enter)="load()" placeholder="Placa, marca, modelo o cliente" />
+  </label>
+  <label class="field">Estado
+    <nz-select style="min-width: 150px" id="vehicle-status" [ngModel]="status" (ngModelChange)="status = $event" nzAllowClear nzPlaceHolder="Todos">
+      <nz-option nzValue="active" nzLabel="Activos"></nz-option>
+      <nz-option nzValue="inactive" nzLabel="Inactivos"></nz-option>
+    </nz-select>
+  </label>
+  <button nz-button type="button" id="vehicle-search-button" (click)="load()">Buscar</button>
+  <button nz-button type="button" id="vehicle-new" (click)="startCreate()">Nuevo vehículo</button>
+</div>
+
+<nz-table #table [nzData]="rows()" [nzLoading]="loading()" nzSize="middle" id="vehicle-table" aria-label="Vehículos registrados">
+  <thead><tr><th>Placa</th><th>Marca / Modelo</th><th>Año</th><th>Combustible</th><th>Propietario</th><th>Estado</th><th>Acciones</th></tr></thead>
+  <tbody>
+    @for (vehicle of table.data; track vehicle.id) {
+      <tr [attr.data-vehicle-plate]="vehicle.plate">
+        <td><strong>{{ vehicle.plate }}</strong></td>
+        <td>{{ vehicle.make }} {{ vehicle.model }}@if (vehicle.color) { · {{ vehicle.color }} }</td>
+        <td>{{ vehicle.year }}</td>
+        <td>{{ vehicle.fuelType }}</td>
+        <td>{{ vehicle.customerName }}</td>
+        <td><nz-tag [nzColor]="vehicle.status === 'active' ? 'green' : 'default'">{{ vehicle.status === 'active' ? 'Activo' : 'Inactivo' }}</nz-tag></td>
+        <td class="actions">
+          <button nz-button nzType="link" nzSize="small" type="button" [attr.data-vehicle-edit]="vehicle.plate" (click)="startEdit(vehicle)">Editar</button>
+          @if (vehicle.status === 'active') {
+            <button nz-button nzType="link" nzSize="small" nzDanger type="button" nz-popconfirm
+              nzPopconfirmTitle="¿Desactivar este vehículo?" nzOkText="Desactivar" nzCancelText="Cancelar"
+              [attr.data-vehicle-deactivate]="vehicle.plate" [disabled]="saving()"
+              (nzOnConfirm)="deactivate(vehicle)">Desactivar</button>
+          }
+        </td>
+      </tr>
+    }
+  </tbody>
+</nz-table>
+@if (!rows().length && !loading()) {
+  <nz-empty id="vehicle-empty" nzNotFoundContent="Sin vehículos para el filtro actual"></nz-empty>
+}
+
+<h3 class="panel">{{ editing() ? 'Editar vehículo' : 'Registrar vehículo' }}</h3>
+<div class="toolbar">
+  <label class="field">Propietario
+    <nz-select style="min-width: 240px" id="vehicle-owner" [ngModel]="customerId" (ngModelChange)="customerId = $event" nzPlaceHolder="Cliente activo">
+      @for (owner of owners(); track owner.id) {
+        <nz-option [nzValue]="owner.id" [nzLabel]="owner.firstName + ' ' + owner.lastName + ' · ' + owner.document"></nz-option>
+      }
+    </nz-select>
+  </label>
+  <label class="field">Placa
+    <input nz-input id="vehicle-plate" [value]="plate" (input)="plate = $any($event.target).value" placeholder="ABC1234" />
+  </label>
+  <label class="field">Marca
+    <input nz-input id="vehicle-make" [value]="make" (input)="make = $any($event.target).value" />
+  </label>
+  <label class="field">Modelo
+    <input nz-input id="vehicle-model" [value]="model" (input)="model = $any($event.target).value" />
+  </label>
+  <label class="field">Año
+    <input nz-input type="number" id="vehicle-year" [value]="year" (input)="year = $any($event.target).value" />
+  </label>
+  <label class="field">Combustible
+    <nz-select style="min-width: 150px" id="vehicle-fuel" [ngModel]="fuelType" (ngModelChange)="fuelType = $event">
+      @for (fuel of fuels; track fuel.value) {
+        <nz-option [nzValue]="fuel.value" [nzLabel]="fuel.label"></nz-option>
+      }
+    </nz-select>
+  </label>
+  <label class="field">Color
+    <input nz-input id="vehicle-color" [value]="color" (input)="color = $any($event.target).value" placeholder="Opcional" />
+  </label>
+  <button nz-button nzType="primary" type="button" id="vehicle-save" [disabled]="saving()" (click)="save()">
+    {{ editing() ? 'Guardar cambios' : 'Registrar' }}
+  </button>
+  <button nz-button type="button" id="vehicle-clear" (click)="startCreate()">Limpiar</button>
+</div>

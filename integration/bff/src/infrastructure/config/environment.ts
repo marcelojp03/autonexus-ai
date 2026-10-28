@@ -22,6 +22,7 @@ function port(value: string | undefined, fallback: number, name: string): number
 export interface BffConfiguration {
   readonly port: number;
   readonly employeesUrl: string;
+  readonly operationsUrl: string;
   readonly issuer: string;
   readonly audience: string;
   readonly origins: readonly string[];
@@ -33,9 +34,11 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const audience = env.OIDC_AUDIENCE ?? OWN_AUDIENCE;
   const origins = env.WEB_ALLOWED_ORIGINS?.split(',').map((origin) => origin.trim()) ?? LOCAL_ORIGINS;
   const employeesUrl = env.EMPLOYEES_API_URL ?? 'http://127.0.0.1:3002';
+  const operationsUrl = env.OPERATIONS_API_URL ?? 'http://127.0.0.1:8081';
   const schemaPath = env.BFF_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/employees.graphql');
   const scheduleSchema = env.BFF_SCHEDULE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/schedules.graphql');
   const securitySchema = env.BFF_SECURITY_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/security.graphql');
+  const operationsSchema = env.BFF_OPERATIONS_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/operations.graphql');
   if (issuer !== LOCAL_ISSUER) throw new Error('Invalid configuration: OIDC_ISSUER_URI');
   if (audience !== OWN_AUDIENCE) throw new Error('Invalid configuration: OIDC_AUDIENCE');
   if (!origins.length || origins.some((origin) => !LOCAL_ORIGINS.includes(origin))) {
@@ -50,15 +53,26 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1' || target.pathname !== '/' || target.search || target.hash) {
     throw new Error('Invalid configuration: EMPLOYEES_API_URL');
   }
+  let operationsTarget: URL;
+  try {
+    operationsTarget = new URL(operationsUrl);
+  } catch {
+    throw new Error('Invalid configuration: OPERATIONS_API_URL');
+  }
+  if (operationsTarget.protocol !== 'http:' || operationsTarget.hostname !== '127.0.0.1' || operationsTarget.pathname !== '/' || operationsTarget.search || operationsTarget.hash) {
+    throw new Error('Invalid configuration: OPERATIONS_API_URL');
+  }
   if (!isAbsolute(schemaPath) || !existsSync(schemaPath)) throw new Error('Invalid configuration: BFF_SCHEMA_PATH');
   if (!isAbsolute(scheduleSchema) || !existsSync(scheduleSchema)) throw new Error('Invalid configuration: BFF_SCHEDULE_SCHEMA_PATH');
   if (!isAbsolute(securitySchema) || !existsSync(securitySchema)) throw new Error('Invalid configuration: BFF_SECURITY_SCHEMA_PATH');
+  if (!isAbsolute(operationsSchema) || !existsSync(operationsSchema)) throw new Error('Invalid configuration: BFF_OPERATIONS_SCHEMA_PATH');
   return Object.freeze({
     port: port(env.PORT, 3004, 'PORT'),
     employeesUrl: target.origin,
     issuer,
     audience,
     origins: Object.freeze([...new Set(origins)]),
-    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema]),
+    operationsUrl: operationsTarget.origin,
+    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema]),
   });
 }

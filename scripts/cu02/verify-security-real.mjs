@@ -28,7 +28,7 @@ const suffix = randomUUID().slice(0, 8);
 const supervisor = 'supervisor_' + suffix;
 const limited = 'limitado_' + suffix;
 const createdRoles = [supervisor, limited];
-let employeeId, subject, password, secondEmployeeId;
+let employeeId, subject, password, secondEmployeeId, thirdEmployeeId;
 const db = new Client({ host: env.DB_HOST, port: Number(env.DB_PORT), database: env.DB_NAME, user: env.DB_USER, password: env.DB_PASSWORD });
 
 const call = async (path, { method = 'GET', body, token, expected = 200 } = {}) => {
@@ -70,8 +70,13 @@ try {
   const mecanico = (await authorize(accounts.find(account => account.key === 'mecanico'))).access_token;
 
   const catalog = await call('/security/permissions', { token: admin });
-  assert.equal(catalog.catalog.length, 6);
-  assert.deepEqual([...catalog.effective].sort(), ['employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write']);
+  assert.equal(catalog.catalog.length, 14);
+  assert.deepEqual([...catalog.effective].sort(), [
+    'appointments:read', 'appointments:write', 'catalog:read', 'catalog:write',
+    'customers:read', 'customers:write', 'employees:read', 'employees:write',
+    'schedules:read', 'schedules:write', 'security:read', 'security:write',
+    'vehicles:read', 'vehicles:write',
+  ]);
   const mecanicoCatalog = await call('/security/permissions', { token: mecanico });
   assert.deepEqual(mecanicoCatalog.effective, []);
   stages.push('catalog-and-effective-permissions');
@@ -150,15 +155,21 @@ try {
     expected: 409,
   });
   assert.equal(lastAdministrator.code, 'LAST_ADMINISTRATOR');
+  const administradorRole = await call('/security/roles/administrador', { token: admin });
   const reduceAdministrator = await call('/security/roles/administrador', {
     method: 'PUT',
-    body: { operationId: randomUUID(), expectedVersion: 1, description: 'Administración completa de la plataforma', permissions: ['employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read'] },
+    body: {
+      operationId: randomUUID(),
+      expectedVersion: administradorRole.version,
+      description: 'Administración completa de la plataforma',
+      permissions: administradorRole.permissions.filter(permission => permission !== 'security:write'),
+    },
     token: admin,
     expected: 409,
   });
   assert.equal(reduceAdministrator.code, 'LAST_ADMINISTRATOR');
   const untouched = await call('/security/roles/administrador', { token: admin });
-  assert.equal(untouched.version, 1);
+  assert.equal(untouched.version, administradorRole.version);
   assert.equal(untouched.permissions.includes('security:write'), true);
   stages.push('last-administrator-guard-blocks-revoke-and-reduction');
 
@@ -208,30 +219,48 @@ try {
   assert.equal(reduceOnlyAdministrator.code, 'LAST_ADMINISTRATOR');
   stages.push('second-reduction-guard');
 
-  // Concurrency: two administrators exist; removing both at once must leave exactly one.
-  const secondDocument = 'CU2B-' + suffix;
-  const second = await call('/employees', {
-    method: 'POST',
-    body: {
-      operationId: randomUUID(), firstName: 'Synthetic', lastName: 'Concurrent', document: secondDocument,
-      email: secondDocument.toLowerCase() + '@example.invalid', phone: '+591 70000004',
-      jobTitle: 'Supervisor', startDate: '2020-01-01', specialties: [], access: { requested: true },
-    },
-    token: admin,
-    expected: 201,
-  });
-  secondEmployeeId = second.employee.id;
-  let secondRecord = second.employee;
-  for (let attempt = 0; attempt < 20 && secondRecord.access.status !== 'synced'; attempt += 1) {
-    await new Promise(done => setTimeout(done, 500));
-    secondRecord = await call('/employees/' + secondEmployeeId, { token: admin });
-  }
-  assert.equal(secondRecord.access.status, 'synced');
-  const firstAdmin = await call(`/security/employees/${employeeId}/roles`, {
-    method: 'POST', body: { operationId: randomUUID(), roleName: 'administrador' }, token: admin, expected: 201,
-  });
+  // Concurrency: exactly one of two simultaneous revocations may succeed when the third
+  // administrator (this employee, holding `limitado`) is removed first.
+  const createAdministrator = async label => {
+    const documentValue = label + suffix;
+    const record = await call('/employees', {
+      method: 'POST',
+      body: {
+        operationId: randomUUID(), firstName: 'Synthetic', lastName: label, document: documentValue,
+        email: documentValue.toLowerCase() + '@example.invalid', phone: '+591 70000004',
+        jobTitle: 'Supervisor', startDate: '2020-01-01', specialties: [], access: { requested: true },
+      },
+      token: admin,
+      expected: 201,
+    });
+    let currentRecord = record.employee;
+    for (let attempt = 0; attempt < 20 && currentRecord.access.status !== 'synced'; attempt += 1) {
+      await new Promise(done => setTimeout(done, 500));
+      currentRecord = await call('/employees/' + record.employee.id, { token: admin });
+    }
+    assert.equal(currentRecord.access.status, 'synced');
+    return record.employee.id;
+  };
+  secondEmployeeId = await createAdministrator('CU2B');
+  thirdEmployeeId = await createAdministrator('CU2C');
   const secondAdmin = await call(`/security/employees/${secondEmployeeId}/roles`, {
     method: 'POST', body: { operationId: randomUUID(), roleName: 'administrador' }, token: admin, expected: 201,
+  });
+  const thirdAdmin = await call(`/security/employees/${thirdEmployeeId}/roles`, {
+    method: 'POST', body: { operationId: randomUUID(), roleName: 'administrador' }, token: admin, expected: 201,
+  });
+  const assignments = await call(`/security/employees/${employeeId}/roles`, { token: admin });
+  let writeAssignment = null;
+  for (const item of assignments.items.filter(entry => entry.status === 'active' && entry.roleName !== 'administrador')) {
+    const candidate = await call('/security/roles/' + item.roleName, { token: admin });
+    if (candidate.permissions.includes('security:write')) {
+      writeAssignment = item;
+      break;
+    }
+  }
+  assert.ok(writeAssignment, 'a non-administrator role granting security:write must exist');
+  await call(`/security/employees/${employeeId}/roles/${writeAssignment.roleName}/revoke`, {
+    method: 'POST', body: { operationId: randomUUID(), expectedVersion: writeAssignment.version }, token: admin,
   });
   const attemptRevoke = async (id, version) => {
     const response = await fetch(`http://127.0.0.1:3002/security/employees/${id}/roles/administrador/revoke`, {
@@ -243,8 +272,8 @@ try {
     return { status: response.status, body: await response.json().catch(() => null) };
   };
   const concurrent = await Promise.all([
-    attemptRevoke(employeeId, firstAdmin.assignment.version),
     attemptRevoke(secondEmployeeId, secondAdmin.assignment.version),
+    attemptRevoke(thirdEmployeeId, thirdAdmin.assignment.version),
   ]);
   const statuses = concurrent.map(item => item.status).sort();
   assert.deepEqual(statuses, [200, 409], 'exactly one concurrent revocation may succeed: ' + JSON.stringify(concurrent));
@@ -270,8 +299,9 @@ try {
   const supervisorToken = (await employeeToken()).access_token;
   await call('/staffing/employees', { token: supervisorToken });
   await call('/employees', { token: supervisorToken, expected: 403 });
-  await call('/security/roles', { token: supervisorToken });
-  stages.push('permissions-are-the-union-of-active-assignments');
+  // The role granting security:read was revoked in the concurrency stage, so it no longer applies.
+  await call('/security/roles', { token: supervisorToken, expected: 403 });
+  stages.push('permissions-follow-active-assignments');
 
   const revokeOperation = randomUUID();
   const revoke = await call(`/security/employees/${employeeId}/roles/${supervisor}/revoke`, {
@@ -331,7 +361,7 @@ try {
   process.exitCode = 1;
 } finally {
   try {
-    for (const id of [employeeId, secondEmployeeId].filter(Boolean)) {
+    for (const id of [employeeId, secondEmployeeId, thirdEmployeeId].filter(Boolean)) {
       await db.query(
         "UPDATE employees.employee_records SET record=jsonb_set(record,'{status}','\"inactive\"') WHERE id=$1 AND record->>'status'='active'",
         [id],

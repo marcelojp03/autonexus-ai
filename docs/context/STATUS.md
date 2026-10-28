@@ -1,6 +1,29 @@
 # Estado comprobado
 
-## CU02 — Roles y permisos entregados y verificados (2026-10-27)
+## Bloque operativo — CU06, CU07, CU09 y CU10 entregados y verificados (2026-10-28)
+
+**Resumen vigente.** Rama `work/marcelo`. Operaciones (MS01) deja de ser un esqueleto: clientes, vehículos con historial de propietario, catálogo de servicios y citas, con persistencia PostgreSQL propia (Flyway V2–V4), autorización por permiso en REST y BFF, y pantallas en `mf-operations`. El catálogo de CU02 pasó de seis a **catorce permisos**; los roles iniciales se resembraron respetando los actores de cada CU (`administrador` todos, `jefe_taller` suma catálogo y agenda, `recepcionista` clientes/vehículos/citas, `mecanico` y `responsable_financiero` sin permisos). CU03 sigue administrador-only y CU04 no cambia.
+
+Operaciones resuelve los permisos del portador llamando a `GET /security/permissions` de Empleados con el token del usuario (caché 30 s, timeout 2 s, fallo cerrado); no consulta bases ajenas ni duplica la matriz. `/technical/*` conserva la política y el cuerpo de CU01.
+
+Reglas de cita: cliente/vehículo/servicio activos, vehículo del cliente declarado, `startsAt` ISO-8601 con offset, duración del servicio para `endsAt`, duplicado exacto, solapamiento del vehículo y capacidad del taller (por defecto 2) evaluados bajo `pg_advisory_xact_lock`; reprogramar revalida y cancelar exige motivo y libera la franja. **Una cita no es una orden de trabajo ni asigna mecánico**; no existe estado `confirmed`.
+
+| Verificación | Resultado |
+| --- | --- |
+| `services/operations` `mvnw test` / package | PASS 30 pruebas (validaciones, casos de uso, permisos con caché y fallo cerrado) y jar exit0 |
+| API real CU06/CU07 (`scripts/operations/verify-customers-vehicles-real.mjs`) | PASS 9 etapas/exit0: permisos por operación, duplicados, versiones, replay, cambio de propietario trazado, cliente inactivo, auditoría |
+| API real CU09/CU10 (`scripts/operations/verify-catalog-appointments-real.mjs`) | PASS 11 etapas/exit0: duplicado por nombre, duración/tarifa inválidas, desactivación, cita con duración, duplicado, solapamiento, propiedad, servicio inactivo, capacidad, reprogramación, cancelación que libera la franja |
+| BFF real (`scripts/operations/verify-bff-real.mjs`) | PASS 9 etapas/exit0 por GraphQL hasta PostgreSQL |
+| Navegador real (`scripts/operations/verify-operations-web.mjs`) | PASS 9 etapas/exit0: recepción registra cliente, asocia vehículo y agenda; jefatura crea servicio; reprogramación y cancelación; mecánico denegado por el servidor; consola limpia |
+| BFF `pnpm test` / `test:e2e` / build | PASS 20 unitarias + 13 HTTP y build exit0 |
+| Empleados `pnpm test` / build | PASS 90 pruebas (catálogo de catorce permisos) y build exit0 |
+| Regresión CU01 API / CU02 API / CU02 web / CU03 / CU04 | PASS 10 comprobaciones y 14, 9, 11 y 8 etapas, todas exit0 |
+
+Hallazgos corregidos durante la verificación: `mvnw package` fallaba si el jar estaba en uso por el servicio en ejecución (se detiene antes de empaquetar); el duplicado exacto de cita devolvía `APPOINTMENT_OVERLAP` porque el solapamiento se comprobaba antes que la duplicidad; la migración de catálogo incrementa la versión de los roles `system`, así que el verificador de CU02 debía leer la versión vigente en lugar de asumir 1; y la prueba de concurrencia de CU02 necesitaba un administrador de apoyo limpio porque el rol `limitado` seguía otorgando `security:write`.
+
+Límites: sin permisos por registro; la sincronización offline de clientes y citas no está implementada; CU05 no se declara completo porque su agenda requiere órdenes y asignaciones reales (CU11/CU12/CU15); su consulta futura deberá identificar al empleado por el subject autenticado y añadir su permiso de agenda.
+
+## Histórico — CU02 — Roles y permisos entregados y verificados (2026-10-27)
 
 Rama `work/marcelo`. Se sustituye la autorización por nombre de rol fijo por un **catálogo cerrado de seis permisos** (`employees:read|write`, `schedules:read|write`, `security:read|write`) resuelto en el servidor, con roles y asignaciones persistidos en el esquema propio de Empleados (migración `1793196000000`) y materializados en Keycloak como realm roles. `contracts/auth/permissions.md` y `docs/decisions/012-cu02-roles-permissions.md` fijan la semántica.
 
@@ -26,7 +49,7 @@ Hallazgos corregidos durante la verificación: `UPDATE ... RETURNING` llegaba co
 Revisión **independiente** del rango `a2e1451..b2fe58f` (subagente revisor, sin fallo de herramienta): cero críticos y seis hallazgos mayores, todos evaluados y corregidos en el commit de correcciones. Correcciones aplicadas: la política por campo del BFF es eludible con un fragmento inline en la raíz (ahora se rechaza, con prueba); la resolución de permisos usaba la foto del `subject` guardada al asignar en vez de la identidad actual del empleado y admitía roles nuevos para sujetos sin vínculo (ahora exige `e.subject` vigente y limita la rama sin vínculo a los roles iniciales); el invariante de último administrador no exigía identidad resoluble; una revocación fallida no se reconciliaba con el reintento; el escalamiento no se comprobaba al asignar; `retry-sync` no era idempotente; y `assignedCount` quedaba en 0 tras actualizar un rol. La contención de locks pasa de `503` a `409 CONCURRENT_OPERATION` y ahora está verificada con un retiro concurrente real. Se mantiene declarado como límite que la inmutabilidad de la auditoría es de aplicación, no de base.
 Límites: sin permisos por registro; CU02 asigna roles pero no habilita credenciales de acceso; `Operaciones` conserva su política técnica por nombre de rol; la disponibilidad de CU04 sigue siendo informativa para CU15; la inmutabilidad de `security_history` es de aplicación.
 
-## CU03 web — BFF e interfaz entregados localmente (2026-10-27)
+## Histórico — CU03 web — BFF e interfaz entregados localmente (2026-10-27)
 
 Rama `work/marcelo`, base main425ed03. Decisión009 habilita alcance no exclusivo: se implementaron BFF y pantallas sin esperar al participante2. Backend CU03 sigue siendo el de main; esta entrega agrega el recorrido web y no modifica reglas de negocio del servicio.
 
@@ -54,7 +77,7 @@ Evidencia local ignorada en `output-cu03web/` (logs de BFF, shell, Empleados, Op
 No se acredita CU02, CU04, agenda/asignaciones, Saga, móvil ni producción. CU03 se entrega como backend + web local, no como CU completo de punta a punta en remoto.
 
 
-## Integración CU03 en main — verificada y revisada; publicación pendiente
+## Histórico — Integración CU03 en main — verificada y revisada; publicación pendiente
 
 Cierre2026-10-26: integración efc2e1c..4bbf9af conforme por revisión fresca en cumplimiento/corrección/consistencia, cero críticos. Spec delivered; código empresarial no modificado. Auditoría código4bb:20commits/685blobs/871archivos/251entradasPASS sin hallazgos; reporte local debe renovarse contra HEAD documental final antes de publicar. No push/PR; backend raíz3002 entregado, BFF/interfaz pendientes. CU04 queda preparado enT3, no iniciado. Las menciones posteriores a revisión pendiente son fases históricas del recorrido.
 
@@ -70,7 +93,7 @@ Evidencia ignorada: output/cu03-main-integration/{live-main,cu01-main,postgres-m
 
 GitHub: origin saneado correcto, ls-remote exit0 sin refs; lectura no acredita permisos de push. Históricos sin paths privados/dependencias/artefactos locales; escaneo inicial897873b de18commits/667blobs/251entradas comprimidasPASS sin coincidencias de privados actuales ni patrones de alta confianza. Auditoría del HEAD final y revisión independiente de integración pendientes antes del cierre. Backend entregado; BFF/interfaz siguen pendientes: no CU03 de punta a punta ni CU02.
 
-## CU03 backend propietario — entregado localmente y revisado; BFF/interfaz pendientes
+## Histórico — CU03 backend propietario — entregado localmente y revisado; BFF/interfaz pendientes
 
 Cierre2026-10-26: revisión integral y re-revisiones afectadas conformes hasta código281b9ee. C1 y observaciones de consistencia cerrados, cero críticos pendientes. Especificación delivered con70unitarias/42HTTP,9grupos funcionales finales y15grupos previos de identidad/recuperación reales, todosPASS; CU01 root13etapas/SQLPASS. Los párrafos posteriores que dicen pendiente revisión describen etapas históricas del recorrido, no el dictamen final. No se acredita CU02 ni CU03 web completo; no hubo push ni merge CU03 a main.
 
@@ -99,7 +122,7 @@ Aplicaciones CU01 y ambos Compose permanecen en raíz. CU03 real se ejecutó des
 
 BFF sigue siendo carpeta reservada, sin aplicación. Se entregan contratos al participante2; mf-employees conserva NG-ALAIN/demos y NO llama REST empresarial. No acreditar interfaz integrada, CU03 web completo, CU02, jornadas, agenda, Saga, otros servicios, Kubernetes ni producción. Revisión independiente inicial cerrada: C1 bloqueó emails inválidos; se reprodujeron8rojos,67unitarias/42HTTP posteriores pasan. Se corrigieron dos inconsistencias documentales y la reactivación de cuentas deshabilitadas reproducida con IdP real. La matriz final15grupos/exit0 incluye pérdida de la sesión SQL dueña del lock sintético y reparación explícita. El primer intento de restauración no se acredita: Keycloak arrancó en118s y excedió la espera anterior; el verificador ahora exige Dockerhealthy+discovery dentro de300s, sin recrear volumen. Cleanup acotado verificó origen sintético/desactivó los pendientes, sin borrado. Falta re-revisión antes de delivered. Fallos SQLite iniciales de agentes no sustituyeron revisión: la revisión independiente sí llegó a ejecutarse.
 
-## CU01 integrado: runtime definitivo verificado (2026-10-26)
+## Histórico — CU01 integrado: runtime definitivo verificado (2026-10-26)
 
 La inspección inicial encontró main y feat/cu01-keycloak ya en b8d8079, divergencia0/0 y worktrees limpios. b8d8079 es hijo de86d81af y exclusivamente documental; código revisado1963ce3..86d81af. No se repitió un merge. Se preservan ramas/worktrees, sin push. Los apartados CU01 anteriores que sitúan main en1963ce3 son históricos.
 
@@ -113,7 +136,7 @@ Límite honesto: el auxiliar de traslado se interrumpió después de recrear IdP
 
 Fecha: 2026-10-26. Los apartados anteriores de base/composición conservan fechas y resultados históricos.
 
-## Preparado
+## Histórico — Preparado
 
 - Estructura de 13 aplicaciones previstas y carpetas compartidas.
 - Reglas para IA, copias de Notion y 31 especificaciones de CU.
@@ -142,7 +165,7 @@ Verificación local del 2026-10-25. La raíz AutoNexus no tiene metadatos Git; c
 - READMEs de ambas apps documentan comandos reales, layout, menú estático, rutas hash, autenticación Delon y mocks. Propuestas de integración Shell diferenciadas de acuerdos: chrome, prefijos, lifecycles single-spa/zoneless, assets, SSO/refresh, GraphQL y limpieza de efectos globales.
 - Evidencias locales: output/angular-verification/_-build.log (marcador BUILD_EXIT=0), logs de instalación/serve y output/playwright/_-dashboard.yml. La captura de pantalla excedió el timeout y no se considera evidencia. No hubo cambios en src, _mock, estilos ni AGENTS locales.
 
-## Primera integración Shell + Angular — comprobada
+## Histórico — Primera integración Shell + Angular — comprobada
 
 Fecha: 2026-10-25. Implementación local del participante 1, sin CU de negocio. Estrategia y fuentes: docs/decisions/002-shell-angular-single-spa.md. Se conservaron todos los AGENTS.md por SHA-256 y los cambios de la tarea previa; no se creó commit ni se alteró la estructura Git.
 
@@ -179,11 +202,11 @@ Comandos y condiciones de reproducción en web/shell/README.md y ambos README An
 
 Servidores locales al cierre: Shell preview en 127.0.0.1:4200; standalone en 4201/4202. Sesiones de navegador automatizado cerradas al terminar. Staging sirve copias generadas: tras cambiar un MF, reconstruirlo y volver a stagear/construir el Shell; no hay HMR cruzado prometido. No se desplegó a hosting externo ni se probó todo el catálogo demo.
 
-## Organización Git vigente
+## Histórico — Organización Git vigente
 
 El 2026-10-25 Marcelo indicó usar un único monorepositorio en `autonexus-ai`. Se inicializó la raíz en `main` y se configuró `origin=https://github.com/marcelojp03/autonexus-ai.git`, sin push. Se confirmó que los dos `.git` Angular pertenecían a NG-ALAIN, no a AutoNexus, y se retiraron a la Papelera con autorización; fuentes/AGENTS/lockfiles preservados. El `.gitignore` raíz excluye dependencias/builds/cachés, entornos reales, secretos, datos locales y artefactos de verificación, conservando lockfiles y ejemplos. Ver decisión 003. Las referencias anteriores a falta de Git son históricas.
 
-## Base backend MS01/MS02 — técnica terminada y revisada
+## Histórico — Base backend MS01/MS02 — técnica terminada y revisada
 
 Fecha: 2026-10-25. Rama feat/backend-foundation, worktree .worktrees/backend-foundation, base main7bc80a7. Especificación aprobada: docs/compose/spec/backend-foundation.md; decisión004. Sin merge/push automático ni CU de negocio terminado.
 
@@ -208,13 +231,13 @@ Mismos PID/hora de inicio Java/Node durante caída/restauración. El verificador
 
 README por servicio/infra con comandos reales para configurar, instalar, compilar, migrar, ejecutar y verificar. Evidencia local ignorada: output/backend-foundation (build/tests, migraciones, aislamiento, health-outage, frontend-browser). Revisión independiente de7bc80a7..6027fce: cumplimiento, corrección y consistencia conformes;0críticos. Se reactivaron después los procesos propios: PostgreSQL healthy, Ops8081/Empleados3002live/ready200 y frontends4200/4201/4202HTTP200. El script no compara PID automáticamente: la identidad durante caída fue comprobada por el principal. Especificación delivered con evidencia y tareas completas; cierre Git local sin merge/push automático.
 
-## Integración local de backend-foundation en main
+## Histórico — Integración local de backend-foundation en main
 
 El 2026-10-25, por instrucción de Marcelo, main avanzó por fast-forward de7bc80a7 a3bbf499; feat/backend-foundation y su worktree se conservaron, sin push. Las tres configuraciones privadas se copiaron a la carpeta principal con creación exclusiva/comparación byte a byte, sin regenerar contraseñas. Se recompiló allí: Maven12tests PASS; Empleados frozen/build,13unitarias+3HTTP PASS. Los primeros intentos de consola excedieron60s y no se acreditan; verificaciones desacopladas terminaron con exit0.
 
 El contenedor PostgreSQL propio fue recreado para que bind/config/ownership apunten a infra/compose de la raíz principal. Se comprobó el mismo volumen autonexus-backend-dev_postgres-data, credenciales conservadas y una migración por servicio. El verificador de raíz pasó caída/restauración200→503→200 con mismos PID/hora de inicio; el verificador del worktree anterior rechazó ownership antes de mutar. La ejecución definitiva de esta base está en la raíz; el worktree se conserva como fuente histórica, no como dueño runtime. Evidencia local: output/backend-main-integration. CU01/Keycloak siguen pendientes de la siguiente rama.
 
-## CU01 web local — feat/cu01-keycloak
+## Histórico — CU01 web local — feat/cu01-keycloak
 
 La base permanece integrada en main1963ce3. CU01 queda entregado localmente en .worktrees/cu01-keycloak, rama feat/cu01-keycloak, base main1963ce3; contratos682bfeb, implementación0a8bd2f y corrección86d81af. Revisión integral y re-revisión afectada conformes en especificación/corrección/consistencia: C1/NC1 cerrados, cero críticos pendientes. Especificación delivered con rango revisado1963ce3..86d81af, excluyendo el commit documental final. No se hizo push, reset, borrado de ramas/worktrees ni merge automático de CU01. Todos los AGENTS se preservan.
 
@@ -250,7 +273,7 @@ Access local60s. Logout invalida cliente/sesión IdP/refresh, pero un access tok
 
 Evidencia local: output/cu01-keycloak/{backend-verification.json,operations-build.log,employees-unit.log,employees-http.log,api-real.log,health-outage.log,browser-real.log}; API/browser/health .exit=0. Builds finales con parche: g2-{red,green,build}-results.json y logs por app/modo; seis builds exit0 y tests reales del servicio en Chromium6/6 cada app. IdP: infra/keycloak/.local/*.result.json/log con PASS/exitCode0; no publicar archivos privados. Capturas sanitizadas output/playwright/cu01-{desktop,mobile}.png. Ejecución/puertos/comandos completos en scripts/cu01/README.md. ESLint global Angular adicional no se acredita: excedió el timeout; no se presenta como PASS ni se ocultaron budgets/CommonJS y warnings de módulos Node.
 
-## Pendiente
+## Histórico — Pendiente
 
 - Identificar participantes 2 y 3 por nombre.
 - Inicializar y verificar Finanzas, Inteligencia, Sincronización y aplicaciones de integración restantes cuando sus responsables/CU lo requieran. Operaciones y Empleados ya tienen base técnica terminada y revisada; CU03 backend está implementado/verificado en su rama; los demás CU siguen su estado explícito.
@@ -258,15 +281,15 @@ Evidencia local: output/cu01-keycloak/{backend-verification.json,operations-buil
 - Crear contratos, infraestructura ejecutable y configuración.
 - Implementar y probar CU15, IA, offline, sincronización, MCP y demás funciones.
 
-## Siguiente entregable
+## Histórico — Siguiente entregable
 
 Acordar matriz de permisos empresariales para CU02 y contrato BFF del participante2: audiencia propia, forwarding/exchange autorizado, validación issuer/firma/exp y rol/acción/registro por campo/CU. El SessionPort y los cinco roles técnicos están versionados, no sustituyen esas políticas. Flutter/offline de CU01 y CU15 permanecen pendientes.
 
-## Evidencia
+## Histórico — Evidencia
 
 No se ha integrado ni probado una plataforma AutoNexus completa ni todos sus CU. La base backend está en main; esta rama incorpora CU01 web local real y distingue explícitamente sus pruebas de las demos históricas. En el cierre histórico de CU01 no se acreditaban Flutter, offline autorizado, CU02, CRUD, BFF, Saga ni producción; CU03 backend posterior se registra en la cabecera vigente. El callback ficticio y ACL completa solo pueden ejecutarse en la entrada demo dedicada; compilar/probar ese modo no lo convierte en autenticación válida.
 
-## Próxima actualización
+## Histórico — Próxima actualización
 
 Registrar fecha, rama/commit, cambios implementados, verificaciones reales, bloqueos y siguiente paso. No reemplazar pendientes por porcentajes estimados sin evidencia.
 
@@ -276,7 +299,7 @@ C1 residual en re-revisión5e1f5cc: U+212A se convertía en k antes de verificar
 Prueba acotada de reintento de acceso (2026-10-27): `scripts/cu03/verify-access-retry-web.mjs` PASS 7 etapas/exit0. Crea un empleado con acceso, deshabilita su cuenta en Keycloak mediante el cliente técnico, provoca el fallo de sincronización por la API propietaria (setup, no la interfaz bajo prueba), abre la ficha en el navegador con sesión real, comprueba estado fallido + botón de reintento, reintenta mientras la cuenta sigue deshabilitada (se registra el intento) y, tras habilitar la cuenta por vía autorizada, reintenta y verifica el estado `synced` con subject estable y desaparición del botón. Consola limpia. Detectó y corrigió que la ficha mostraba el snapshot previo a la sincronización; ahora relee el empleado tras el reintento.
 
 Revisión del commit final `fe78fe9`: el sistema de agentes siguió bloqueado por SQLite, por lo que se realizó una **revisión directa focalizada** del diff (no independiente). Confirmó el guard de reenvío, la normalización de especialidades, la eliminación del bloque duplicado del Shell, el traslado del reintento fuera de `nz-alert` y la alineación documental; no halló regresiones. La diferencia de método queda registrada aquí.
-## CU04 — Horarios y disponibilidad entregados (2026-10-27)
+## Histórico — CU04 — Horarios y disponibilidad entregados (2026-10-27)
 
 Rama `work/marcelo`. Backend en Empleados, BFF y pantalla NG-ALAIN integrados. No se modificó el CRUD de CU03.
 

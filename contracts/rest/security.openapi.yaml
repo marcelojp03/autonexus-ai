@@ -235,7 +235,23 @@ components:
       type: object
       required: [id, module, operation, description]
       properties:
-        id: { type: string, enum: ['employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write'] }
+        id:
+          type: string
+          enum:
+            - employees:read
+            - employees:write
+            - schedules:read
+            - schedules:write
+            - security:read
+            - security:write
+            - customers:read
+            - customers:write
+            - vehicles:read
+            - vehicles:write
+            - catalog:read
+            - catalog:write
+            - appointments:read
+            - appointments:write
         module: { type: string }
         operation: { type: string }
         description: { type: string }

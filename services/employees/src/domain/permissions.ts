@@ -6,6 +6,14 @@ export const PERMISSIONS = [
   'schedules:write',
   'security:read',
   'security:write',
+  'customers:read',
+  'customers:write',
+  'vehicles:read',
+  'vehicles:write',
+  'catalog:read',
+  'catalog:write',
+  'appointments:read',
+  'appointments:write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -24,6 +32,14 @@ export const PERMISSION_CATALOG: readonly PermissionDescriptor[] = Object.freeze
   { id: 'schedules:write', module: 'Horarios', operation: 'write', description: 'Planificar turnos, descansos y ausencias (CU04)' },
   { id: 'security:read', module: 'Seguridad', operation: 'read', description: 'Consultar roles, permisos y asignaciones (CU02)' },
   { id: 'security:write', module: 'Seguridad', operation: 'write', description: 'Crear y modificar roles, asignarlos y retirarlos (CU02)' },
+  { id: 'customers:read', module: 'Clientes', operation: 'read', description: 'Consultar clientes del taller (CU06)' },
+  { id: 'customers:write', module: 'Clientes', operation: 'write', description: 'Registrar, actualizar y desactivar clientes (CU06)' },
+  { id: 'vehicles:read', module: 'Vehículos', operation: 'read', description: 'Consultar vehículos y su propietario (CU07)' },
+  { id: 'vehicles:write', module: 'Vehículos', operation: 'write', description: 'Registrar, actualizar y desactivar vehículos (CU07)' },
+  { id: 'catalog:read', module: 'Catálogo', operation: 'read', description: 'Consultar el catálogo de servicios (CU09)' },
+  { id: 'catalog:write', module: 'Catálogo', operation: 'write', description: 'Crear, actualizar y desactivar servicios (CU09)' },
+  { id: 'appointments:read', module: 'Citas', operation: 'read', description: 'Consultar citas y la agenda del taller (CU10)' },
+  { id: 'appointments:write', module: 'Citas', operation: 'write', description: 'Registrar, reprogramar y cancelar citas (CU10)' },
 ]);
 
 const KNOWN = new Set<string>(PERMISSIONS);
@@ -33,8 +49,8 @@ export const isPermission = (value: unknown): value is Permission => typeof valu
 /** Permissions granted by the initial roles; reproduces the policy in force before CU02. */
 export const INITIAL_ROLES: readonly { name: string; description: string; permissions: readonly Permission[] }[] = Object.freeze([
   { name: 'administrador', description: 'Administración completa de la plataforma', permissions: PERMISSIONS },
-  { name: 'jefe_taller', description: 'Planificación de horarios y disponibilidad', permissions: ['schedules:read', 'schedules:write'] },
-  { name: 'recepcionista', description: 'Atención al cliente en recepción', permissions: [] },
+  { name: 'jefe_taller', description: 'Planificación de horarios y disponibilidad', permissions: ['schedules:read', 'schedules:write', 'customers:read', 'vehicles:read', 'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write'] },
+  { name: 'recepcionista', description: 'Atención al cliente en recepción', permissions: ['customers:read', 'customers:write', 'vehicles:read', 'vehicles:write', 'catalog:read', 'appointments:read', 'appointments:write'] },
   { name: 'mecanico', description: 'Trabajo técnico en el taller', permissions: [] },
   { name: 'responsable_financiero', description: 'Responsabilidad financiera', permissions: [] },
 ]);

@@ -63,3 +63,20 @@ El microfrontend `mf-employees` consume estas operaciones a través de `SessionP
 | `createRole`, `updateRole`, `retryRoleSync`, `assignRole`, `revokeRole` | `security:write` |
 
 La política del BFF ya no usa nombres de rol: cada campo raíz declara un permiso y el BFF resuelve los permisos del actor con `GET /security/permissions` reenviando su token (caché 30 s). Si la resolución falla responde `SERVICE_UNAVAILABLE` y no autoriza. El CRUD de empleados sigue exigiendo `employees:write`, que solo posee el rol `administrador`: habilitar CU02 no amplía CU03. Catálogo y semántica: [auth/permissions.md](../auth/permissions.md).
+
+## Implementación Operaciones (2026-10-28)
+
+`operations.graphql` extiende el mismo SDL que ejecuta `integration/bff` (`BusinessGraphql`) para CU06, CU07, CU09 y CU10. Campos raíz y permiso exigido:
+
+| Campo | Permiso |
+| --- | --- |
+| `customers`, `customer` | `customers:read` |
+| `createCustomer`, `updateCustomer`, `deactivateCustomer` | `customers:write` |
+| `vehicles`, `vehicle` | `vehicles:read` |
+| `createVehicle`, `updateVehicle`, `deactivateVehicle` | `vehicles:write` |
+| `services`, `service` | `catalog:read` |
+| `createService`, `updateService`, `deactivateService` | `catalog:write` |
+| `appointments`, `appointment` | `appointments:read` |
+| `createAppointment`, `rescheduleAppointment`, `cancelAppointment` | `appointments:write` |
+
+El BFF reenvía el token del usuario a Operaciones, que vuelve a autorizar resolviendo los permisos contra el catálogo de Empleados. Las citas exponen `customerName`, `vehiclePlate` y `serviceName` resueltos por el servicio propietario: la web no compone llamadas cruzadas.

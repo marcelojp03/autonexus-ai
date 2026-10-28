@@ -1,15 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { EmployeesGraphql, BadRequest } from './employees-graphql.js';
+import { BusinessGraphql, BadRequest } from './business-graphql.js';
 import { BusinessError } from './business-error.js';
 
 const schemaPath = resolve(process.cwd(), '../../contracts/graphql/employees.graphql');
 const schedulePath = resolve(process.cwd(), '../../contracts/graphql/schedules.graphql');
 const securityPath = resolve(process.cwd(), '../../contracts/graphql/security.graphql');
+const operationsPath = resolve(process.cwd(), '../../contracts/graphql/operations.graphql');
 const ADMIN = Object.freeze({ subject: 'synthetic-admin', roles: ['administrador'] as const });
 const HEAD = Object.freeze({ subject: 'synthetic-head', roles: ['jefe_taller'] as const });
 const EMPLOYEE_ID = '11111111-1111-4111-8111-111111111111';
-const ALL = ['employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write'];
+const ALL = [
+  'employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write',
+  'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write',
+  'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
+];
 const effectiveFor = (token: string): string[] =>
   token === 'head-token' ? ['schedules:read', 'schedules:write']
     : token === 'security-token' ? ['security:read']
@@ -17,6 +22,28 @@ const effectiveFor = (token: string): string[] =>
         : ALL;
 
 function build(rejected?: Error) {
+  const operations = {
+    customers: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    customer: vi.fn(),
+    createCustomer: vi.fn(async () => ({ customer: { id: EMPLOYEE_ID }, replayed: false })),
+    updateCustomer: vi.fn(),
+    deactivateCustomer: vi.fn(),
+    vehicles: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    vehicle: vi.fn(),
+    createVehicle: vi.fn(),
+    updateVehicle: vi.fn(),
+    deactivateVehicle: vi.fn(),
+    services: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    service: vi.fn(),
+    createService: vi.fn(),
+    updateService: vi.fn(),
+    deactivateService: vi.fn(),
+    appointments: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    appointment: vi.fn(),
+    createAppointment: vi.fn(async () => ({ appointment: { id: EMPLOYEE_ID }, replayed: false })),
+    rescheduleAppointment: vi.fn(),
+    cancelAppointment: vi.fn(),
+  };
   const gateway = {
     list: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
     get: vi.fn(async () => ({ id: EMPLOYEE_ID })),
@@ -46,7 +73,7 @@ function build(rejected?: Error) {
     securityHistory: vi.fn(),
   };
   if (rejected) gateway.list.mockRejectedValueOnce(rejected);
-  return { gateway, graphql: new EmployeesGraphql(gateway, [schemaPath, schedulePath, securityPath]) };
+  return { gateway, operations, graphql: new BusinessGraphql(gateway, operations, [schemaPath, schedulePath, securityPath, operationsPath]) };
 }
 
 describe('EmployeesGraphql allowlist and error mapping', () => {
@@ -188,5 +215,55 @@ describe('CU02 security policy', () => {
     );
     expect(denied.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
     expect(gateway.deactivate).not.toHaveBeenCalled();
+  });
+});
+
+describe('operations policy (CU06, CU07, CU09, CU10)', () => {
+  it('publishes the operations root fields in the SDL', () => {
+    const source = readFileSync(operationsPath, 'utf8');
+    const blocks = [...source.matchAll(/extend type (?:Query|Mutation) \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join('\n');
+    const roots = [...blocks.matchAll(/^ {2}([A-Za-z]+)[(:]/gm)].map((match) => match[1]);
+    expect(roots.sort()).toEqual([
+      'appointments', 'appointment', 'cancelAppointment', 'createAppointment', 'createCustomer', 'createService',
+      'createVehicle', 'customer', 'customers', 'deactivateCustomer', 'deactivateService', 'deactivateVehicle',
+      'rescheduleAppointment', 'service', 'services', 'updateCustomer', 'updateService', 'updateVehicle',
+      'vehicle', 'vehicles',
+    ].sort());
+  });
+
+  it('routes customers, services and appointments to the operations owner', async () => {
+    const { graphql, operations } = build();
+    const customers = await graphql.run({ query: '{ customers(search: "ana") { total items { id } } }' }, ADMIN, 'token');
+    expect(customers.errors).toBeUndefined();
+    expect(operations.customers).toHaveBeenCalledWith(expect.objectContaining({ search: 'ana' }), 'token');
+
+    const scheduled = await graphql.run(
+      {
+        query: 'mutation ($input: CreateAppointmentInput!) { createAppointment(input: $input) { appointment { id } replayed } }',
+        variables: { input: { operationId: EMPLOYEE_ID, customerId: EMPLOYEE_ID, vehicleId: EMPLOYEE_ID, serviceId: EMPLOYEE_ID, startsAt: '2026-12-01T09:00:00-04:00' } },
+      },
+      ADMIN,
+      'token',
+    );
+    expect(scheduled.errors).toBeUndefined();
+    expect(operations.createAppointment).toHaveBeenCalledWith(expect.objectContaining({ startsAt: '2026-12-01T09:00:00-04:00' }), 'token');
+  });
+
+  it('requires catalog and appointment permissions per field', async () => {
+    const { graphql, operations } = build();
+    const deniedCatalog = await graphql.run({ query: '{ services { total } }' }, HEAD, 'head-token');
+    expect(deniedCatalog.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(operations.services).not.toHaveBeenCalled();
+
+    const deniedAppointment = await graphql.run(
+      {
+        query: 'mutation ($input: CreateAppointmentInput!) { createAppointment(input: $input) { appointment { id } } }',
+        variables: { input: { operationId: EMPLOYEE_ID, customerId: EMPLOYEE_ID, vehicleId: EMPLOYEE_ID, serviceId: EMPLOYEE_ID, startsAt: '2026-12-01T09:00:00-04:00' } },
+      },
+      ADMIN,
+      'security-token',
+    );
+    expect(deniedAppointment.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(operations.createAppointment).not.toHaveBeenCalled();
   });
 });

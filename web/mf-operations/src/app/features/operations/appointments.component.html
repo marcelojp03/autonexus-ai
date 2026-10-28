@@ -1,0 +1,103 @@
+<nz-page-header nzTitle="Citas de servicio" nzSubtitle="CU10 · Agenda del taller"></nz-page-header>
+
+<nz-alert class="panel" nzType="info" nzShowIcon id="appointment-scope"
+  nzMessage="Una cita reserva una franja para un vehículo y un servicio. No es una orden de trabajo ni asigna mecánico."></nz-alert>
+
+@if (error()) {
+  <nz-alert class="panel" nzType="error" nzShowIcon id="appointment-error" [nzMessage]="error()!"></nz-alert>
+}
+@if (notice()) {
+  <nz-alert class="panel" nzType="success" nzShowIcon nzCloseable id="appointment-notice" [nzMessage]="notice()!" (nzOnClose)="notice.set(null)"></nz-alert>
+}
+
+<div class="toolbar">
+  <label class="field">Desde
+    <input nz-input type="date" id="appointment-from" [value]="from" (change)="from = $any($event.target).value" />
+  </label>
+  <label class="field">Hasta
+    <input nz-input type="date" id="appointment-to" [value]="to" (change)="to = $any($event.target).value" />
+  </label>
+  <label class="field">Estado
+    <nz-select style="min-width: 150px" id="appointment-status" [ngModel]="status" (ngModelChange)="status = $event" nzAllowClear nzPlaceHolder="Todas">
+      <nz-option nzValue="scheduled" nzLabel="Programadas"></nz-option>
+      <nz-option nzValue="cancelled" nzLabel="Canceladas"></nz-option>
+    </nz-select>
+  </label>
+  <label class="field">Motivo de cancelación
+    <input nz-input id="appointment-cancel-reason" [value]="cancelReason" (input)="cancelReason = $any($event.target).value" placeholder="Requerido para cancelar" />
+  </label>
+  <button nz-button type="button" id="appointment-search-button" (click)="load()">Actualizar agenda</button>
+</div>
+
+<nz-table #table [nzData]="rows()" [nzLoading]="loading()" nzSize="middle" id="appointment-table" aria-label="Citas del taller">
+  <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Vehículo</th><th>Servicio</th><th>Estado</th><th>Motivo</th><th>Acciones</th></tr></thead>
+  <tbody>
+    @for (appointment of table.data; track appointment.id) {
+      <tr [attr.data-appointment-id]="appointment.id" [attr.data-appointment-status]="appointment.status">
+        <td>{{ localDate(appointment.startsAt) }}</td>
+        <td>{{ localTime(appointment.startsAt) }}–{{ localTime(appointment.endsAt) }}</td>
+        <td>{{ appointment.customerName }}</td>
+        <td>{{ appointment.vehiclePlate }}</td>
+        <td>{{ appointment.serviceName }}</td>
+        <td><nz-tag [nzColor]="appointment.status === 'scheduled' ? 'blue' : 'default'">{{ appointment.status === 'scheduled' ? 'Programada' : 'Cancelada' }}</nz-tag></td>
+        <td>{{ appointment.cancelReason || '—' }}</td>
+        <td class="actions">
+          @if (appointment.status === 'scheduled') {
+            <button nz-button nzType="link" nzSize="small" type="button" [attr.data-appointment-reschedule]="appointment.id" (click)="startReschedule(appointment)">Reprogramar</button>
+            <button nz-button nzType="link" nzSize="small" nzDanger type="button" nz-popconfirm
+              nzPopconfirmTitle="¿Cancelar esta cita? Se usa el motivo indicado arriba."
+              nzOkText="Cancelar cita" nzCancelText="Volver"
+              [attr.data-appointment-cancel]="appointment.id" [disabled]="saving()"
+              (nzOnConfirm)="cancel(appointment)">Cancelar</button>
+          }
+        </td>
+      </tr>
+    }
+  </tbody>
+</nz-table>
+@if (!rows().length && !loading()) {
+  <nz-empty id="appointment-empty" nzNotFoundContent="Sin citas en el rango elegido"></nz-empty>
+}
+
+<h3 class="panel">Registrar cita</h3>
+<div class="toolbar">
+  <label class="field">Cliente
+    <nz-select style="min-width: 230px" id="appointment-customer" [ngModel]="customerId" (ngModelChange)="selectCustomer($event)" nzPlaceHolder="Cliente activo">
+      @for (customer of customers(); track customer.id) {
+        <nz-option [nzValue]="customer.id" [nzLabel]="customer.firstName + ' ' + customer.lastName"></nz-option>
+      }
+    </nz-select>
+  </label>
+  <label class="field">Vehículo
+    <nz-select style="min-width: 200px" id="appointment-vehicle" [ngModel]="vehicleId" (ngModelChange)="vehicleId = $event" nzPlaceHolder="Vehículo del cliente">
+      @for (vehicle of vehicles(); track vehicle.id) {
+        <nz-option [nzValue]="vehicle.id" [nzLabel]="vehicle.plate + ' · ' + vehicle.make + ' ' + vehicle.model"></nz-option>
+      }
+    </nz-select>
+  </label>
+  <label class="field">Servicio
+    <nz-select style="min-width: 230px" id="appointment-service" [ngModel]="serviceId" (ngModelChange)="serviceId = $event" nzPlaceHolder="Servicio activo">
+      @for (service of services(); track service.id) {
+        <nz-option [nzValue]="service.id" [nzLabel]="service.name + ' · ' + service.estimatedMinutes + ' min'"></nz-option>
+      }
+    </nz-select>
+  </label>
+  <label class="field">Fecha y hora
+    <input nz-input type="datetime-local" id="appointment-starts-at" [value]="startsAt" (input)="startsAt = $any($event.target).value" />
+  </label>
+  <label class="field">Observaciones
+    <input nz-input id="appointment-notes" [value]="notes" (input)="notes = $any($event.target).value" placeholder="Opcional" />
+  </label>
+  <button nz-button nzType="primary" type="button" id="appointment-save" [disabled]="saving()" (click)="schedule()">Agendar</button>
+</div>
+
+@if (rescheduling(); as appointment) {
+  <h3 class="panel">Reprogramar cita de {{ appointment.customerName }} ({{ appointment.vehiclePlate }})</h3>
+  <div class="toolbar">
+    <label class="field">Nueva fecha y hora
+      <input nz-input type="datetime-local" id="appointment-reschedule-at" [value]="rescheduleAt" (input)="rescheduleAt = $any($event.target).value" />
+    </label>
+    <button nz-button nzType="primary" type="button" id="appointment-reschedule-save" [disabled]="saving()" (click)="confirmReschedule()">Guardar</button>
+    <button nz-button type="button" id="appointment-reschedule-cancel" (click)="rescheduling.set(null)">Descartar</button>
+  </div>
+}

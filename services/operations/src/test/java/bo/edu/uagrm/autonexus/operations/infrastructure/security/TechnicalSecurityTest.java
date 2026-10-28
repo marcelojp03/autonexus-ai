@@ -27,6 +27,11 @@ class TechnicalSecurityTest {
     @EnableWebMvc @EnableWebSecurity
     @Import({SecurityConfiguration.class, TechnicalController.class, FakeHealth.class})
     static class TestConfig {
+        @Bean EmployeePermissionsClient permissionsClient() {
+            // Unreachable owner: permissions fail closed and only role authorities remain.
+            return new EmployeePermissionsClient("http://127.0.0.1:1", 30);
+        }
+
         @Bean @Primary JwtDecoder fakeDecoder() {
             return fixture -> {
                 if (fixture.equals("invalid")) throw new BadJwtException("Invalid synthetic fixture");

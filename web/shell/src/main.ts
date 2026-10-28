@@ -44,6 +44,9 @@ function renderNavigation(): void {
   document.querySelectorAll<HTMLElement>('[data-employee-link]').forEach((link) => {
     link.hidden = !allowed || module !== 'employees';
   });
+  document.querySelectorAll<HTMLElement>('[data-operations-link]').forEach((link) => {
+    link.hidden = !allowed || module !== 'operations';
+  });
   document.querySelectorAll<HTMLAnchorElement>('[data-page]').forEach((link) => {
     link.hidden = !module || !allowed;
     if (!module) return;

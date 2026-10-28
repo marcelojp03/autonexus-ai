@@ -1,0 +1,186 @@
+"""Operations contract (CU06, CU07, CU09, CU10). Extends the employees schema executed by
+integration/bff; every root field declares the permission required by the CU02 catalog."""
+
+enum CustomerStatus { active inactive }
+enum VehicleStatus { active inactive }
+enum FuelType { gasolina diesel gas electrico hibrido }
+enum ServiceCategory { mantenimiento reparacion diagnostico otros }
+enum AppointmentStatus { scheduled cancelled }
+
+type Customer {
+  id: UUID!
+  firstName: String!
+  lastName: String!
+  document: String!
+  phone: String!
+  email: String
+  address: String
+  status: CustomerStatus!
+  version: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type CustomerPage { items: [Customer!]! total: Int! limit: Int! offset: Int! }
+
+type Vehicle {
+  id: UUID!
+  customerId: UUID!
+  customerName: String!
+  plate: String!
+  make: String!
+  model: String!
+  year: Int!
+  fuelType: FuelType!
+  color: String
+  status: VehicleStatus!
+  version: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type VehiclePage { items: [Vehicle!]! total: Int! limit: Int! offset: Int! }
+
+type Service {
+  id: UUID!
+  name: String!
+  description: String!
+  category: ServiceCategory!
+  estimatedMinutes: Int!
+  referenceRate: Float!
+  active: Boolean!
+  version: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type ServicePage { items: [Service!]! total: Int! limit: Int! offset: Int! }
+
+"""A reserved slot for a vehicle and a service. It is not a work order nor a mechanic assignment."""
+type Appointment {
+  id: UUID!
+  customerId: UUID!
+  customerName: String!
+  vehicleId: UUID!
+  vehiclePlate: String!
+  serviceId: UUID!
+  serviceName: String!
+  startsAt: DateTime!
+  endsAt: DateTime!
+  status: AppointmentStatus!
+  notes: String
+  cancelReason: String
+  version: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+type AppointmentPage { items: [Appointment!]! total: Int! limit: Int! offset: Int! }
+
+type CustomerResult { customer: Customer! replayed: Boolean! }
+type VehicleResult { vehicle: Vehicle! replayed: Boolean! }
+type ServiceResult { service: Service! replayed: Boolean! }
+type AppointmentResult { appointment: Appointment! replayed: Boolean! }
+
+input CreateCustomerInput {
+  operationId: UUID!
+  firstName: String!
+  lastName: String!
+  document: String!
+  phone: String!
+  email: String
+  address: String
+}
+input UpdateCustomerInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  firstName: String!
+  lastName: String!
+  document: String!
+  phone: String!
+  email: String
+  address: String
+}
+input CreateVehicleInput {
+  operationId: UUID!
+  customerId: UUID!
+  plate: String!
+  make: String!
+  model: String!
+  year: Int!
+  fuelType: FuelType!
+  color: String
+}
+input UpdateVehicleInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  customerId: UUID!
+  plate: String!
+  make: String!
+  model: String!
+  year: Int!
+  fuelType: FuelType!
+  color: String
+}
+input CreateServiceInput {
+  operationId: UUID!
+  name: String!
+  description: String!
+  category: ServiceCategory!
+  estimatedMinutes: Int!
+  referenceRate: Float!
+}
+input UpdateServiceInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  name: String!
+  description: String!
+  category: ServiceCategory!
+  estimatedMinutes: Int!
+  referenceRate: Float!
+}
+input CreateAppointmentInput {
+  operationId: UUID!
+  customerId: UUID!
+  vehicleId: UUID!
+  serviceId: UUID!
+  startsAt: DateTime!
+  notes: String
+}
+input RescheduleAppointmentInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  startsAt: DateTime!
+  notes: String
+}
+input CancelAppointmentInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  reason: String!
+}
+input OperationsCommandInput {
+  operationId: UUID!
+  expectedVersion: Int!
+}
+
+extend type Query {
+  customers(limit: Int, offset: Int, status: CustomerStatus, search: String): CustomerPage!
+  customer(id: UUID!): Customer!
+  vehicles(limit: Int, offset: Int, status: VehicleStatus, customerId: UUID, search: String): VehiclePage!
+  vehicle(id: UUID!): Vehicle!
+  services(limit: Int, offset: Int, active: Boolean, search: String): ServicePage!
+  service(id: UUID!): Service!
+  appointments(limit: Int, offset: Int, from: DateTime, to: DateTime, status: AppointmentStatus, customerId: UUID, vehicleId: UUID): AppointmentPage!
+  appointment(id: UUID!): Appointment!
+}
+
+extend type Mutation {
+  createCustomer(input: CreateCustomerInput!): CustomerResult!
+  updateCustomer(id: UUID!, input: UpdateCustomerInput!): CustomerResult!
+  deactivateCustomer(id: UUID!, input: OperationsCommandInput!): CustomerResult!
+  createVehicle(input: CreateVehicleInput!): VehicleResult!
+  updateVehicle(id: UUID!, input: UpdateVehicleInput!): VehicleResult!
+  deactivateVehicle(id: UUID!, input: OperationsCommandInput!): VehicleResult!
+  createService(input: CreateServiceInput!): ServiceResult!
+  updateService(id: UUID!, input: UpdateServiceInput!): ServiceResult!
+  deactivateService(id: UUID!, input: OperationsCommandInput!): ServiceResult!
+  createAppointment(input: CreateAppointmentInput!): AppointmentResult!
+  rescheduleAppointment(id: UUID!, input: RescheduleAppointmentInput!): AppointmentResult!
+  cancelAppointment(id: UUID!, input: CancelAppointmentInput!): AppointmentResult!
+}

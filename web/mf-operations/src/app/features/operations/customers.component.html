@@ -1,0 +1,77 @@
+<nz-page-header nzTitle="Clientes" nzSubtitle="CU06 · Recepción"></nz-page-header>
+
+@if (error()) {
+  <nz-alert class="panel" nzType="error" nzShowIcon id="customer-error" [nzMessage]="error()!"></nz-alert>
+}
+@if (notice()) {
+  <nz-alert class="panel" nzType="success" nzShowIcon nzCloseable id="customer-notice" [nzMessage]="notice()!" (nzOnClose)="notice.set(null)"></nz-alert>
+}
+
+<div class="toolbar">
+  <label class="field">Buscar
+    <input nz-input id="customer-search" [value]="search" (input)="search = $any($event.target).value" (keyup.enter)="load()" placeholder="Nombre, apellido o documento" />
+  </label>
+  <label class="field">Estado
+    <nz-select style="min-width: 150px" id="customer-status" [ngModel]="status" (ngModelChange)="status = $event" nzAllowClear nzPlaceHolder="Todos">
+      <nz-option nzValue="active" nzLabel="Activos"></nz-option>
+      <nz-option nzValue="inactive" nzLabel="Inactivos"></nz-option>
+    </nz-select>
+  </label>
+  <button nz-button type="button" id="customer-search-button" (click)="load()">Buscar</button>
+  <button nz-button type="button" id="customer-new" (click)="startCreate()">Nuevo cliente</button>
+</div>
+
+<nz-table #table [nzData]="rows()" [nzLoading]="loading()" nzSize="middle" id="customer-table" aria-label="Clientes registrados">
+  <thead><tr><th>Cliente</th><th>Documento</th><th>Teléfono</th><th>Correo</th><th>Estado</th><th>Versión</th><th>Acciones</th></tr></thead>
+  <tbody>
+    @for (customer of table.data; track customer.id) {
+      <tr [attr.data-customer-document]="customer.document">
+        <td>{{ customer.firstName }} {{ customer.lastName }}</td>
+        <td>{{ customer.document }}</td>
+        <td>{{ customer.phone }}</td>
+        <td>{{ customer.email || '—' }}</td>
+        <td><nz-tag [nzColor]="customer.status === 'active' ? 'green' : 'default'">{{ customer.status === 'active' ? 'Activo' : 'Inactivo' }}</nz-tag></td>
+        <td>{{ customer.version }}</td>
+        <td class="actions">
+          <button nz-button nzType="link" nzSize="small" type="button" [attr.data-customer-edit]="customer.document" (click)="startEdit(customer)">Editar</button>
+          @if (customer.status === 'active') {
+            <button nz-button nzType="link" nzSize="small" nzDanger type="button" nz-popconfirm
+              nzPopconfirmTitle="¿Desactivar este cliente? Se conserva el historial."
+              nzOkText="Desactivar" nzCancelText="Cancelar"
+              [attr.data-customer-deactivate]="customer.document" [disabled]="saving()"
+              (nzOnConfirm)="deactivate(customer)">Desactivar</button>
+          }
+        </td>
+      </tr>
+    }
+  </tbody>
+</nz-table>
+@if (!rows().length && !loading()) {
+  <nz-empty id="customer-empty" nzNotFoundContent="Sin clientes para el filtro actual"></nz-empty>
+}
+
+<h3 class="panel">{{ editing() ? 'Editar cliente' : 'Registrar cliente' }}</h3>
+<div class="toolbar">
+  <label class="field">Nombres
+    <input nz-input id="customer-first-name" [value]="firstName" (input)="firstName = $any($event.target).value" />
+  </label>
+  <label class="field">Apellidos
+    <input nz-input id="customer-last-name" [value]="lastName" (input)="lastName = $any($event.target).value" />
+  </label>
+  <label class="field">Documento
+    <input nz-input id="customer-document" [value]="document" (input)="document = $any($event.target).value" placeholder="Sólo letras y números" />
+  </label>
+  <label class="field">Teléfono
+    <input nz-input id="customer-phone" [value]="phone" (input)="phone = $any($event.target).value" />
+  </label>
+  <label class="field">Correo
+    <input nz-input id="customer-email" [value]="email" (input)="email = $any($event.target).value" placeholder="Opcional" />
+  </label>
+  <label class="field">Dirección
+    <input nz-input id="customer-address" [value]="address" (input)="address = $any($event.target).value" placeholder="Opcional" />
+  </label>
+  <button nz-button nzType="primary" type="button" id="customer-save" [disabled]="saving()" (click)="save()">
+    {{ editing() ? 'Guardar cambios' : 'Registrar' }}
+  </button>
+  <button nz-button type="button" id="customer-clear" (click)="startCreate()">Limpiar</button>
+</div>

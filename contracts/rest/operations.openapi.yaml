@@ -1,0 +1,580 @@
+openapi: 3.1.0
+info:
+  title: AutoNexus AI — Operaciones, clientes, vehículos, catálogo y citas
+  version: 1.0.0
+  description: >
+    Superficie REST propietaria de MS01 (CU06, CU07, CU09, CU10). La web consume estas
+    operaciones exclusivamente por GraphQL mediante integration/bff. Autorización por permiso
+    del catálogo CU02 (`contracts/auth/permissions.md`): `<modulo>:read` para consultas y
+    `<modulo>:write` para mutaciones. Una cita no es una orden de trabajo ni una asignación
+    de mecánico.
+servers:
+  - url: http://127.0.0.1:8081
+security:
+  - bearerAuth: []
+paths:
+  /customers:
+    get:
+      operationId: listCustomers
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: Página de clientes ordenada por alta
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createCustomer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCustomerInput' }
+      responses:
+        '201':
+          description: Cliente registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerResult' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /customers/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getCustomer
+      responses:
+        '200':
+          description: Ficha del cliente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Customer' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateCustomer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCustomerInput' }
+      responses:
+        '200':
+          description: Cliente actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerResult' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /customers/{id}/deactivate:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: deactivateCustomer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommandInput' }
+      responses:
+        '200':
+          description: Cliente desactivado; el historial se conserva
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /vehicles:
+    get:
+      operationId: listVehicles
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { name: customerId, in: query, schema: { type: string, format: uuid } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: Página de vehículos con su propietario
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehiclePage' }
+    post:
+      operationId: createVehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateVehicleInput' }
+      responses:
+        '201':
+          description: Vehículo registrado con su propietario inicial
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleResult' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /vehicles/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getVehicle
+      responses:
+        '200':
+          description: Ficha del vehículo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateVehicle
+      description: Un cambio de propietario cierra la fila vigente de `vehicle_owners` y abre otra.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateVehicleInput' }
+      responses:
+        '200':
+          description: Vehículo actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /vehicles/{id}/deactivate:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: deactivateVehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommandInput' }
+      responses:
+        '200':
+          description: Vehículo desactivado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /services:
+    get:
+      operationId: listServices
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: active, in: query, schema: { type: boolean } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: Página del catálogo de servicios
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServicePage' }
+    post:
+      operationId: createService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateServiceInput' }
+      responses:
+        '201':
+          description: Servicio registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceResult' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /services/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getService
+      responses:
+        '200':
+          description: Ficha del servicio
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Service' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateServiceInput' }
+      responses:
+        '200':
+          description: Servicio actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /services/{id}/deactivate:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: deactivateService
+      description: Los servicios usados antes no se eliminan; se desactivan y conservan su historial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommandInput' }
+      responses:
+        '200':
+          description: Servicio desactivado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /appointments:
+    get:
+      operationId: listAppointments
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - name: from
+          in: query
+          description: ISO-8601 con offset; filtra citas que terminan después del instante
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: ISO-8601 con offset; filtra citas que empiezan antes del instante
+          schema: { type: string, format: date-time }
+        - { name: status, in: query, schema: { type: string, enum: [scheduled, cancelled] } }
+        - { name: customerId, in: query, schema: { type: string, format: uuid } }
+        - { name: vehicleId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Página de citas con cliente, vehículo y servicio resueltos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentPage' }
+    post:
+      operationId: createAppointment
+      description: >
+        Reserva una franja para un vehículo y un servicio. Valida cliente/vehículo/servicio
+        activos, propiedad del vehículo, duplicados, solapamiento del vehículo y capacidad del
+        taller. No crea una orden de trabajo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAppointmentInput' }
+      responses:
+        '201':
+          description: Cita programada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResult' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /appointments/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getAppointment
+      responses:
+        '200':
+          description: Detalle de la cita
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: rescheduleAppointment
+      description: Reprogramar repite todas las validaciones de disponibilidad.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RescheduleAppointmentInput' }
+      responses:
+        '200':
+          description: Cita reprogramada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /appointments/{id}/cancel:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: cancelAppointment
+      description: Cancela con motivo, libera la franja y conserva la cita.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operationId, expectedVersion, reason]
+              additionalProperties: false
+              properties:
+                operationId: { type: string, format: uuid }
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200':
+          description: Cita cancelada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Invalid:
+      description: VALIDATION_ERROR
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BusinessError' }
+    Unauthorized:
+      description: Token ausente o inválido
+    Forbidden:
+      description: Permiso insuficiente o permisos no resolubles
+    NotFound:
+      description: CUSTOMER_NOT_FOUND, VEHICLE_NOT_FOUND, SERVICE_NOT_FOUND, APPOINTMENT_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BusinessError' }
+    Conflict:
+      description: >
+        DUPLICATE_DOCUMENT, DUPLICATE_PLATE, DUPLICATE_SERVICE, CUSTOMER_INACTIVE, VEHICLE_INACTIVE,
+        VEHICLE_OWNERSHIP_MISMATCH, SERVICE_INACTIVE, APPOINTMENT_DUPLICATE, APPOINTMENT_OVERLAP,
+        APPOINTMENT_NOT_SCHEDULED, WORKSHOP_CAPACITY_EXCEEDED, VERSION_CONFLICT, IDEMPOTENCY_CONFLICT
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/BusinessError' }
+  schemas:
+    BusinessError:
+      type: object
+      required: [statusCode, message, code]
+      properties:
+        statusCode: { type: integer }
+        message: { type: string }
+        code: { type: string }
+    CommandInput:
+      type: object
+      required: [operationId, expectedVersion]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 1 }
+    Customer:
+      type: object
+      required: [id, firstName, lastName, document, phone, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        document: { type: string, pattern: '^[0-9A-Z]{4,20}$' }
+        phone: { type: string }
+        email: { type: [string, 'null'] }
+        address: { type: [string, 'null'] }
+        status: { type: string, enum: [active, inactive] }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CustomerPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Customer' } }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    Vehicle:
+      type: object
+      required: [id, customerId, customerName, plate, make, model, year, fuelType, status, version]
+      properties:
+        id: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        customerName: { type: string }
+        plate: { type: string, pattern: '^[0-9A-Z]{5,10}$' }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer, minimum: 1950 }
+        fuelType: { type: string, enum: [gasolina, diesel, gas, electrico, hibrido] }
+        color: { type: [string, 'null'] }
+        status: { type: string, enum: [active, inactive] }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    VehiclePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Vehicle' } }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    Service:
+      type: object
+      required: [id, name, description, category, estimatedMinutes, referenceRate, active, version]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 3, maxLength: 80 }
+        description: { type: string, minLength: 1, maxLength: 300 }
+        category: { type: string, enum: [mantenimiento, reparacion, diagnostico, otros] }
+        estimatedMinutes: { type: integer, minimum: 15, maximum: 480 }
+        referenceRate: { type: number, minimum: 0, maximum: 9999999.99 }
+        active: { type: boolean }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ServicePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Service' } }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    Appointment:
+      type: object
+      required: [id, customerId, customerName, vehicleId, vehiclePlate, serviceId, serviceName, startsAt, endsAt, status, version]
+      properties:
+        id: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        customerName: { type: string }
+        vehicleId: { type: string, format: uuid }
+        vehiclePlate: { type: string }
+        serviceId: { type: string, format: uuid }
+        serviceName: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        status: { type: string, enum: [scheduled, cancelled] }
+        notes: { type: [string, 'null'] }
+        cancelReason: { type: [string, 'null'] }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AppointmentPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Appointment' } }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    CreateCustomerInput:
+      type: object
+      required: [operationId, firstName, lastName, document, phone]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        document: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        address: { type: string, maxLength: 200 }
+    UpdateCustomerInput:
+      allOf:
+        - { $ref: '#/components/schemas/CreateCustomerInput' }
+        - type: object
+          required: [expectedVersion]
+          properties:
+            expectedVersion: { type: integer, minimum: 1 }
+    CreateVehicleInput:
+      type: object
+      required: [operationId, customerId, plate, make, model, year, fuelType]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        plate: { type: string }
+        make: { type: string, maxLength: 60 }
+        model: { type: string, maxLength: 60 }
+        year: { type: integer }
+        fuelType: { type: string, enum: [gasolina, diesel, gas, electrico, hibrido] }
+        color: { type: string, maxLength: 40 }
+    UpdateVehicleInput:
+      allOf:
+        - { $ref: '#/components/schemas/CreateVehicleInput' }
+        - type: object
+          required: [expectedVersion]
+          properties:
+            expectedVersion: { type: integer, minimum: 1 }
+    CreateServiceInput:
+      type: object
+      required: [operationId, name, description, category, estimatedMinutes, referenceRate]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        name: { type: string, minLength: 3, maxLength: 80 }
+        description: { type: string, minLength: 1, maxLength: 300 }
+        category: { type: string, enum: [mantenimiento, reparacion, diagnostico, otros] }
+        estimatedMinutes: { type: integer, minimum: 15, maximum: 480 }
+        referenceRate: { type: number, minimum: 0, maximum: 9999999.99 }
+    UpdateServiceInput:
+      allOf:
+        - { $ref: '#/components/schemas/CreateServiceInput' }
+        - type: object
+          required: [expectedVersion]
+          properties:
+            expectedVersion: { type: integer, minimum: 1 }
+    CreateAppointmentInput:
+      type: object
+      required: [operationId, customerId, vehicleId, serviceId, startsAt]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        customerId: { type: string, format: uuid }
+        vehicleId: { type: string, format: uuid }
+        serviceId: { type: string, format: uuid }
+        startsAt:
+          type: string
+          format: date-time
+          description: ISO-8601 con offset explícito, por ejemplo 2026-12-01T09:00:00-04:00
+        notes: { type: string, maxLength: 500 }
+    RescheduleAppointmentInput:
+      type: object
+      required: [operationId, expectedVersion, startsAt]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 1 }
+        startsAt: { type: string, format: date-time }
+        notes: { type: string, maxLength: 500 }
+    CustomerResult:
+      type: object
+      required: [customer, replayed]
+      properties:
+        customer: { $ref: '#/components/schemas/Customer' }
+        replayed: { type: boolean }
+    VehicleResult:
+      type: object
+      required: [vehicle, replayed]
+      properties:
+        vehicle: { $ref: '#/components/schemas/Vehicle' }
+        replayed: { type: boolean }
+    ServiceResult:
+      type: object
+      required: [service, replayed]
+      properties:
+        service: { $ref: '#/components/schemas/Service' }
+        replayed: { type: boolean }
+    AppointmentResult:
+      type: object
+      required: [appointment, replayed]
+      properties:
+        appointment: { $ref: '#/components/schemas/Appointment' }
+        replayed: { type: boolean }

@@ -13,12 +13,17 @@ import {
 } from 'graphql';
 import { BusinessError, publicMessage } from './business-error.js';
 import type { CommandInput, EmployeePageQuery, EmployeeQuery, EmployeesGateway, SecurityHistoryQuery, StaffingCommand } from './employees-gateway.js';
+import type { OperationsCommand, OperationsGateway, OperationsPageQuery } from './operations-gateway.js';
 
 /** Closed permission catalog published by the Employees owner. */
 type Permission =
   | 'employees:read' | 'employees:write'
   | 'schedules:read' | 'schedules:write'
-  | 'security:read' | 'security:write';
+  | 'security:read' | 'security:write'
+  | 'customers:read' | 'customers:write'
+  | 'vehicles:read' | 'vehicles:write'
+  | 'catalog:read' | 'catalog:write'
+  | 'appointments:read' | 'appointments:write';
 
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
@@ -49,6 +54,26 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.fre
   retryRoleSync: 'security:write',
   assignRole: 'security:write',
   revokeRole: 'security:write',
+  customers: 'customers:read',
+  customer: 'customers:read',
+  createCustomer: 'customers:write',
+  updateCustomer: 'customers:write',
+  deactivateCustomer: 'customers:write',
+  vehicles: 'vehicles:read',
+  vehicle: 'vehicles:read',
+  createVehicle: 'vehicles:write',
+  updateVehicle: 'vehicles:write',
+  deactivateVehicle: 'vehicles:write',
+  services: 'catalog:read',
+  service: 'catalog:read',
+  createService: 'catalog:write',
+  updateService: 'catalog:write',
+  deactivateService: 'catalog:write',
+  appointments: 'appointments:read',
+  appointment: 'appointments:read',
+  createAppointment: 'appointments:write',
+  rescheduleAppointment: 'appointments:write',
+  cancelAppointment: 'appointments:write',
 });
 const CACHE_TTL_MS = 30000;
 const MAX_QUERY_LENGTH = 4000;
@@ -74,11 +99,15 @@ export class BadRequest extends Error {
   constructor(readonly code: string) { super(code); this.name = 'BadRequest'; }
 }
 
-export class EmployeesGraphql {
+export class BusinessGraphql {
   private readonly schema: GraphQLSchema;
   private readonly cache = new Map<string, { expires: number; permissions: ReadonlySet<string> }>();
 
-  constructor(private readonly gateway: EmployeesGateway, schemaPaths: readonly string[]) {
+  constructor(
+    private readonly gateway: EmployeesGateway,
+    private readonly operations: OperationsGateway,
+    schemaPaths: readonly string[],
+  ) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
   }
 
@@ -209,6 +238,26 @@ export class EmployeesGraphql {
       retryRoleSync: (args: { name: string; input: CommandInput }) => this.gateway.retryRoleSync(args.name, args.input, token),
       assignRole: (args: { employeeId: string; input: CommandInput }) => this.gateway.assignRole(args.employeeId, args.input, token),
       revokeRole: (args: { employeeId: string; roleName: string; input: CommandInput }) => this.gateway.revokeRole(args.employeeId, args.roleName, args.input, token),
+      customers: (args: OperationsPageQuery) => this.operations.customers(args ?? {}, token),
+      customer: (args: { id: string }) => this.operations.customer(args.id, token),
+      createCustomer: (args: { input: OperationsCommand }) => this.operations.createCustomer(args.input, token),
+      updateCustomer: (args: { id: string; input: OperationsCommand }) => this.operations.updateCustomer(args.id, args.input, token),
+      deactivateCustomer: (args: { id: string; input: OperationsCommand }) => this.operations.deactivateCustomer(args.id, args.input, token),
+      vehicles: (args: OperationsPageQuery) => this.operations.vehicles(args ?? {}, token),
+      vehicle: (args: { id: string }) => this.operations.vehicle(args.id, token),
+      createVehicle: (args: { input: OperationsCommand }) => this.operations.createVehicle(args.input, token),
+      updateVehicle: (args: { id: string; input: OperationsCommand }) => this.operations.updateVehicle(args.id, args.input, token),
+      deactivateVehicle: (args: { id: string; input: OperationsCommand }) => this.operations.deactivateVehicle(args.id, args.input, token),
+      services: (args: OperationsPageQuery) => this.operations.services(args ?? {}, token),
+      service: (args: { id: string }) => this.operations.service(args.id, token),
+      createService: (args: { input: OperationsCommand }) => this.operations.createService(args.input, token),
+      updateService: (args: { id: string; input: OperationsCommand }) => this.operations.updateService(args.id, args.input, token),
+      deactivateService: (args: { id: string; input: OperationsCommand }) => this.operations.deactivateService(args.id, args.input, token),
+      appointments: (args: OperationsPageQuery) => this.operations.appointments(args ?? {}, token),
+      appointment: (args: { id: string }) => this.operations.appointment(args.id, token),
+      createAppointment: (args: { input: OperationsCommand }) => this.operations.createAppointment(args.input, token),
+      rescheduleAppointment: (args: { id: string; input: OperationsCommand }) => this.operations.rescheduleAppointment(args.id, args.input, token),
+      cancelAppointment: (args: { id: string; input: OperationsCommand }) => this.operations.cancelAppointment(args.id, args.input, token),
     };
   }
 

@@ -6,11 +6,16 @@ import { AppModule } from '../src/app.module.js';
 import { AccessTokenVerifier } from '../src/infrastructure/auth/token-verifier.js';
 import { BusinessError } from '../src/application/business-error.js';
 import { HttpEmployeesGateway } from '../src/application/employees-gateway.js';
+import { HttpOperationsGateway } from '../src/application/operations-gateway.js';
 import { configureHttp } from '../src/infrastructure/http/configure-http.js';
 import { bffEnvironment } from '../src/infrastructure/config/environment.js';
 
 const PAGE = { items: [], total: 0, limit: 20, offset: 0 };
-const ALL = ['employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write'];
+const ALL = [
+  'employees:read', 'employees:write', 'schedules:read', 'schedules:write', 'security:read', 'security:write',
+  'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write',
+  'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
+];
 /** Mirrors the owner resolution: realm roles plus persisted assignments. */
 const effectiveFor = (bearer: string): string[] => {
   try {
@@ -59,6 +64,28 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     revokeRole: vi.fn(),
     securityHistory: vi.fn(),
   };
+  const operations = {
+    customers: vi.fn(async () => PAGE),
+    customer: vi.fn(),
+    createCustomer: vi.fn(),
+    updateCustomer: vi.fn(),
+    deactivateCustomer: vi.fn(),
+    vehicles: vi.fn(async () => PAGE),
+    vehicle: vi.fn(),
+    createVehicle: vi.fn(),
+    updateVehicle: vi.fn(),
+    deactivateVehicle: vi.fn(),
+    services: vi.fn(async () => PAGE),
+    service: vi.fn(),
+    createService: vi.fn(),
+    updateService: vi.fn(),
+    deactivateService: vi.fn(),
+    appointments: vi.fn(async () => PAGE),
+    appointment: vi.fn(),
+    createAppointment: vi.fn(),
+    rescheduleAppointment: vi.fn(),
+    cancelAppointment: vi.fn(),
+  };
   const config = bffEnvironment({}, process.cwd());
 
   beforeAll(async () => {
@@ -76,6 +103,8 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
       .useValue(new AccessTokenVerifier(config, createLocalJWKSet({ keys: [await exportJWK(keys.publicKey)] })))
       .overrideProvider(HttpEmployeesGateway)
       .useValue(gateway)
+      .overrideProvider(HttpOperationsGateway)
+      .useValue(operations)
       .compile();
     app = module.createNestApplication<NestExpressApplication>();
     configureHttp(app, config);

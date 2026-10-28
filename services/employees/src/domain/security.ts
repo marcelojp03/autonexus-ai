@@ -1,4 +1,4 @@
-import { isPermission, type Permission } from './permissions.js';
+import { PERMISSIONS, isPermission, type Permission } from './permissions.js';
 
 export class SecurityError extends Error {
   constructor(readonly statusCode: number, readonly code: string, options?: { cause?: unknown }) { super(code, options); this.name = 'SecurityError'; }
@@ -67,7 +67,7 @@ export function roleDescription(value: unknown): string {
 
 /** New and updated roles must carry at least one known permission and no duplicates. */
 export function rolePermissions(value: unknown): readonly Permission[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 8) return invalid();
+  if (!Array.isArray(value) || value.length === 0 || value.length > PERMISSIONS.length) return invalid();
   const seen = new Set<string>();
   for (const item of value) {
     if (!isPermission(item) || seen.has(item)) return invalid();

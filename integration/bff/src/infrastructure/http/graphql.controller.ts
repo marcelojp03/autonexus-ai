@@ -1,6 +1,6 @@
 import { Controller, Get, Headers, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { BadRequest, EmployeesGraphql, type GraphqlRequest } from '../../application/employees-graphql.js';
+import { BadRequest, BusinessGraphql, type GraphqlRequest } from '../../application/business-graphql.js';
 import { publicMessage } from '../../application/business-error.js';
 import type { EmployeesGateway } from '../../application/employees-gateway.js';
 import { HttpEmployeesGateway } from '../../application/employees-gateway.js';
@@ -11,7 +11,7 @@ import { UseGuards } from '@nestjs/common';
 @Controller()
 export class GraphqlController {
   constructor(
-    @Inject(EmployeesGraphql) private readonly graphql: EmployeesGraphql,
+    @Inject(BusinessGraphql) private readonly graphql: BusinessGraphql,
     @Inject(HttpEmployeesGateway) private readonly gateway: EmployeesGateway,
   ) {}
 

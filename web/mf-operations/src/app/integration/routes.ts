@@ -1,6 +1,7 @@
 import { sessionGuard } from '../auth/session';
 import { Component } from '@angular/core';
 import { RouterLink, Routes } from '@angular/router';
+import { operationsRoutes } from '../features/operations/routes';
 
 @Component({
   selector: 'anx-integrated-not-found',
@@ -12,7 +13,8 @@ class IntegratedNotFound {}
 
 /** No template chrome, login guards or redirects outside this MF base path. */
 export const integratedRoutes: Routes = [
-  { path: '', redirectTo: 'widgets', pathMatch: 'full' },
+  { path: '', redirectTo: 'appointments', pathMatch: 'full' },
+  ...operationsRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   { path: 'widgets', canActivate: [sessionGuard], loadChildren: () => import('../routes/widgets/routes').then(module => module.routes) },
   { path: 'dashboard', canActivate: [sessionGuard], loadChildren: () => import('../routes/dashboard/routes').then(module => module.routes) },
   { path: '**', component: IntegratedNotFound }
