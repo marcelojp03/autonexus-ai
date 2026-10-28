@@ -1,0 +1,29 @@
+# Normalise text files to LF in the repository AND in the working tree on every
+# platform.
+#
+# The `eol=lf` half matters more than it looks. Without it, git checks files out
+# with CRLF on Windows, and `.prettierrc.json` sets `endOfLine: "lf"`, so
+# `npm run check` fails on a freshly cloned repository with a diff on every
+# single line of every file. Anyone on Windows would hit that within a minute of
+# their first `git clone`.
+* text=auto eol=lf
+
+# Shell scripts must keep LF endings on every platform. A hook checked out with
+# CRLF on Windows and then run on macOS or Linux fails with
+# "bad interpreter: /bin/sh^M", which is a confusing way to discover this.
+.githooks/** text eol=lf
+*.sh text eol=lf
+
+# Config formats that are read by tools rather than by Windows editors.
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+nginx.conf text eol=lf
+
+# Binary, so git never tries to diff or convert them.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

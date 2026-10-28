@@ -34,7 +34,7 @@ export interface SessionPort {
 }
 export interface IntegratedProps {
   domElement: HTMLElement;
-  basePath: '/employees' | '/operations';
-  assetBase: '/mfs/employees/' | '/mfs/operations/';
+  basePath: '/employees' | '/operations' | '/finance';
+  assetBase: '/mfs/employees/' | '/mfs/operations/' | '/mfs/finance/';
   session: SessionPort;
 }

@@ -99,7 +99,7 @@ for (const module of modules) {
       return instrument(name, remote);
     },
     activeWhen: (url) => canMount() && matchesModule(url.pathname, module),
-    customProps: { domElement: hosts[module], basePath: module === 'employees' ? '/employees' : '/operations', assetBase: module === 'employees' ? '/mfs/employees/' : '/mfs/operations/', session },
+      customProps: { domElement: hosts[module], basePath: (module === 'employees' ? '/employees' : '/operations') as IntegrationProps['basePath'], assetBase: ('/mfs/' + module + '/') as IntegrationProps['assetBase'], session },
   });
 }
 document.querySelectorAll<HTMLAnchorElement>('[data-shell-link]').forEach((link) => {
