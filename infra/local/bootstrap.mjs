@@ -99,10 +99,23 @@ export async function retry(check, attempts = 60, delay = 1000) {
 }
 export function httpApi(base, authorization) {
   return async (path, method = 'GET', body, allowed = [200, 201, 204]) => {
-    const response = await fetch(base + path, { method, headers: { Authorization: authorization, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000), redirect: 'error' });
+    let response;
+    try {
+      response = await fetch(base + path, { method, headers: { Authorization: authorization, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000), redirect: 'error' });
+    } catch (error) { throw new Error('HTTP_TRANSPORT_UNCERTAIN', { cause: error }); }
     ensure(allowed.includes(response.status), 'HTTP_STATUS_' + response.status);
-    return response.status === 200 ? response.json() : null;
+    if (response.status !== 200) return null;
+    try { return await response.json(); } catch (error) { throw new Error('HTTP_TRANSPORT_UNCERTAIN', { cause: error }); }
   };
+}
+export async function withTransportRetry(action, { attempts = 3, wait = pause } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try { return await action(); } catch (error) {
+      if (error.message !== 'HTTP_TRANSPORT_UNCERTAIN' || attempt + 1 === attempts) throw error;
+      console.warn('RETRY bootstrap idempotent stage after uncertain transport; private values omitted');
+    }
+    await wait(1000);
+  }
 }
 export async function provisionDatabases(state) {
   const module = await import(process.env.BOOTSTRAP_PG_MODULE || 'pg');
@@ -163,7 +176,7 @@ export async function provision(options = {}) {
     }],
     ['BROKER', () => provisionRabbit(state)],
   ]) {
-    try { await action(); console.log('PASS bootstrap stage ' + stage); }
+    try { await withTransportRetry(action); console.log('PASS bootstrap stage ' + stage); }
     catch (error) {
       // Constrained diagnostics only, never raw upstream messages or private values.
       const code = /^[A-Z0-9_]+$/.test(error.message ?? '') ? error.message : /^[A-Z0-9_]+$/.test(error.code ?? '') ? error.code : /^[A-Za-z]+$/.test(error.name ?? '') ? error.name.toUpperCase() : 'UNKNOWN';

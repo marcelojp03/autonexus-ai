@@ -8,7 +8,7 @@ Consulta de órdenes pendientes, búsqueda por número/placa/ID, creación y rev
 
 La decisión se registra exclusivamente sobre una cotización seleccionada identificada por ID, orden y versión. Exige evidencia real no vacía y admite motivo. Las referencias de cliente y vehículo son sus UUID de Operaciones; nombre y placa son solo presentación. Permisos quotes:read/write/decide y orders:read resueltos por securityCatalog; los servicios y BFF vuelven a autorizarlos.
 
-**Aprobar no confirma el servicio ni asigna mecánico.** CU15, cobros, gastos e indicadores siguen pendientes. IA, fotos/S3 y offline no se acreditan.
+**Aprobar no confirma el servicio ni asigna mecánico.** La confirmación se realiza por CU15, con su estado y evidencia en STATUS. Cobros, gastos e indicadores siguen pendientes; IA, fotos/S3 y offline no se acreditan.
 
 ## Integrado en el Shell
 
@@ -23,6 +23,17 @@ Dev/preview usan exclusivamente http://127.0.0.1:4204, strictPort. main.jsx crea
 El cliente se provisiona de forma idempotente con infra/keycloak/scripts/provision-finance-clients.mjs desde la raíz. Requiere scopes basic/profile/roles, scope-mappings de roles del taller y audiencias de Finanzas, Empleados (BFF) y Operaciones; no se amplían clientes existentes ni se regeneran secretos. El BFF admite el origen exacto 4204 además de los anteriores.
 
 ## Preparación y ejecución
+
+### Docker integrado
+
+Para el conjunto implementado se usa el Compose de la raíz y su [guía de despliegue local](../../docs/deployment/local-compose.md): Shell y los tres microfrontends se compilan dentro de Docker. No se necesitan Node/pnpm ni builds previos en el host para ese recorrido.
+
+El Dockerfile heredado de esta carpeta fue corregido para contexto de raíz, Node22.22.3, pnpm12.6.0 y pnpm-lock.yaml. Compila salidas standalone/integrated separadas; no usa npm ci ni package-lock. Build ejecutado desde raíz con salida0:
+
+```sh
+```
+
+Ese resultado acredita compilación/imagen, no un segundo despliegue SSO independiente. El Compose integral expone solo el Shell. Para ejecutar la imagen heredada por separado también hace falta configuración legible en /run/config/service.env y provisión del cliente OIDC independiente; ese modo no se acredita en la aceptación Docker integral. Los pasos nativos siguientes corresponden al modo de desarrollo ya documentado.
 
 Desde esta carpeta, con Node/pnpm fijados en PATH:
 
