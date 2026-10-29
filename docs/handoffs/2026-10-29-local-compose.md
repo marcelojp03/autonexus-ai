@@ -1,6 +1,6 @@
 # Traspaso — entorno reproducible local (2026-10-29)
 
-T25 verificado y revisado en la rama personal `work/marcelo`, base de integración `df91374`, correcciones finales `71108ad`. Sin otra rama/worktree. El cierre FF/push autorizado y sus referencias observadas se registran en STATUS después de ejecutarlo.
+T25 verificado y revisado en la rama personal `work/marcelo`, base de integración `df91374`, correcciones finales `71108ad`. Sin otra rama/worktree. FF y push normal exacto de `main`/`work/marcelo` ejecutados; `ls-remote` confirmó ambas en `534c597bc306e53d421187b1cbbc9366f95e2a9d`. Este cierre posterior solo es documental y se publica con nueva comprobación de refs.
 
 ## Entrega
 

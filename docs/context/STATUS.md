@@ -1,8 +1,8 @@
 # Estado comprobado
 
-## Infraestructura local reproducible — verificada y revisada, cierre Git en curso (2026-10-29)
+## Infraestructura local reproducible — entregada, integrada y publicada (2026-10-29)
 
-Se continúa T25 conservando CU05 abierto solo por G2 visual: la consulta de secuencia fue descartada sin respuesta y compose-next permite seguir la alternativa recomendada no destructiva. Ninguna publicación ni entrega completa se acredita.
+T25 se cierra con aceptación funcional y revisión independiente resueltas. CU05 permanece abierto solo por G2 visual: la consulta de secuencia fue descartada sin respuesta y compose-next permitió seguir la alternativa recomendada no destructiva; no se presenta el cierre de infraestructura como conformidad visual de CU05.
 
 Creado: Compose raíz de servicios reales, volúmenes/red por proyecto y solo web en loopback; recetas multietapa con imágenes fijadas por digest; bootstrap canónico sin rotación y configuración por consumidor; issuer público exacto/JWKS/token internos separados, binds/orígenes configurables y TLS PostgreSQL verificado opcional; configuración pública runtime del Shell sin secretos; readiness SQL de Finanzas y propuesta cloud sin despliegue.
 
@@ -20,7 +20,7 @@ Medición aproximada en Linux x86-64 (12 CPU, 15,4 GiB para Docker): muestra de 
 
 Revisión independiente general-50: inicialmente no aprobatoria por C1 (exclusiones privadas incompletas del contexto Docker) y C2 (pico no medido), más N1 (bloque vacío en Finance). C1 tiene regresión BuildKit real con archivos sintéticos: rojo antes del fix, verde después, sin secretos reales ni exposición observada; preserva fuentes, contratos y lockfiles. Exclusiones y N1 corregidos, C2 medido como arriba. Re-revisión independiente general-51 aprobatoria sobre las correcciones, sin nuevos bloqueantes de cumplimiento/corrección/consistencia; no sustituye ni oculta el dictamen inicial. Correcciones en `71108ad`; suite posterior de siete archivos: 46 PASS, 2 SKIP Windows, 0 FAIL y `git diff --check` PASS.
 
-README público y guías contienen comandos observados, datos académicos confirmados, cuentas exportadas solo en privado y propuesta cloud sin desplegar. T25 está verificado y revisado; falta registrar el cierre Git autorizado con FF y push normal exacto de ambas ramas y comprobar sus SHA remotos. Los recursos antiguos permanecen intactos; CU05 conserva su bloqueo visual separado y no se declara entregado aunque su código se integre con la infraestructura.
+README público y guías contienen comandos observados, datos académicos confirmados, cuentas exportadas solo en privado y propuesta cloud sin desplegar. Cierre observado: FF desde df91374 y push normal exacto de main/work/marcelo; ls-remote confirmó ambas refs en `534c597bc306e53d421187b1cbbc9366f95e2a9d`. Auditoría de ese HEAD: 23 commits/236 blobs, findings=[] para rutas privadas/generadas, claves privadas y material JWT; no es certificación exhaustiva. El commit posterior solo registra el cierre documental y se audita/publica con nueva comprobación remota. Ramas/worktrees/recursos antiguos/privados/volúmenes conservados. CU05 sigue con G2 visual bloqueado y no se declara entregado aunque su código esté integrado.
 
 ## Revisión CU05 — F1/G1 resueltos; G2 visual bloqueado (2026-10-29)
 

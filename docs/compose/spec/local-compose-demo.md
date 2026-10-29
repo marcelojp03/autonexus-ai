@@ -15,6 +15,8 @@ source: main
 
 **Review** — general-50 independiente no aprobatoria inicialmente (C1/C2/N1). Re-revisión independiente general-51 acepta las correcciones, sin nuevos bloqueantes de cumplimiento/corrección/consistencia. No acredita G2 visual CU05. Cierre Git exacto se registra en STATUS después de comprobar las refs remotas.
 
+**Publication** — FF desde df91374 y push normal exacto de main/work/marcelo comprobados por ls-remote: ambas refs en `534c597bc306e53d421187b1cbbc9366f95e2a9d`. Este cierre posterior es solo documental y se publica con la misma comprobación remota. Ramas, worktrees, privados y volúmenes conservados; CU05 G2 no se cierra.
+
 ## [S1] Problem
 
 El repositorio funcional hasta CU15 depende de herramientas/artefactos del host y tres Compose locales separados; el README raíz contiene estados históricos e instrucciones para agentes. El Dockerfile heredado de React usa npm/package-lock y un dist distinto al actual pnpm/integrated. Un compañero no puede reproducir todo desde una copia limpia solo con Docker/Compose.
@@ -128,7 +130,7 @@ Cloud contratado/desplegado, producción/HA certificada, servicios IA/MS05/MF04/
 - [x] T4: Demo conservadora — acceptance: cuentas privadas, escenario relacionado por APIs/Saga y repetición sin duplicados/ediciones/credenciales cambiadas (depends: T3; covers: S2.7).
 - [x] T5: Aceptación aislada limpia y medidas — acceptance: matriz S2.8 con recursos reales, reinicio/recuperación y métricas observadas (depends: T1, T2, T3, T4; covers: S2.8).
 - [x] T6: README/guías y revisión — acceptance: portada con datos confirmados/badges reales/comandos comprobados; propuesta cloud y revisión resuelta, evidencia técnica separada (depends: T5; covers: S2.1, S2.9, S2.10).
-- [ ] T7: Cierre/publicación — acceptance: STATUS/decisiones/traspaso actualizados, FF y ambas refs remotas verificadas tras push normal (depends: T6; covers: S2.10).
+- [x] T7: Cierre/publicación — acceptance: STATUS/decisiones/traspaso actualizados, FF y ambas refs remotas verificadas tras push normal (depends: T6; covers: S2.10).
 
 ## Journey log
 
