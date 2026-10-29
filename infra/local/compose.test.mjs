@@ -22,6 +22,7 @@ test('runtime consumers do not mount bootstrap state or another owner configurat
 });
 test('migrations and genuine workers participate in ordered startup', () => {
   assert.equal(config.services.rabbitmq.hostname, 'rabbitmq');
+  assert.deepEqual(config.services.rabbitmq.healthcheck.test, ['CMD', 'gosu', 'rabbitmq', 'rabbitmq-diagnostics', '-q', 'ping']);
   assert.equal(config.services.rabbitmq.healthcheck.timeout, '30s');
   assert.equal(config.services.employees.depends_on['employees-migrate'].condition, 'service_completed_successfully');
   assert.equal(config.services.finance.depends_on['finance-migrate'].condition, 'service_completed_successfully');

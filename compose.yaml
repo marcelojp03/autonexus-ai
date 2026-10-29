@@ -74,7 +74,7 @@ services:
       config-init:
         condition: "service_completed_successfully"
     healthcheck:
-      test: ["CMD","rabbitmq-diagnostics","-q","ping"]
+      test: ["CMD","gosu","rabbitmq","rabbitmq-diagnostics","-q","ping"]
       interval: "10s"
       timeout: "30s"
       retries: 50
