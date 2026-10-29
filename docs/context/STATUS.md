@@ -1,6 +1,6 @@
 # Estado comprobado
 
-## Infraestructura local reproducible — aceptación funcional verificada, revisión en curso (2026-10-29)
+## Infraestructura local reproducible — verificada y revisada, cierre Git en curso (2026-10-29)
 
 Se continúa T25 conservando CU05 abierto solo por G2 visual: la consulta de secuencia fue descartada sin respuesta y compose-next permite seguir la alternativa recomendada no destructiva. Ninguna publicación ni entrega completa se acredita.
 
@@ -18,9 +18,9 @@ Regresión focalizada `t25-regression-01.exit=0`, incluidos 34 HTTP BFF y 5 HTTP
 
 Medición aproximada en Linux x86-64 (12 CPU, 15,4 GiB para Docker): muestra de diez contenedores tras calentamiento, 1457 MiB RAM y 24,76 % CPU acumulada. Corrección C2: 26 muestras durante 89,366 s y reinicio controlado de O del proyecto aislado registraron máximos observados de 1836 MiB y 522,95 % CPU agregada, con salud final de nueve aplicaciones y publisher financiero activo (`t25-peak-01.json`, `.exit=0`). Se excluyen daemon/build/host/entornos ajenos. No son promedios, requisitos mínimos ni máximos absolutos: el muestreo omite posibles transitorios y no mide el pico de compilación. Tamaños lógicos y alcance en `t25-resources-01.json` y guía local; no se purgó caché para producir cifras.
 
-Revisión independiente general-50: inicialmente no aprobatoria por C1 (exclusiones privadas incompletas del contexto Docker) y C2 (pico no medido), más N1 (bloque vacío en Finance). C1 tiene regresión BuildKit real con archivos sintéticos: rojo antes del fix, verde después, sin secretos reales ni exposición observada; preserva fuentes, contratos y lockfiles. Exclusiones y N1 corregidos, C2 medido como arriba. Re-revisión pendiente; no se sustituye por el dictamen inicial.
+Revisión independiente general-50: inicialmente no aprobatoria por C1 (exclusiones privadas incompletas del contexto Docker) y C2 (pico no medido), más N1 (bloque vacío en Finance). C1 tiene regresión BuildKit real con archivos sintéticos: rojo antes del fix, verde después, sin secretos reales ni exposición observada; preserva fuentes, contratos y lockfiles. Exclusiones y N1 corregidos, C2 medido como arriba. Re-revisión independiente general-51 aprobatoria sobre las correcciones, sin nuevos bloqueantes de cumplimiento/corrección/consistencia; no sustituye ni oculta el dictamen inicial. Correcciones en `71108ad`; suite posterior de siete archivos: 46 PASS, 2 SKIP Windows, 0 FAIL y `git diff --check` PASS.
 
-README público y guías contienen comandos observados, datos académicos confirmados, cuentas exportadas solo en privado y propuesta cloud sin desplegar. Revisión independiente T25 en curso; no se acredita entrega final ni publicación hasta su cierre. Los recursos antiguos permanecen intactos; CU05 conserva su bloqueo visual separado.
+README público y guías contienen comandos observados, datos académicos confirmados, cuentas exportadas solo en privado y propuesta cloud sin desplegar. T25 está verificado y revisado; falta registrar el cierre Git autorizado con FF y push normal exacto de ambas ramas y comprobar sus SHA remotos. Los recursos antiguos permanecen intactos; CU05 conserva su bloqueo visual separado y no se declara entregado aunque su código se integre con la infraestructura.
 
 ## Revisión CU05 — F1/G1 resueltos; G2 visual bloqueado (2026-10-29)
 

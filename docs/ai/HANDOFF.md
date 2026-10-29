@@ -1,6 +1,8 @@
 # Cierre y continuidad de sesión
 
-Traspaso vigente: [CU05 — F1/G1 corregidos, revisión visual pendiente](../handoffs/2026-10-29-cu05-review.md). CU05 no se declara cerrado; infraestructura conserva diseño aprobado pendiente de resolver la secuencia.
+Traspaso de infraestructura: [Docker Compose local — verificado y revisado](../handoffs/2026-10-29-local-compose.md). T25 tiene aceptación funcional/revisión completas y cierre Git registrado en STATUS al ejecutarse; CU05 G2 visual sigue bloqueado por separado.
+
+Traspaso de CU05: [F1/G1 corregidos, revisión visual pendiente](../handoffs/2026-10-29-cu05-review.md). CU05 no se declara cerrado; continuar con revisión humana o canal que entregue píxeles reales.
 
 Traspaso más reciente: [CU15 — Saga de confirmación entregada y publicada](../handoffs/2026-10-28-cu15-confirmation-saga.md).
 Traspaso anterior: [T21 — React, recepción, órdenes y cotizaciones](../handoffs/2026-10-28-t21-react-finance.md).

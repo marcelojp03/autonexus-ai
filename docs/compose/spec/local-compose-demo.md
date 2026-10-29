@@ -1,13 +1,19 @@
 ---
 feature: local-compose-demo
-status: in-progress
+status: delivered
 updated: 2026-10-29
-source: work/marcelo
+source: main
 ---
 
 # Entorno local reproducible — Docker Compose, demo y README público
 
 ## Report
+
+**What was built** — Entorno local aislado con Compose raíz, builds multietapa desde fuentes/locks, un único origen público con issuer exacto, configuración privada por consumidor y bootstrap/demo conservadores. README público con UAGRM/Ingeniería de Software II/Grupo 26 y comandos observados; guías local/cloud sin despliegue remoto. Correcciones revisadas en 71108ad. CU05 funcional está incluido, pero su conformidad visual G2 sigue pendiente: esta entrega no lo declara cerrado.
+
+**Verification** — Copia pública fuente 21bbcd8 con volúmenes nuevos: `docker compose --env-file .env.example --profile demo up --build -d` PASS en 320,363 s con caché normal; Chromium real PASS, cero diagnósticos de consola/página/red/HTTP/transporte. Repetición conservadora, reinicio de diez contenedores, recuperación de la misma Saga y comprobación readonly de efectos por propietario PASS. Siete archivos de pruebas `infra/local/*.test.mjs`: 46 PASS, 2 SKIP Windows, 0 FAIL; contexto Docker real rojo→verde. Regresiones Empleados 188 unidades/86 HTTP, BFF 141/34 y Finanzas 5 HTTP/46 aserciones PASS. Compose config y diff --check PASS. Muestra estable 1457 MiB/24,76 % CPU; máximo observado de 26 muestras en 89,366 s durante reinicio O: 1836 MiB/522,95 % CPU, todos los healthchecks restaurados. No son picos absolutos ni de compilación. Evidencia saneada y fallos previos preservados bajo `output/stack`; detalle en STATUS/guía local.
+
+**Review** — general-50 independiente no aprobatoria inicialmente (C1/C2/N1). Re-revisión independiente general-51 acepta las correcciones, sin nuevos bloqueantes de cumplimiento/corrección/consistencia. No acredita G2 visual CU05. Cierre Git exacto se registra en STATUS después de comprobar las refs remotas.
 
 ## [S1] Problem
 
@@ -116,12 +122,12 @@ Cloud contratado/desplegado, producción/HA certificada, servicios IA/MS05/MF04/
 
 ## Tasks
 
-- [ ] T1: Configuración/topología y recetas — acceptance: imágenes/versiones comprobadas, Dockerfiles/ignore/Compose sin artefactos host ni colisión con entornos previos (covers: S2.2–S2.4).
-- [ ] T2: Portabilidad de transporte/auth/DB — acceptance: DNS/binds/origins/issuer/JWKS/runtime config/TLS explícitos con tests y defaults locales conservados (depends: T1; covers: S2.3, S2.9).
-- [ ] T3: Bootstrap/migraciones/provisión — acceptance: arranque ordenado idempotente por propietario y secretos preservados fuera de imágenes (depends: T1, T2; covers: S2.5, S2.6).
-- [ ] T4: Demo conservadora — acceptance: cuentas privadas, escenario relacionado por APIs/Saga y repetición sin duplicados/ediciones/credenciales cambiadas (depends: T3; covers: S2.7).
-- [ ] T5: Aceptación aislada limpia y medidas — acceptance: matriz S2.8 con recursos reales, reinicio/recuperación y métricas observadas (depends: T1, T2, T3, T4; covers: S2.8).
-- [ ] T6: README/guías y revisión — acceptance: portada con datos confirmados/badges reales/comandos comprobados; propuesta cloud y revisión resuelta, evidencia técnica separada (depends: T5; covers: S2.1, S2.9, S2.10).
+- [x] T1: Configuración/topología y recetas — acceptance: imágenes/versiones comprobadas, Dockerfiles/ignore/Compose sin artefactos host ni colisión con entornos previos (covers: S2.2–S2.4).
+- [x] T2: Portabilidad de transporte/auth/DB — acceptance: DNS/binds/origins/issuer/JWKS/runtime config/TLS explícitos con tests y defaults locales conservados (depends: T1; covers: S2.3, S2.9).
+- [x] T3: Bootstrap/migraciones/provisión — acceptance: arranque ordenado idempotente por propietario y secretos preservados fuera de imágenes (depends: T1, T2; covers: S2.5, S2.6).
+- [x] T4: Demo conservadora — acceptance: cuentas privadas, escenario relacionado por APIs/Saga y repetición sin duplicados/ediciones/credenciales cambiadas (depends: T3; covers: S2.7).
+- [x] T5: Aceptación aislada limpia y medidas — acceptance: matriz S2.8 con recursos reales, reinicio/recuperación y métricas observadas (depends: T1, T2, T3, T4; covers: S2.8).
+- [x] T6: README/guías y revisión — acceptance: portada con datos confirmados/badges reales/comandos comprobados; propuesta cloud y revisión resuelta, evidencia técnica separada (depends: T5; covers: S2.1, S2.9, S2.10).
 - [ ] T7: Cierre/publicación — acceptance: STATUS/decisiones/traspaso actualizados, FF y ambas refs remotas verificadas tras push normal (depends: T6; covers: S2.10).
 
 ## Journey log
