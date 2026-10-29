@@ -20,6 +20,15 @@ Contrato aprobado en `docs/compose/spec/cu02-security.md` y ampliado en `docs/co
 | `catalog:write` | Catálogo | write | Crear, actualizar y desactivar servicios (CU09) |
 | `appointments:read` | Citas | read | Consultar citas y la agenda del taller (CU10) |
 | `appointments:write` | Citas | write | Registrar, reprogramar y cancelar citas (CU10) |
+| receptions:read | Recepción | read | Consultar recepciones (CU11) |
+| receptions:write | Recepción | write | Recepcionar e inspeccionar con textos (CU11) |
+| orders:read | Órdenes | read | Consultar órdenes (CU12) |
+| orders:write | Órdenes | write | Crear órdenes (CU12) |
+| quotes:read | Cotizaciones | read | Consultar cotizaciones/versiones (CU13) |
+| quotes:write | Cotizaciones | write | Elaborar y revisar cotizaciones (CU13) |
+| quotes:decide | Cotizaciones | decide | Registrar la decisión del cliente (CU14) |
+| confirmations:read | Confirmaciones | read | Progreso, resultados y proyección de mecánicos (CU15) |
+| confirmations:write | Confirmaciones | write | Iniciar y solicitar recuperación de la Saga (CU15) |
 
 Reglas: identificador `modulo:operacion` en minúsculas ASCII; conjunto cerrado; un permiso desconocido produce `VALIDATION_ERROR`; el catálogo se publica por `GET /security/permissions` y por `securityCatalog` en GraphQL, de modo que Empleados, Operaciones y el BFF lo consumen en vez de duplicarlo. CU05 añadirá su permiso de agenda cuando existan órdenes reales; no se crean permisos para módulos sin caso de uso entregado.
 
@@ -27,11 +36,11 @@ Reglas: identificador `modulo:operacion` en minúsculas ASCII; conjunto cerrado;
 
 | Rol | Permisos | Motivo |
 | --- | --- | --- |
-| `administrador` | los catorce | Autoridad completa de la plataforma |
-| `jefe_taller` | `schedules:read/write`, `customers:read`, `vehicles:read`, `catalog:read/write`, `appointments:read/write` | Planificación y catálogo (CU04 y CU09), lectura operativa y agenda (CU10) |
-| `recepcionista` | `customers:read/write`, `vehicles:read/write`, `catalog:read`, `appointments:read/write` | Recepción de clientes, vehículos y citas (CU06, CU07, CU10) |
-| `mecanico` | — | Sin operaciones de gestión entregadas |
-| `responsable_financiero` | — | Finanzas no implementado |
+| `administrador` | los veintitrés vigentes | Autoridad completa de la plataforma |
+| `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write | Planificación, catálogo, órdenes, decisión financiera y confirmación CU15 |
+| `recepcionista` | customers:read/write, vehicles:read/write, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes y decisión del cliente; no elabora cotizaciones |
+| `mecanico` | receptions:read/write | Recepción textual CU11; no confirma servicios por tener este rol |
+| `responsable_financiero` | orders:read, quotes:read/write/decide | Cotizaciones y decisiones CU13/CU14; aprobar no confirma el servicio |
 
 Los roles iniciales son `system=true`: no se renombran y no se borran. Sus permisos sí pueden editarse, con las restricciones de último administrador. Un rol nuevo requiere nombre `^[a-z][a-z0-9_]{2,63}$`, distinto de cualquier otro, y al menos un permiso del catálogo.
 
@@ -56,10 +65,18 @@ El paso 3 es lo que hace que retirar una asignación tenga efecto en la siguient
 ## Política por operación
 
 - REST de Empleados: `employees:*`, `schedules:*`, `security:*`.
-- REST de Operaciones: `customers:*`, `vehicles:*`, `catalog:*`, `appointments:*`. `/technical/session` y `/technical/admin` conservan la política y el cuerpo de CU01 (rol reconocido y rol `administrador`).
+- REST de Operaciones: customers:*, vehicles:*, catalog:*, appointments:*, receptions:*, orders:*; Finanzas usa quotes:read/write/decide. /technical/session y /technical/admin conservan la política y el cuerpo de CU01.
 - BFF GraphQL: el permiso declarado por campo; `securityCatalog` no exige permiso porque solo devuelve el catálogo y los permisos del propio portador.
 
-## Garantías
+## Ampliación CU15 implementada
+
+confirmations:read (progreso/resultados/proyección de mecánicos CU15) y confirmations:write (inicio/reintento) forman parte del catálogo ejecutable de 23 permisos. La migración 1793455200000 los añade a administrador y jefe_taller sin borrar personalizaciones previas. Un rol nuevo puede recibirlos como los demás permisos, sin guards por nombre de rol.
+
+La identidad técnica autonexus-cu15-coordinator es un cliente separado client_credentials con scopes cerrados cu15.staffing.read/reserve/confirm/release y cu15.finance.read/authorize/cancel. No son permisos humanos asignables mediante CU02, no van en clientes públicos y no conceden CRUD de empleados, aprobación de cotizaciones ni realm-management. Los handlers internos comprueban azp/cliente, audiencia y scope además de firma/exp/issuer; no aceptan JWT del navegador por tener confirmations:write.
+
+El campo aprobado mechanicEnabled describe habilitación laboral en Empleados, no un permiso/rol Keycloak; no se concede automáticamente por cargo o por el rol de acceso mecanico. Detalle y aprobación registrados en docs/compose/spec/cu15-confirmation-saga.md y contracts/rest/saga.md.
+
+## Garantías vigentes CU02
 
 - **Sin escalamiento**: un actor no puede crear ni modificar un rol con permisos que no posee, ni asignar un rol cuyos permisos no tenga (`PERMISSION_ESCALATION`, 409).
 - **Nunca sin administrador**: con `pg_advisory_xact_lock` sobre `security:administrators`, se cuentan dentro de la misma transacción las asignaciones vigentes a empleados activos con identidad resoluble cuyos roles otorgan `security:write`. Retirar la última o reducir el último rol que lo otorga responde `LAST_ADMINISTRATOR` (409). Dos peticiones concurrentes no pueden dejar la plataforma sin administrador; la contención de locks responde `409 CONCURRENT_OPERATION`.

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Domain\QuotePolicy;
+use App\Domain\CanonicalJson;
+use App\Domain\CivilQuoteCalendar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,7 +14,32 @@ use InvalidArgumentException;
 /** CU13 and CU14: versioned quotes and the client decision. Approval is not a confirmed service. */
 final class QuoteController extends Controller
 {
-    private const DATE = '/^\d{4}-\d{2}-\d{2}$/';
+    public function store(Request $request): JsonResponse
+    {
+        return $this->write($request, fn () => $this->storeInTransaction($request));
+    }
+
+    public function revise(Request $request, string $id): JsonResponse
+    {
+        return $this->write($request, fn () => $this->reviseInTransaction($request, $id));
+    }
+
+    public function decide(Request $request, string $id): JsonResponse
+    {
+        return $this->write($request, fn () => $this->decideInTransaction($request, $id));
+    }
+
+    private function write(Request $request, \Closure $work): JsonResponse
+    {
+        $operationId = $request->json('operationId');
+        if (!is_string($operationId) || !Str::isUuid($operationId)) {
+            return $this->failure(400, 'VALIDATION_ERROR');
+        }
+        return DB::transaction(function () use ($operationId, $work) {
+            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['finance.operation:'.strtolower($operationId)]);
+            return $work();
+        }, 3);
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -48,7 +75,7 @@ final class QuoteController extends Controller
         return response()->json($this->view((array) $row));
     }
 
-    public function store(Request $request): JsonResponse
+    private function storeInTransaction(Request $request): JsonResponse
     {
         $operationId = (string) ($request->json('operationId') ?? '');
         if (!Str::isUuid($operationId)) {
@@ -56,7 +83,7 @@ final class QuoteController extends Controller
         }
         $subject = (string) $request->attributes->get('subject');
         $payload = $request->json()->all();
-        $fingerprint = hash('sha256', $subject.'|create|'.json_encode($payload));
+        $fingerprint = hash('sha256', CanonicalJson::encode(['subject' => $subject, 'command' => 'create', 'body' => $payload]));
         if ($replay = $this->replay($operationId, $fingerprint)) {
             return response()->json(['quote' => $replay, 'replayed' => true], 200);
         }
@@ -67,7 +94,7 @@ final class QuoteController extends Controller
             $computed = QuotePolicy::calculate($items, $discount, $tax);
             QuotePolicy::assertConsistent(isset($payload['total']) ? (float) $payload['total'] : null, $computed['total']);
             $validUntil = (string) ($payload['validUntil'] ?? '');
-            if (!preg_match(self::DATE, $validUntil) || $validUntil < now()->toDateString()) {
+            if (!CivilQuoteCalendar::current($validUntil, now('UTC'))) {
                 throw new InvalidArgumentException('VALIDATION_ERROR');
             }
             foreach (['orderReference', 'orderNumber', 'customerReference', 'vehicleReference', 'vehiclePlate'] as $field) {
@@ -111,7 +138,7 @@ final class QuoteController extends Controller
     }
 
     /** CU13: revising a pending quote produces the next version and supersedes the previous one. */
-    public function revise(Request $request, string $id): JsonResponse
+    private function reviseInTransaction(Request $request, string $id): JsonResponse
     {
         $operationId = (string) ($request->json('operationId') ?? '');
         if (!Str::isUuid($operationId)) {
@@ -119,16 +146,19 @@ final class QuoteController extends Controller
         }
         $subject = (string) $request->attributes->get('subject');
         $payload = $request->json()->all();
-        $fingerprint = hash('sha256', $subject.'|revise|'.$id.'|'.json_encode($payload));
+        $fingerprint = hash('sha256', CanonicalJson::encode(['subject' => $subject, 'command' => 'revise', 'id' => $id, 'body' => $payload]));
         if ($replay = $this->replay($operationId, $fingerprint)) {
             return response()->json(['quote' => $replay, 'replayed' => true], 200);
         }
-        $current = DB::table('quotes')->where('id', $id)->first();
+        $current = DB::table('quotes')->where('id', $id)->lockForUpdate()->first();
         if ($current === null) {
             return $this->failure(404, 'QUOTE_NOT_FOUND');
         }
         if ($current->status === 'approved') {
             return $this->failure(409, 'QUOTE_APPROVED_IMMUTABLE');
+        }
+        if (DB::table('quote_confirmation_links')->where('quote_id', $id)->exists()) {
+            return $this->failure(409, 'QUOTE_LINKED_IMMUTABLE');
         }
         if ($current->status === 'rejected' || $current->status === 'superseded') {
             return $this->failure(409, 'QUOTE_NOT_PENDING');
@@ -142,7 +172,7 @@ final class QuoteController extends Controller
             $computed = QuotePolicy::calculate($items, (float) ($payload['discountPercent'] ?? 0), (float) ($payload['taxPercent'] ?? $current->tax_percent));
             QuotePolicy::assertConsistent(isset($payload['total']) ? (float) $payload['total'] : null, $computed['total']);
             $validUntil = (string) ($payload['validUntil'] ?? $current->valid_until);
-            if (!preg_match(self::DATE, $validUntil) || $validUntil < now()->toDateString()) {
+            if (!CivilQuoteCalendar::current($validUntil, now('UTC'))) {
                 throw new InvalidArgumentException('VALIDATION_ERROR');
             }
         } catch (InvalidArgumentException $error) {
@@ -182,7 +212,7 @@ final class QuoteController extends Controller
     }
 
     /** CU14: records the client decision with evidence; it never confirms the service. */
-    public function decide(Request $request, string $id): JsonResponse
+    private function decideInTransaction(Request $request, string $id): JsonResponse
     {
         $operationId = (string) ($request->json('operationId') ?? '');
         if (!Str::isUuid($operationId)) {
@@ -192,21 +222,24 @@ final class QuoteController extends Controller
         $decision = (string) ($request->json('decision') ?? '');
         $evidence = trim((string) ($request->json('evidence') ?? ''));
         $reason = $request->json('reason');
-        $fingerprint = hash('sha256', $subject.'|decide|'.$id.'|'.$decision.'|'.$evidence);
+        $fingerprint = hash('sha256', CanonicalJson::encode(['subject' => $subject, 'command' => 'decide', 'id' => $id, 'body' => $request->json()->all()]));
         if ($replay = $this->replay($operationId, $fingerprint)) {
             return response()->json(['quote' => $replay, 'replayed' => true], 200);
         }
         if (!in_array($decision, ['approved', 'rejected'], true) || $evidence === '' || mb_strlen($evidence) > 300) {
             return $this->failure(400, 'VALIDATION_ERROR');
         }
-        $quote = DB::table('quotes')->where('id', $id)->first();
+        $quote = DB::table('quotes')->where('id', $id)->lockForUpdate()->first();
         if ($quote === null) {
             return $this->failure(404, 'QUOTE_NOT_FOUND');
         }
         if ($quote->status !== 'pending') {
             return $this->failure(409, 'QUOTE_ALREADY_DECIDED');
         }
-        if ((string) $quote->valid_until < now()->toDateString()) {
+        if (DB::table('quote_confirmation_links')->where('quote_id', $id)->exists()) {
+            return $this->failure(409, 'QUOTE_LINKED_IMMUTABLE');
+        }
+        if (!CivilQuoteCalendar::current((string) $quote->valid_until, now('UTC'))) {
             return $this->failure(409, 'QUOTE_EXPIRED');
         }
         $view = DB::transaction(function () use ($quote, $decision, $evidence, $reason, $subject, $operationId, $fingerprint) {

@@ -29,6 +29,8 @@ type EmployeeAccess {
 }
 
 type Employee {
+  """Nullable for historical CU03 snapshots created before explicit mechanic eligibility."""
+  mechanicEnabled: Boolean
   id: UUID!
   firstName: String!
   lastName: String!
@@ -80,6 +82,7 @@ input EmployeeAccessInput {
 }
 
 input CreateEmployeeInput {
+  mechanicEnabled: Boolean
   operationId: UUID!
   firstName: String!
   lastName: String!
@@ -93,6 +96,7 @@ input CreateEmployeeInput {
 }
 
 input UpdateEmployeeInput {
+  mechanicEnabled: Boolean
   operationId: UUID!
   expectedVersion: Int!
   firstName: String!

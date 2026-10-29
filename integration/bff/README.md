@@ -4,6 +4,12 @@ Tecnología: NestJS 12.2.0. Persistencia: sin base de negocio. GraphQL 17.0.2 so
 
 ## Estado
 
+CU15: SDL en contracts/graphql/confirmations.graphql, cargado por environment (override BFF_CONFIRMATIONS_SCHEMA_PATH). Cinco queries con confirmations:read y dos mutaciones con confirmations:write; permisos efectivos resueltos por Empleados, sin ACL por nombre de rol. startServiceConfirmation y retryServiceConfirmation devuelven ConfirmationSaga directa. La autorización CU03 employees:write permanece separada.
+
+Los gateways reenvían el token humano a los endpoints públicos de Operaciones y a staffing/mechanics de Empleados. No hay coordinación de Saga, cuentas técnicas, acceso a bases ni llamadas internas desde el BFF. Solo confirmed significa éxito; 202 conserva el estado pendiente recibido. Las reservas se exponen separadas de assignments y el flag laboral usa el CRUD existente, sin defaults que alteren actualizaciones omitidas ni cambios de roles. Historiales legacy admiten mechanicEnabled=null.
+
+Pruebas CU15 unitarias y HTTP usan fakes explícitos (test/bff.e2e-spec.ts conserva el nombre histórico); no acreditan integración real de servicios ni UI. Node 22.22.3 y pnpm 12.6.0; checks reproducibles: pnpm typecheck, pnpm test --maxWorkers=1, pnpm test:e2e --maxWorkers=1, pnpm build. Evidencia de ejecución por entrega en output/cu15/bff-*.log y .exit desde la raíz del workspace. La integración distribuida corresponde al coordinador principal.
+
 Implementado para CU03 (Empleados). Consume `contracts/graphql/employees.graphql` como fuente única y reenvía el token del usuario a `http://127.0.0.1:3002`. No consulta PostgreSQL, no usa credenciales administrativas de Keycloak y no expone tokens.
 
 Alcance no exclusivo (decisión 009): el BFF puede ser implementado por cualquier integrante. Decisiones de seguridad y transporte: `docs/decisions/010-bff-graphql-forwarding.md`.

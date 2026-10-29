@@ -1,4 +1,5 @@
 import type { DataSourceOptions } from 'typeorm';
+import { CreateCu151793455200000 } from './migrations/1793455200000-create-cu15.js';
 import { databaseEnvironment } from '../config/environment.js';
 import { CreateEmployeesSchema1792886400000 } from './migrations/1792886400000-create-employees-schema.js';
 import { CreateEmployeeManagement1793023200000 } from './migrations/1793023200000-create-employee-management.js';
@@ -14,7 +15,15 @@ export function dataSourceOptions(): DataSourceOptions {
     synchronize: false,
     migrationsRun: false,
     entities: [],
-    migrations: [CreateEmployeesSchema1792886400000, CreateEmployeeManagement1793023200000, CreateScheduling1793109000000, CreateSecurity1793196000000, ExtendPermissionsCatalog1793282400000, ExtendFlowPermissions1793368800000],
+    migrations: [
+      CreateEmployeesSchema1792886400000,
+      CreateEmployeeManagement1793023200000,
+      CreateScheduling1793109000000,
+      CreateSecurity1793196000000,
+      ExtendPermissionsCatalog1793282400000,
+      ExtendFlowPermissions1793368800000,
+      CreateCu151793455200000,
+    ],
     migrationsTableName: 'employees_migrations',
     logging: false,
     installExtensions: false,

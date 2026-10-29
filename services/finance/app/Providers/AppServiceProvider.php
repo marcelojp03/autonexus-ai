@@ -10,6 +10,8 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(\App\Application\Cu15\EventPublisher::class, \App\Infrastructure\Cu15\AmqpEventPublisher::class);
+        $this->app->bind(\App\Application\Cu15\QuoteLinkStore::class, \App\Infrastructure\Cu15\SqlQuoteLinkStore::class);
         $this->app->singleton(JwtVerifier::class, fn () => new JwtVerifier(
             (string) config('finance.issuer'),
             (string) config('finance.audience'),

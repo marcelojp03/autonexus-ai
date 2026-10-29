@@ -18,6 +18,7 @@ export interface EmployeeFields {
   jobTitle: string;
   startDate: string;
   specialties: string[];
+  mechanicEnabled?: boolean;
 }
 export type AccessStatus =
   'not_requested' | 'pending' | 'synced' | 'failed' | 'conflict';
@@ -74,6 +75,7 @@ const fieldNames = [
   'jobTitle',
   'startDate',
   'specialties',
+  'mechanicEnabled',
 ];
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -156,7 +158,13 @@ export function fields(value: unknown): EmployeeFields {
     text(item, 80),
   );
   if (new Set(specialties).size !== specialties.length) invalid();
+  if (v.mechanicEnabled !== undefined && typeof v.mechanicEnabled !== 'boolean')
+    invalid();
+  if (v.mechanicEnabled === true && specialties.length === 0) invalid();
   return {
+    ...(v.mechanicEnabled === undefined
+      ? {}
+      : { mechanicEnabled: v.mechanicEnabled as boolean }),
     firstName: text(v.firstName, 100),
     lastName: text(v.lastName, 100),
     document: text(v.document, 40),
@@ -248,6 +256,7 @@ export function transition(
     return {
       employee: {
         ...c.fields!,
+        mechanicEnabled: c.fields?.mechanicEnabled ?? false,
         id: newId,
         status: 'active',
         version: 1,
@@ -287,6 +296,8 @@ export function transition(
     if (c.requested === false && employee.access.requested)
       throw new EmployeeError(409, 'ACCESS_REQUEST_CANNOT_BE_REVOKED');
     Object.assign(employee, c.fields);
+    if (employee.mechanicEnabled && employee.specialties.length === 0)
+      invalid();
     if (c.requested === true) employee.access.requested = true;
   }
   employee.version++;

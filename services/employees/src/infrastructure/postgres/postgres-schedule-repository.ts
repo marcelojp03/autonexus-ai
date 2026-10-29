@@ -60,28 +60,91 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
     throw new ScheduleError(503, 'PERSISTENCE_UNAVAILABLE');
   }
 
-  private async locked<T>(keys: string[], work: (runner: QueryRunner) => Promise<T>): Promise<T> {
+  private async locked<T>(
+    keys: string[],
+    work: (runner: QueryRunner) => Promise<T>,
+  ): Promise<T> {
     let runner: QueryRunner | undefined;
     const acquired: string[] = [];
     try {
       runner = (await this.database()).createQueryRunner();
       await runner.connect();
       for (const key of keys) {
-        const rows = await runner.query('SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS acquired', [key]) as Array<{ acquired: boolean }>;
-        if (!rows[0]?.acquired) throw new ScheduleError(503, 'PERSISTENCE_UNAVAILABLE');
+        const rows = (await runner.query(
+          'SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS acquired',
+          [key],
+        )) as Array<{ acquired: boolean }>;
+        if (!rows[0]?.acquired)
+          throw new ScheduleError(503, 'PERSISTENCE_UNAVAILABLE');
         acquired.push(key);
       }
-      return await work(runner);
+      const employeeIds = new Set<string>();
+      for (const key of keys) {
+        let employeeId: string | undefined;
+        if (key.startsWith('staffing:')) employeeId = key.slice(9);
+        if (key.startsWith('shift:') || key.startsWith('absence:')) {
+          const table = key.startsWith('shift:')
+            ? 'employee_shifts'
+            : 'employee_absences';
+          const rows = (await runner.query(
+            'SELECT employee_id FROM employees.' + table + ' WHERE id=$1',
+            [key.slice(key.indexOf(':') + 1)],
+          )) as Array<{ employee_id: string }>;
+          employeeId = rows[0]?.employee_id;
+        }
+        if (employeeId) employeeIds.add(employeeId);
+      }
+      for (const id of employeeIds) {
+        const key = 'employee:' + id;
+        const rows = (await runner.query(
+          'SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS acquired',
+          [key],
+        )) as Array<{ acquired: boolean }>;
+        if (!rows[0]?.acquired)
+          throw new ScheduleError(503, 'PERSISTENCE_UNAVAILABLE');
+        acquired.push(key);
+      }
+      await runner.startTransaction();
+      try {
+        const result = await work(runner);
+        for (const id of employeeIds) await this.protectPending(runner, id);
+        await runner.commitTransaction();
+        return result;
+      } catch (error) {
+        await runner.rollbackTransaction();
+        throw error;
+      }
     } catch (error) {
       return this.failure(error);
     } finally {
       if (runner) {
         for (const key of acquired.reverse()) {
-          try { await runner.query('SELECT pg_advisory_unlock(hashtextextended($1,0))', [key]); } catch { /* broken connections are discarded */ }
+          try {
+            await runner.query(
+              'SELECT pg_advisory_unlock(hashtextextended($1,0))',
+              [key],
+            );
+          } catch {
+            /* broken connections are discarded */
+          }
         }
         await runner.release();
       }
     }
+  }
+
+  private async protectPending(
+    runner: QueryRunner,
+    employeeId: string,
+  ): Promise<void> {
+    const invalid = (await runner.query(
+      `SELECT a.id FROM employees.employee_assignments a WHERE a.employee_id=$1 AND a.saga_id IS NOT NULL AND a.status IN ('reserved','confirmed') AND NOT a.order_confirmed_observed AND (
+        EXISTS (SELECT 1 FROM employees.employee_absences x WHERE x.employee_id=a.employee_id AND x.active AND x.starts_on <= (a.starts_at AT TIME ZONE 'America/La_Paz')::date AND x.ends_on >= (a.starts_at AT TIME ZONE 'America/La_Paz')::date)
+        OR NOT EXISTS (SELECT 1 FROM employees.employee_shifts s WHERE s.employee_id=a.employee_id AND s.active AND s.weekday=EXTRACT(ISODOW FROM (a.starts_at AT TIME ZONE 'America/La_Paz')) AND s.starts_at <= (a.starts_at AT TIME ZONE 'America/La_Paz')::time AND s.ends_at >= (a.ends_at AT TIME ZONE 'America/La_Paz')::time AND (s.break_start IS NULL OR s.break_start >= (a.ends_at AT TIME ZONE 'America/La_Paz')::time OR s.break_end <= (a.starts_at AT TIME ZONE 'America/La_Paz')::time)))`,
+      [employeeId],
+    )) as Array<{ id: string }>;
+    if (invalid.length)
+      throw new ScheduleError(409, 'AFFECTS_PENDING_CONFIRMATION');
   }
 
   private async employee(runner: QueryRunner, employeeId: string): Promise<{ id: string; firstName: string; lastName: string; jobTitle: string; status: string }> {
@@ -147,10 +210,11 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
       const absences = await runner.query('SELECT id FROM employees.employee_absences WHERE employee_id=$1 AND active AND starts_on <= $2::date AND ends_on >= $2::date', [employeeId, date]) as Array<{ id: string }>;
       const assignments = await runner.query(
         `SELECT id, starts_at, ends_at, reference FROM employees.employee_assignments
-         WHERE employee_id=$1 AND status='confirmed' AND (starts_at AT TIME ZONE 'America/La_Paz')::date <= $2::date AND (ends_at AT TIME ZONE 'America/La_Paz')::date >= $2::date
+         WHERE employee_id=$1 AND status='confirmed' AND (saga_id IS NULL OR order_confirmed_observed) AND (starts_at AT TIME ZONE 'America/La_Paz')::date <= $2::date AND (ends_at AT TIME ZONE 'America/La_Paz')::date >= $2::date
          ORDER BY starts_at`,
         [employeeId, date],
       ) as Array<{ id: string; starts_at: Date; ends_at: Date; reference: string }>;
+      const reservations = await runner.query(`SELECT id,saga_id,order_id,starts_at,ends_at,status,version,order_confirmed_observed FROM employees.employee_assignments WHERE employee_id=$1 AND saga_id IS NOT NULL AND status IN ('reserved','confirmed') AND NOT order_confirmed_observed AND (starts_at AT TIME ZONE 'America/La_Paz')::date=$2::date ORDER BY starts_at`,[employeeId,date]) as Array<{id:string;saga_id:string;order_id:string;starts_at:Date;ends_at:Date;status:'reserved'|'confirmed';version:number;order_confirmed_observed:boolean}>;
       const { slots } = await import('../../domain/schedule.js');
       const available = absences.length ? [] : shifts.flatMap(row => slots(view(row), date));
       return {
@@ -158,6 +222,7 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
         date,
         weekday,
         available,
+        reservations: reservations.map(row => ({id:row.id,sagaId:row.saga_id,orderId:row.order_id,startsAt:row.starts_at.toISOString(),endsAt:row.ends_at.toISOString(),status:row.status,version:row.version,orderConfirmedObserved:row.order_confirmed_observed})),
         absent: absences.length > 0,
         assignments: assignments.map(row => ({ id: row.id, startsAt: row.starts_at.toISOString(), endsAt: row.ends_at.toISOString(), reference: row.reference })),
       };
@@ -194,7 +259,7 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
 
   async createShift(employeeId: string, input: ShiftInput, actor: string, operationId: string, acknowledge: boolean): Promise<ShiftMutation> {
     const fingerprint = this.fingerprint({ actor, action: 'create-shift', employeeId, input, acknowledge });
-    return this.locked(['staffing:' + employeeId], async runner => {
+    return this.locked(['staffing-operation:' + operationId, 'staffing:' + employeeId], async runner => {
       const replayed = await this.replay<ShiftMutation>(runner, operationId, fingerprint);
       if (replayed) return { ...replayed, replayed: true };
       await this.requireActive(runner, employeeId);
@@ -217,8 +282,8 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
 
   async updateShift(shiftId: string, input: ShiftInput, expectedVersion: number, actor: string, operationId: string, acknowledge: boolean): Promise<ShiftMutation> {
     const fingerprint = this.fingerprint({ actor, action: 'update-shift', shiftId, input, expectedVersion, acknowledge });
-    return this.locked(['shift:' + shiftId], async runner => {
-      const rows = await runner.query('SELECT id, employee_id, version FROM employees.employee_shifts WHERE id=$1', [shiftId]) as Array<{ id: string; employee_id: string; version: number }>;
+    return this.locked(['staffing-operation:' + operationId, 'shift:' + shiftId], async runner => {
+      const rows = await runner.query('SELECT id, employee_id, weekday, starts_at, ends_at, break_start, break_end, active, version FROM employees.employee_shifts WHERE id=$1', [shiftId]) as Array<ShiftRow & { employee_id: string }>;
       if (!rows[0]) throw new ScheduleError(404, 'SHIFT_NOT_FOUND');
       const employeeId = rows[0].employee_id;
       const replayed = await this.replay<ShiftMutation>(runner, operationId, fingerprint);
@@ -226,7 +291,7 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
       if (rows[0].version !== expectedVersion) throw new ScheduleError(409, 'VERSION_CONFLICT');
       await this.requireActive(runner, employeeId);
       await this.shiftConflicts(runner, employeeId, input, shiftId);
-      const affected = await this.assignmentConflict(runner, employeeId, input);
+      const affected = await this.assignmentConflict(runner, employeeId, input) || await this.assignmentConflict(runner, employeeId, view(rows[0]));
       if (affected && !acknowledge) throw new ScheduleError(409, 'AFFECTS_CONFIRMED_ASSIGNMENT');
       const version = expectedVersion + 1;
       await runner.query(
@@ -242,7 +307,7 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
 
   async deactivateShift(shiftId: string, expectedVersion: number, actor: string, operationId: string, acknowledge: boolean): Promise<ShiftMutation> {
     const fingerprint = this.fingerprint({ actor, action: 'deactivate-shift', shiftId, expectedVersion, acknowledge });
-    return this.locked(['shift:' + shiftId], async runner => {
+    return this.locked(['staffing-operation:' + operationId, 'shift:' + shiftId], async runner => {
       const rows = await runner.query('SELECT id, employee_id, weekday, starts_at, ends_at, break_start, break_end, active, version FROM employees.employee_shifts WHERE id=$1', [shiftId]) as Array<ShiftRow & { employee_id: string }>;
       if (!rows[0]) throw new ScheduleError(404, 'SHIFT_NOT_FOUND');
       const current = rows[0];
@@ -269,7 +334,7 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
 
   async createAbsence(employeeId: string, input: { startsOn: string; endsOn: string; reason: string | null }, actor: string, operationId: string, acknowledge: boolean): Promise<AbsenceMutation> {
     const fingerprint = this.fingerprint({ actor, action: 'create-absence', employeeId, input, acknowledge });
-    return this.locked(['staffing:' + employeeId], async runner => {
+    return this.locked(['staffing-operation:' + operationId, 'staffing:' + employeeId], async runner => {
       const replayed = await this.replay<AbsenceMutation>(runner, operationId, fingerprint);
       if (replayed) return { ...replayed, replayed: true };
       await this.requireActive(runner, employeeId);
@@ -292,7 +357,7 @@ export class PostgresScheduleRepository implements ScheduleRepository, OnApplica
 
   async cancelAbsence(absenceId: string, expectedVersion: number, actor: string, operationId: string, acknowledge: boolean): Promise<AbsenceMutation> {
     const fingerprint = this.fingerprint({ actor, action: 'cancel-absence', absenceId, expectedVersion, acknowledge });
-    return this.locked(['absence:' + absenceId], async runner => {
+    return this.locked(['staffing-operation:' + operationId, 'absence:' + absenceId], async runner => {
       const rows = await runner.query('SELECT id, employee_id, starts_on, ends_on, reason, active, version FROM employees.employee_absences WHERE id=$1', [absenceId]) as Array<AbsenceRow & { employee_id: string }>;
       if (!rows[0]) throw new ScheduleError(404, 'ABSENCE_NOT_FOUND');
       const current = rows[0];

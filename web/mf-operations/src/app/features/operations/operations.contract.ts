@@ -127,7 +127,7 @@ export interface WorkOrder {
   id: string; number: string; receptionId: string; vehicleId: string; vehiclePlate: string;
   customerId: string; customerName: string; description: string;
   priority: 'baja' | 'normal' | 'alta' | 'urgente'; notes: string | null;
-  status: 'pending_quote' | 'quote_requested' | 'quote_approved' | 'cancelled';
+  status: 'pending_quote' | 'quote_requested' | 'quote_approved' | 'confirmation_pending' | 'confirmed' | 'cancelled';
   version: number; createdAt: string; updatedAt: string;
   items: { serviceId: string; serviceName: string; quantity: number; estimatedMinutes: number; referenceRate: number }[];
 }

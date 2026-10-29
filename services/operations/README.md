@@ -1,5 +1,65 @@
 # MS01 Operaciones
 
+## CU15 — coordinador implementado, matriz real acreditada y cierre pendiente
+
+Implementación local en work/marcelo desde 0fc8f7f, con Java 21/Spring Boot 4.1.2, JDBC/SQL explícito y Flyway V7; sin JPA ni acceso a bases de participantes. En la fase inicial delegada no se aplicó V7, no se empaquetó el JAR ni se sustituyó el runtime. Posteriormente el principal aplicó V7 (también E1793455200000 y F2026_10_28_000002), empaquetó/desplegó y provisionó el coordinador técnico y RabbitMQ. Esas limitaciones iniciales no describen el estado posterior.
+
+El recorrido real de navegador posterior tiene seis etapas acreditadas y la matriz real6 terminó PASS7/7. Regresión proporcional, revisión y cierre siguen pendientes. Decisión técnica: [016](../../docs/decisions/016-cu15-confirmation-saga.md). Evidencia final y revisión deben registrarse en [STATUS](../../docs/context/STATUS.md) y la [especificación](../../docs/compose/spec/cu15-confirmation-saga.md); este README no declara CU15 completo.
+
+### Contrato para BFF
+
+Se mantienen exactamente las rutas de contracts/rest/saga.md:
+
+- POST /orders/:orderId/confirmations: cuerpo cerrado del contrato; HTTP202, también en replay. No significa servicio confirmado.
+- GET /confirmations/:sagaId y GET /confirmations/operations/:operationId: progreso actual.
+- GET /orders/:orderId/confirmations: array de Sagas, la más reciente primero; orden inexistente produce ORDER_NOT_FOUND.
+- POST /confirmations/:sagaId/retry: cuerpo cerrado operationId/expectedVersion (versión de Saga), HTTP202; conserva comandos e iniciador original y audita al solicitante.
+
+DTO común: sagaId, operationId (del inicio), orderId, status, phase, version (Saga), orderVersion, nextAttemptAt (null terminal), errorCode; quoteId/quoteVersion, employeeId/employeeVersion, requiredSpecialty, startsAt/endsAt, assignmentId/assignmentVersion y quoteLinkId/quoteLinkVersion. Las referencias pueden ser null o representar efectos parciales: **solo status=confirmed confirma CU15**. steps contiene operationId, command, direction, status, attempts, errorCode, resourceVersion, outcome, committedAt y resourceStatus; no contiene cuerpos técnicos, huellas, JWT ni credenciales. Los snapshots son históricos, no sustituyen una consulta actual al participante.
+
+Permisos humanos obtenidos del catálogo propietario Empleados: confirmations:read/write; no se derivan de roles locales, orders:write o quotes:write. Autenticación/permisos siguen activos incluso cuando CU15 está apagado. Errores usan el envelope existente statusCode/message/code: CU15_DISABLED (503), VALIDATION_ERROR (400), CONFIRMATION_NOT_FOUND/OPERATION_NOT_FOUND/ORDER_NOT_FOUND (404), IDEMPOTENCY_CONFLICT, ORDER_CONFIRMATION_IN_PROGRESS, ORDER_ALREADY_CONFIRMED, ORDER_NOT_CONFIRMABLE, VERSION_CONFLICT, CONFIRMATION_BUSY y CONFIRMATION_TERMINAL (409). Un retry contra lease vivo no invalida trabajo en vuelo.
+
+### Ejecución y configuración
+
+- CU15_ENABLED=false por defecto: endpoints autorizados devuelven503 y no existe worker CU15. Al habilitar, sondeo1s, lease30s/fence por claim, HTTP connect2s/read5s, backoff persistido1–30s con jitter hasta10% sin convertir incertidumbre en rechazo.
+- EMPLOYEES_API_URL por defecto http://127.0.0.1:3002; FINANCE_API_URL por defecto http://127.0.0.1:8000.
+- CU15_IDP_TOKEN_ENDPOINT por defecto http://127.0.0.1:8180/realms/autonexus/protocol/openid-connect/token. CU15_IDP_CLIENT_FILE apunta a JSON privado con clientId/clientSecret; clientId debe ser autonexus-cu15-coordinator. Nunca se documentan aquí valores reales.
+- Client credentials solicita exactamente cu15.staffing.read/reserve/confirm/release y cu15.finance.read/authorize/cancel. El principal/IdP debe emitir las audiencias de Empleados y Finanzas. No necesita audiencia de Operations para su SQL propio. Tokens técnicos solo en RAM; initiatedBy/authorizedAt provienen del token humano y reloj del servidor al iniciar.
+- CU15_MESSAGING_ENABLED=false por defecto. Al habilitar, CU15_BROKER_CLIENT_FILE apunta a JSON privado host/port/vhost/username/password; vhost=autonexus. Sin RabbitAdmin ni declaraciones de topología desde clientes. Infraestructura debe precrear exchange topic durable autonexus.business.v1, cola cu15.operations.events.v1 y bindings employees.cu15.#, finance.cu15.#, operations.cu15.#; DLX autonexus.dlx.v1 y DLQ cu15.operations.dlq.v1. El consumidor Empleados necesita su binding de operations.order.confirmed.v1. Clientes no necesitan configure permissions.
+- Outbox guarda el envelope completo y publica fuera de SQL, mensajes persistentes, mandatory + publisher confirms + comprobación de returned message antes de published_at. Un lease_owner UUID nuevo protege el marcado de publicación obsoleto. ACK perdido/SQL posterior fallido permite duplicados con el mismo eventId.
+- Inbox valida tipo/productor/esquema/referencias, deduplica huella y despierta solo conciliación del paso causal pendiente; nunca confirma por mensaje. Eventos propios se registran **sin wakeup**, evitando bucles o saltarse backoff. Inválidos/conflictos se rechazan sin requeue hacia la DLQ; errores SQL transitorios reencolan, ACK solo después del commit.
+
+### Persistencia y recuperación
+
+Inicio bloquea la orden y serializa operationId; guarda Saga, cinco UUID de comando estables, ledger, historial, confirmation_pending/nueva versión y Outbox en una transacción corta. Índice único de Saga no terminal incluye recuperación y compensación. Cada despacho congela cuerpo/huella y renueva lease antes de red; toda escritura usa CAS versión/owner/fence/lease. Ninguna transacción SQL envuelve HTTP o AMQP.
+
+Resultado incierto consulta ledger y reenvía el mismo cuerpo/operationId antes de compensar. Se validan envelope, huella, comando, propietario, versiones, referencias e intervalo. Rechazo durable forward compensa solo efectos conocidos: cancel F→release E si E no confirmó; release E→cancel F si confirmó. Compensaciones rechazadas/desconocidas conservan exclusión y estado pendiente. Commit final relee Saga/orden propias y confirma orden + Saga + auditoría + Outbox en una única transacción; un commit SQL incierto se consulta localmente antes de cualquier decisión remota. Cotizaciones/aprobaciones nunca se borran.
+
+### Historial de verificación inicial delegada
+
+Comandos desde la raíz del worktree, sin leer .env ni conectar bases reales:
+
+    $env:JAVA_HOME='C:/Program Files/Java/jdk-21'
+    node output/t21/run-check.mjs cu15-ops-compile3 services/operations powershell.exe -NoProfile -Command "mvn -B -DskipTests compile"
+    node output/t21/run-check.mjs cu15-ops-tests services/operations powershell.exe -NoProfile -Command "mvn -B test"
+    node output/t21/run-check.mjs cu15-ops-http services/operations powershell.exe -NoProfile -Command "mvn -B '-Dtest=RunConfirmationTest,ConfirmationHttpTest,ManageWorkOrdersTest' test"
+
+Resultado final: cu15-ops-final-contracts, mismo launcher con mvn -B test, exit0 y111 pruebas sin fallos/errores/omitidas (82 previas +14 orquestador +5 HTTP/permisos +5 HTTP/OAuth sintético +5 mensajería/forma de evento). Compilación Java21 incluida. Logs/exit ignorados en output/t21/. Primeros dos launchers con cmd.exe /c fallaron por sintaxis Windows antes de Maven; PowerShell funcionó. Una corrida intermedia detectó escapes incorrectos en un fixture Java nuevo; se corrigieron y la suite final pasó. Se conserva el aviso Mockito/Byte Buddy y una deprecación preexistente en OperationsStore; no se usa package/clean verify mientras el runtime existente está activo.
+
+Compatibilidad contrastada con los adaptadores de participantes: order.confirmed usa aggregateType=order, aggregateId=orderId y únicamente las nueve referencias de data admitidas por Empleados; los rechazos de participantes pueden usar aggregateVersion=0 y carecer de orderId. Inbox verifica la Saga local y el comando causal antes de despertar recuperación. Prueba de regresión incluida para la forma cerrada del evento final. Esto es contraste de fuentes/pruebas focalizadas, no evidencia de entrega por broker real.
+
+Al terminar esa fase delegada quedaban pendientes V7, identidad técnica, broker, empaquetado/despliegue y matriz real. La fase principal posterior ejecutó los primeros pasos; la nota anterior de 111 pruebas no incluye la nueva regresión JDBC ni acredita por sí sola integración distribuida.
+
+### Verificación principal posterior y límites
+
+El primer inicio desde navegador encontró un defecto real en lockOperation: JdbcClient rechazaba un ResultSetExtractor que devolvía null. Se corrigió con `SELECT true AS locked FROM pg_advisory_xact_lock(...)`. Evidencia ignorada en output/cu15/: ops-lock-red.log/.exit (una regresión falla, exit1), ops-lock-green.log/.exit (una regresión pasa, exit0) y operations-rebuild-lockfix.log/.exit (package exit0, aplicado al runtime por el principal). No se suma esta prueba como si se hubiera repetido la suite completa de 111.
+
+- browser-real3.exit=0 y browser-real.json: seis etapas reales, incluida confirmación O/E/F con referencias definitivas, Outbox/Inbox y recarga sin nuevo efecto. No equivale a toda la matriz de fallos.
+- finance-real2.exit=0 y finance-real.json: seis etapas financieras reales; detalle en el README de Finanzas.
+- distributed-real1 y distributed-real3: las primeras tres etapas acreditan concurrencia por orden/replay, exclusión por empleado/franja y rechazo financiero tras reserva con release E. Ambas corridas terminaron en fallo, no en aceptación global. Se detuvieron en aserciones de navegador; además matrix3 sufrió caída espontánea de RabbitMQ exit137, OOMKilled=false. No fue fallo inyectado; el principal recuperó el contenedor propio healthy.
+
+La matriz posterior real6 quedó acreditada: output/cu15/distributed-real6.exit=0 y distributed-2026-10-29T00-21-30-311Z-0749409d.json PASS7/7. Cubre carreras por orden/franja, rechazo F con release E, respuesta perdida tras commit F sin compensar el éxito, reinicio del coordinador con IDs/cuerpos durables e identidad técnica, compensación inicialmente pendiente que termina cancel F→release E y retransmisión del mismo eventId con un Inbox/notificación. Ambos browser-proof (recovery_pending y compensation_pending) terminaron PASS con issues=[] y failed=[]. final-check6.json registra restauración DIRECT, readiness200 y flag sintético restaurado. La última corrida no tuvo caídas inesperadas. Esto no convierte las corridas fallidas anteriores en PASS. Regresión proporcional, revisión y cierre permanecen pendientes; no se declara CU15 completo ni revisión independiente. Esta consolidación solo documenta artefactos del principal, sin ejecutar pruebas o intervenir en runtime. Los apartados de base/CU01 siguientes conservan evidencia histórica, no sustituyen el estado CU15 de esta cabecera.
+
 ## Runtime vigente de CU01 integrado
 
 Ejecutar esta aplicación desde su carpeta en la raíz principal autonexus-ai. CU01 ya está en main b8d8079; las referencias a .worktrees/cu01-keycloak en la evidencia posterior son históricas. Ambos Compose se administran desde infra/compose e infra/keycloak de raíz, conservando privados y volúmenes. Ubicaciones, comandos y límites: docs/decisions/006-cu01-main-runtime.md y scripts/cu01/README.md (rutas desde la raíz). No se hizo push ni se eliminaron ramas/worktrees.

@@ -70,15 +70,18 @@ try {
   const mecanico = (await authorize(accounts.find(account => account.key === 'mecanico'))).access_token;
 
   const catalog = await call('/security/permissions', { token: admin });
-  assert.equal(catalog.catalog.length, 14);
+  assert.equal(catalog.catalog.length, 23);
   assert.deepEqual([...catalog.effective].sort(), [
     'appointments:read', 'appointments:write', 'catalog:read', 'catalog:write',
+    'confirmations:read', 'confirmations:write',
     'customers:read', 'customers:write', 'employees:read', 'employees:write',
+    'orders:read', 'orders:write', 'quotes:decide', 'quotes:read', 'quotes:write',
+    'receptions:read', 'receptions:write',
     'schedules:read', 'schedules:write', 'security:read', 'security:write',
     'vehicles:read', 'vehicles:write',
   ]);
   const mecanicoCatalog = await call('/security/permissions', { token: mecanico });
-  assert.deepEqual(mecanicoCatalog.effective, []);
+  assert.deepEqual([...mecanicoCatalog.effective].sort(), ['receptions:read', 'receptions:write']);
   stages.push('catalog-and-effective-permissions');
 
   const roles = await call('/security/roles', { token: admin });

@@ -22,7 +22,7 @@ import org.springframework.web.cors.*;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
     private static final List<String> BUSINESS_PATHS = List.of(
-            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/receptions/**", "/orders/**");
+            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/receptions/**", "/orders/**", "/confirmations/**");
 
     @Bean
     JwtDecoder jwtDecoder(@Value("${OIDC_ISSUER_URI:http://127.0.0.1:8180/realms/autonexus}") String issuer,
@@ -97,6 +97,8 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/receptions", "/receptions/*").hasAuthority("receptions:read")
                 .requestMatchers(HttpMethod.POST, "/receptions").hasAuthority("receptions:write")
                 // CU12 work orders
+                .requestMatchers(HttpMethod.GET, "/confirmations/**", "/orders/*/confirmations").hasAuthority("confirmations:read")
+                .requestMatchers(HttpMethod.POST, "/orders/*/confirmations", "/confirmations/*/retry").hasAuthority("confirmations:write")
                 .requestMatchers(HttpMethod.GET, "/orders", "/orders/*").hasAuthority("orders:read")
                 .requestMatchers(HttpMethod.POST, "/orders").hasAuthority("orders:write")
                 .anyRequest().denyAll())

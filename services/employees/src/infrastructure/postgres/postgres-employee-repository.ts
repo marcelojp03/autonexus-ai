@@ -211,6 +211,22 @@ export class PostgresEmployeeRepository
         }
         const change = apply(c.id ? await this.find(r, c.id) : null),
           employee = change.employee;
+        const assignments = await this.rows<
+          Array<{ required_specialty: string }>
+        >(
+          r,
+          "SELECT required_specialty FROM employees.employee_assignments WHERE employee_id=$1 AND saga_id IS NOT NULL AND status IN ('reserved','confirmed') AND ends_at>now()",
+          [employee.id],
+        );
+        if (
+          assignments.some(
+            (a) =>
+              employee.status !== 'active' ||
+              !employee.mechanicEnabled ||
+              !employee.specialties.includes(a.required_specialty),
+          )
+        )
+          throw new EmployeeError(409, 'AFFECTS_PENDING_ASSIGNMENT');
         await r.query(
           'INSERT INTO employees.employee_records(id,record,subject) VALUES($1,$2::jsonb,$3) ON CONFLICT(id) DO UPDATE SET record=EXCLUDED.record,subject=EXCLUDED.subject',
           [employee.id, JSON.stringify(employee), employee.access.subject],

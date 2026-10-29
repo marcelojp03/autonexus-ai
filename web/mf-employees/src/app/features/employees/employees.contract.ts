@@ -20,6 +20,7 @@ export interface Employee {
   jobTitle: string;
   startDate: string;
   specialties: string[];
+  mechanicEnabled?: boolean | null;
   status: EmployeeStatus;
   version: number;
   createdAt: string;
@@ -60,6 +61,7 @@ export interface EmployeeFieldsInput {
   jobTitle: string;
   startDate: string;
   specialties: string[];
+  mechanicEnabled?: boolean;
 }
 export interface CreateEmployeeVariables {
   input: EmployeeFieldsInput & { operationId: string; access?: { requested: boolean } };
@@ -74,7 +76,7 @@ export interface CommandVariables {
 }
 
 const EMPLOYEE = `
-  id firstName lastName document email phone jobTitle startDate specialties
+  id firstName lastName document email phone jobTitle startDate specialties mechanicEnabled
   status version createdAt updatedAt
   access { requested status subject attempts errorCode }
 `;

@@ -1,0 +1,10 @@
+import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { workspace, primary, node, brokerFile, serviceEnvironment, sanitize } from './runtime.mjs';
+const configuration = serviceEnvironment('employees');
+const args = process.argv.slice(2);
+if (!args.length) throw new Error('employee Node command required');
+const result = spawnSync(node, args, { cwd: resolve(workspace, 'services/employees'), env: { ...process.env, ...configuration, EMPLOYEES_IDP_CLIENT_FILE: resolve(primary, 'infra/keycloak/.local/employees-client.json') }, encoding: 'utf8', timeout: 45000, maxBuffer: 2 * 1024 * 1024 });
+const secrets = Object.entries(configuration).filter(([key]) => ['PASSWORD', 'SECRET', 'KEY', 'TOKEN'].some(marker => key.includes(marker))).map(([, value]) => value);
+console.log(sanitize((result.stdout ?? '') + (result.stderr ?? ''), secrets));
+process.exitCode = result.status ?? 1;

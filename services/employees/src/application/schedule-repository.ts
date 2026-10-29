@@ -8,6 +8,7 @@ export interface AvailabilityView {
   weekday: number;
   available: Array<{ start: string; end: string }>;
   absent: boolean;
+  reservations?: Array<{id:string;sagaId:string;orderId:string;startsAt:string;endsAt:string;status:'reserved'|'confirmed';version:number;orderConfirmedObserved:boolean}>;
   assignments: Array<{ id: string; startsAt: string; endsAt: string; reference: string }>;
 }
 export interface ShiftMutation { shift: ShiftView; replayed: boolean; acknowledgedAssignments: boolean; }

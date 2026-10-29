@@ -74,7 +74,9 @@ class ManageWorkOrdersTest {
 
     @Test
     void validatesTheStatusFilter() {
-        assertThatThrownBy(() -> orders.list(null, null, "confirmed", null, null)).isInstanceOf(OperationsError.class);
+        assertThatThrownBy(() -> orders.list(null, null, "invented", null, null)).isInstanceOf(OperationsError.class);
+        assertThat(orders.list(null, null, "confirmed", null, null).limit()).isEqualTo(20);
+        assertThat(orders.list(null, null, "confirmation_pending", null, null).limit()).isEqualTo(20);
         assertThat(orders.list(null, null, "pending_quote", null, null).limit()).isEqualTo(20);
     }
 

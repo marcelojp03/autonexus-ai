@@ -1,0 +1,25 @@
+name: autonexus-messaging-dev
+services:
+  rabbitmq:
+    image: rabbitmq:4.2.9-management@sha256:d1fb8b38bd0805935907a22b2b7483fba38c9a8dd7e8a74bfba4a6e7a9e91707
+    container_name: autonexus-messaging-dev-rabbitmq
+    hostname: autonexus-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_ADMIN_USER:?Use the CU15 private environment helper}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?Use the CU15 private environment helper}
+      RABBITMQ_DEFAULT_VHOST: autonexus
+    ports:
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+volumes:
+  rabbitmq-data:
+    name: autonexus-rabbitmq-data

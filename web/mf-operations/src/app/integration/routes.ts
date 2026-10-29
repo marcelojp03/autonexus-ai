@@ -14,7 +14,7 @@ class IntegratedNotFound {}
 /** No template chrome, login guards or redirects outside this MF base path. */
 export const integratedRoutes: Routes = [
   { path: '', redirectTo: 'appointments', pathMatch: 'full' },
-  ...operationsRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
+  ...operationsRoutes.map(route => ({ ...route, canActivate: [sessionGuard, ...(route.canActivate ?? [])] })),
   { path: 'widgets', canActivate: [sessionGuard], loadChildren: () => import('../routes/widgets/routes').then(module => module.routes) },
   { path: 'dashboard', canActivate: [sessionGuard], loadChildren: () => import('../routes/dashboard/routes').then(module => module.routes) },
   { path: '**', component: IntegratedNotFound }

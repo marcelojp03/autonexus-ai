@@ -1,0 +1,91 @@
+"""Only confirmed is success; pending/recovery states never confirm a service."""
+enum ConfirmationStatus { running recovery_pending compensating compensation_pending confirmed rejected }
+
+type ConfirmationStep {
+  operationId: UUID!
+  command: String!
+  direction: String!
+  status: String!
+  attempts: Int!
+  errorCode: String
+  resourceVersion: Int
+  outcome: String
+  committedAt: DateTime
+  resourceStatus: String
+}
+type ConfirmationSaga {
+  sagaId: UUID!
+  orderId: UUID!
+  status: ConfirmationStatus!
+  phase: String!
+  version: Int!
+  orderVersion: Int!
+  nextAttemptAt: DateTime
+  errorCode: String
+  operationId: UUID!
+  quoteId: UUID!
+  quoteVersion: Int!
+  employeeId: UUID!
+  employeeVersion: Int!
+  requiredSpecialty: String!
+  startsAt: DateTime!
+  endsAt: DateTime!
+  assignmentId: UUID
+  assignmentVersion: Int
+  quoteLinkId: UUID
+  quoteLinkVersion: Int
+  steps: [ConfirmationStep!]!
+}
+type ConfirmationMechanic {
+  id: UUID!
+  fullName: String!
+  jobTitle: String!
+  status: EmployeeStatus!
+  version: Int!
+  mechanicEnabled: Boolean!
+  specialties: [String!]!
+  eligible: Boolean!
+  eligibilityReasons: [String!]!
+}
+type ConfirmationMechanicPage {
+  items: [ConfirmationMechanic!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+type ConfirmationReservation {
+  id: UUID!
+  sagaId: UUID!
+  orderId: UUID!
+  startsAt: DateTime!
+  endsAt: DateTime!
+  status: String!
+  version: Int!
+  orderConfirmedObserved: Boolean!
+}
+extend type Availability { reservations: [ConfirmationReservation!] }
+
+input StartServiceConfirmationInput {
+  operationId: UUID!
+  expectedVersion: Int!
+  quoteId: UUID!
+  quoteVersion: Int!
+  employeeId: UUID!
+  employeeVersion: Int!
+  requiredSpecialty: String!
+  startsAt: DateTime!
+  endsAt: DateTime!
+}
+input ConfirmationRetryInput { operationId: UUID! expectedVersion: Int! }
+
+extend type Query {
+  confirmationSaga(id: UUID!): ConfirmationSaga!
+  confirmationByOperation(operationId: UUID!): ConfirmationSaga!
+  orderConfirmations(orderId: UUID!): [ConfirmationSaga!]!
+  confirmationMechanics(limit: Int = 20, offset: Int = 0, search: String): ConfirmationMechanicPage!
+  confirmationAvailability(employeeId: UUID!, date: Date!): Availability!
+}
+extend type Mutation {
+  startServiceConfirmation(orderId: UUID!, input: StartServiceConfirmationInput!): ConfirmationSaga!
+  retryServiceConfirmation(id: UUID!, input: ConfirmationRetryInput!): ConfirmationSaga!
+}

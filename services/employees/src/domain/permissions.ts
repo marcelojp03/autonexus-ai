@@ -21,6 +21,8 @@ export const PERMISSIONS = [
   'quotes:read',
   'quotes:write',
   'quotes:decide',
+  'confirmations:read',
+  'confirmations:write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -54,6 +56,8 @@ export const PERMISSION_CATALOG: readonly PermissionDescriptor[] = Object.freeze
   { id: 'quotes:read', module: 'Cotizaciones', operation: 'read', description: 'Consultar cotizaciones y sus versiones (CU13)' },
   { id: 'quotes:write', module: 'Cotizaciones', operation: 'write', description: 'Elaborar y versionar cotizaciones (CU13)' },
   { id: 'quotes:decide', module: 'Cotizaciones', operation: 'decide', description: 'Registrar la aprobación o el rechazo del cliente (CU14)' },
+  { id: 'confirmations:read', module: 'Confirmaciones', operation: 'read', description: 'Consultar confirmaciones y candidatos mecánicos (CU15)' },
+  { id: 'confirmations:write', module: 'Confirmaciones', operation: 'write', description: 'Iniciar y recuperar confirmaciones (CU15)' },
 ]);
 
 const KNOWN = new Set<string>(PERMISSIONS);
@@ -66,7 +70,7 @@ export const INITIAL_ROLES: readonly { name: string; description: string; permis
   { name: 'jefe_taller', description: 'Planificación y supervisión del taller', permissions: [
     'schedules:read', 'schedules:write', 'customers:read', 'vehicles:read', 'catalog:read', 'catalog:write',
     'appointments:read', 'appointments:write', 'receptions:read', 'orders:read', 'orders:write',
-    'quotes:read', 'quotes:decide',
+    'quotes:read', 'quotes:decide', 'confirmations:read', 'confirmations:write',
   ] },
   { name: 'recepcionista', description: 'Atención al cliente en recepción', permissions: [
     'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write', 'catalog:read',

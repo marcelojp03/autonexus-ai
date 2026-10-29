@@ -1,5 +1,39 @@
 # Estado comprobado
 
+## CU15 — implementación y verificación distribuida en curso (2026-10-28)
+
+T23 en work/marcelo desde 0fc8f7f. Diseño aprobado mediante compose-next, sin otra rama ni worktree. Operaciones orquesta; Empleados reserva/confirma/libera; Finanzas registra y cancela un vínculo durable/versionado de la cotización aprobada. Aprobar una cotización por sí solo no confirma el servicio. CU05, offline y Flutter no se acreditan.
+
+Políticas aprobadas: habilitación laboral explícita mechanicEnabled (backfill false, sin identidad/roles automáticos), especialidad declarada, intervalo del mismo día de La Paz, vigencia financiera inclusiva validada al autorizar y reserva sin TTL de negocio. Estados, permisos, identidad técnica y compensaciones: contracts/rest/saga.md y docs/compose/spec/cu15-confirmation-saga.md.
+
+Implementación creada: dominio/puertos/adaptadores propietarios, ledger y Outbox locales; Saga durable con lease/fencing, cuerpos/IDs congelados y recuperación; RabbitMQ con confirms/mandatory y consumidores Inbox; GraphQL/BFF sin coordinación; pantallas existentes extendidas para habilitación, selección y progreso por URL. Catálogo ejecutable de 23 permisos, conservando personalizaciones al migrar.
+
+| Evidencia observada | Resultado |
+| --- | --- |
+| Empleados, unidades / HTTP sintético / tipos / build | PASS 144 + 11; los dobles no acreditan integración |
+| Finanzas, PHPUnit / lint PHP | PASS 24 pruebas y 113 aserciones / 29 archivos |
+| Operaciones, suite / regresión JDBC posterior / package | PASS 111 pruebas + 1 regresión JDBC rojo-verde; JAR reconstruido y desplegado |
+| BFF, unidades / HTTP sintético / tipos / build | PASS 54 + 15 |
+| Web focalizada / tipos / builds integrados y Shell | PASS 32 pruebas y compilaciones |
+| Infraestructura real | RabbitMQ 4.2.9-management fijado por digest, topología/identidades por productor; coordinador Keycloak con 7 scopes y solo audiencias E/F, sin realm-management |
+| Migraciones reales | Empleados 1793455200000, Finanzas 2026_10_28_000002 y Operaciones Flyway V7 aplicadas |
+| Finanzas real, scripts/cu15/verify-finance-real.mjs | PASS 6 etapas: identidad, ledger/replay/conflicto, vínculo/cancelación conservadora, carrera SQL y publicación confirmada medida |
+| Navegador real, scripts/cu15/verify-confirmation-web.mjs | PASS 6 etapas: inelegibilidad y habilitación explícita en ficha; inicio autorizado; confirmed tras recarga sin efectos nuevos; referencias en tres bases y Outbox/Inbox; desktop/móvil sin errores |
+| Matriz distribuida, scripts/cu15/distributed-real.mjs --run --browser-proof --max-minutes=20 | PASS 7/7, exit 0: carreras por orden/franja, rechazo F con release E, respuesta perdida tras commit, reinicio recuperable sin JWT browser, compensación inicialmente fallida y Outbox duplicado con efecto único |
+| Regresión real CU01 / CU02 / CU03 BFF / CU04 / CU11–14 BFF | PASS 10 comprobaciones / 14 / 6 / 11 / 6 etapas, todos exit 0; logs regression-* en output/cu15 |
+| OpenAPI con SnakeYAML 2.6 / JDK 21 | PASS Finanzas 9 operaciones/74 refs, Operaciones 31/147 y Empleados 7/53; sin claves/IDs/parámetros duplicados, contratos previos preservados |
+
+Evidencia local ignorada: output/cu15/browser-real3.log y .exit=0, browser-real.json, finance-real2.log y .exit=0, ops-lock-red/green, y distributed-*.json. El verificador financiero --once procesa una fila: exit 0 por sí solo no acredita publicación; se verificó published_at con RabbitMQ real. El fallo JDBC inicial (ResultSetExtractor nulo) fue corregido y cuenta con regresión.
+
+Incidentes de verificación, no fallos de negocio acreditados: aserción de navegador que buscaba error global en vez del paso incierto; cancelaciones de assets Angular durante OIDC (harness autentica primero en Shell); comprobación de puerto libre basada incorrectamente en timeout HTTP (corregida a TCP ECONNREFUSED). RabbitMQ terminó espontáneamente con exit 137, OOMKilled=false, y se recuperó conservando volumen/privados; no se presenta como inyección. Otra corrida terminó con código Windows 3221225786 sin finally: no es PASS y requiere restauración directa controlada. Los fallos de transporte/SQL deliberados del harness sí se etiquetan INYECTADO.
+
+Matriz final: output/cu15/distributed-real6.exit=0 y distributed-2026-10-29T00-21-30-311Z-0749409d.json (PASS; 20:21–20:24 del 28 de octubre en La Paz). Ambos navegadores recovery_pending/compensation_pending con issues=[] y failed=[], retry de la misma Saga y reserva provisional. Retransmisión observada del mismo evento: intentos 1→2, payload idéntico, una fila Inbox/una notificación. final-check6.json verifica runtime DIRECT E3002/F8000, readiness 200 UP y flag sintético restaurado; no hubo caídas inesperadas en la corrida final. Supervisor y runner ambos detached/windowsHide; esto no demuestra la causa de la terminación Windows previa.
+
+La regresión conservó la evidencia fallida inicial: CU02 esperaba 14 permisos en vez del catálogo vigente de 23; CU03 esperaba HTTP403 aunque la autorización por campo usa GraphQL200 con FORBIDDEN/statusCode403. Se corrigieron solo los verificadores, comprobando ausencia de datos y denegación tipada; no se cambiaron permisos productivos. Reanudación CU03→CU04→CU11–14 exit0 sin repetir CU01/CU02 ya verdes.
+
+Pendientes de cierre: revisión fresca y resolución de hallazgos; documentación final, integración y push normal verificado de main/work/marcelo. No se declara CU15 completo ni publicado.
+
+
 ## T21 — React y pantallas de recepción, órdenes y cotizaciones (2026-10-28)
 
 Implementación verificada y revisada directamente en work/marcelo desde la base publicada f63ed9803dc3ec147d51b94ea847fc515628fe62. Cierre Git autorizado mediante fast-forward a main y push normal de ambas ramas, conservándolas; los SHA remotos se comprueban al finalizar. No se crearon ramas/worktrees ni se reinicializaron proyectos.

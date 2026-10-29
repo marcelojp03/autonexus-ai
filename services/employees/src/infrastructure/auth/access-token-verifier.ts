@@ -30,7 +30,7 @@ export class AccessTokenVerifier {
       const roles = Array.isArray(realmRoles)
         ? [...new Set(realmRoles.filter((role): role is string => typeof role === 'string' && /^[a-z][a-z0-9_]{2,63}$/.test(role)))]
         : [];
-      return { subject: payload.sub, roles, permissions: [], recognized: [] };
+      return { subject: payload.sub, roles, permissions: [], recognized: [], clientId: typeof payload.azp === 'string' ? payload.azp : undefined, scopes: typeof payload.scope === 'string' ? payload.scope.split(' ') : [] };
     } catch {
       throw new UnauthorizedException();
     }

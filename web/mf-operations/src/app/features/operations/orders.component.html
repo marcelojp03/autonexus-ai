@@ -1,9 +1,9 @@
 <nz-page-header nzTitle="Órdenes de trabajo" nzSubtitle="CU12 · Solicitudes de atención"></nz-page-header>
 <nav class="actions"><a routerLink="../receptions" id="order-receptions-link">Recepcionar vehículo</a></nav>
-<nz-alert class="panel" nzType="info" nzMessage="Una orden nace pendiente de cotización. No confirma el servicio ni asigna mecánico (CU15 pendiente). Las tarifas y duraciones se copian del catálogo al crearla."></nz-alert>
+<nz-alert class="panel" nzType="info" nzMessage="Una orden nace pendiente de cotización. No confirma el servicio ni asigna mecánico por sí sola. Las tarifas y duraciones se copian del catálogo al crearla."></nz-alert>
 @if (error()) { <nz-alert class="panel" role="alert" nzType="error" id="order-error" [nzMessage]="error()!"></nz-alert> }
 @if (notice()) { <nz-alert class="panel" role="status" nzType="success" id="order-notice" [nzMessage]="notice()!"></nz-alert> }
-<div class="toolbar"><label class="field" for="order-status">Estado<select id="order-status" [(ngModel)]="status"><option value="">Todos</option><option value="pending_quote">Pendiente de cotización</option><option value="quote_requested">Cotización solicitada</option><option value="quote_approved">Cotización aprobada</option><option value="cancelled">Cancelada</option></select></label>
+<div class="toolbar"><label class="field" for="order-status">Estado<select id="order-status" [(ngModel)]="status"><option value="">Todos</option><option value="pending_quote">Pendiente de cotización</option><option value="quote_requested">Cotización solicitada</option><option value="quote_approved">Cotización aprobada</option><option value="confirmation_pending">Confirmación en curso</option><option value="confirmed">Servicio confirmado</option><option value="cancelled">Cancelada</option></select></label>
 <button nz-button id="order-refresh" [disabled]="loading()" (click)="offset = 0; load()">Actualizar órdenes</button></div>
 <nz-table #table id="order-table" [nzData]="rows()" [nzLoading]="loading()" [nzFrontPagination]="false" [nzShowPagination]="false" [nzScroll]="{ x: '850px' }" nzNoResult="Sin órdenes para mostrar">
 <thead><tr><th>Número</th><th>Vehículo / cliente</th><th>Descripción</th><th>Prioridad</th><th>Estado</th><th>Versión</th><th>Detalle</th></tr></thead>

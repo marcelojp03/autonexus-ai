@@ -41,8 +41,14 @@ try {
 
   const mechanic = (await authorize(account('mecanico'))).access_token;
   const forbidden = await post({ query: '{ employees { total } }' }, mechanic);
-  assert.equal(forbidden.status, 403);
-  stages.push('non-administrator-403');
+  // CU02 moved business authorization to the root-field policy. The GraphQL
+  // transport remains 200, but must expose no employee data and a typed denial.
+  assert.equal(forbidden.status, 200);
+  assert.ok(!forbidden.body.data?.employees);
+  assert.equal(forbidden.body.errors.length, 1);
+  assert.equal(forbidden.body.errors[0].extensions.code, 'FORBIDDEN');
+  assert.equal(forbidden.body.errors[0].extensions.statusCode, 403);
+  stages.push('employee-field-denied-403-without-data');
 
   const admin = (await authorize(account('administrador'))).access_token;
   const list = await post(

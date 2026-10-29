@@ -204,7 +204,7 @@ type Reception {
 type ReceptionPage { items: [Reception!]! total: Int! limit: Int! offset: Int! }
 
 enum OrderPriority { baja normal alta urgente }
-enum WorkOrderStatus { pending_quote quote_requested quote_approved cancelled }
+enum WorkOrderStatus { pending_quote quote_requested quote_approved cancelled confirmation_pending confirmed }
 
 type WorkOrderItem {
   serviceId: UUID!

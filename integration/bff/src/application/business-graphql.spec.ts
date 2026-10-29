@@ -18,15 +18,21 @@ const ALL = [
   'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
   'receptions:read', 'receptions:write', 'orders:read', 'orders:write',
   'quotes:read', 'quotes:write', 'quotes:decide',
+  'confirmations:read', 'confirmations:write',
 ];
 const effectiveFor = (token: string): string[] =>
-  token === 'head-token' ? ['schedules:read', 'schedules:write']
+  token === 'head-token' ? ['schedules:read', 'schedules:write', 'confirmations:read', 'confirmations:write']
     : token === 'security-token' ? ['security:read']
       : token === 'no-role-token' ? []
         : ALL;
 
 function build(rejected?: Error) {
   const operations = {
+    confirmationSaga: vi.fn(),
+    confirmationByOperation: vi.fn(),
+    orderConfirmations: vi.fn(async () => []),
+    startServiceConfirmation: vi.fn(),
+    retryServiceConfirmation: vi.fn(),
     customers: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
     customer: vi.fn(),
     createCustomer: vi.fn(async () => ({ customer: { id: EMPLOYEE_ID }, replayed: false })),
@@ -55,9 +61,11 @@ function build(rejected?: Error) {
     createWorkOrder: vi.fn(),
   };
   const gateway = {
+    confirmationMechanics: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    confirmationAvailability: vi.fn(),
     list: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
     get: vi.fn(async () => ({ id: EMPLOYEE_ID })),
-    history: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
+    history: vi.fn(async (): Promise<{ items: Array<{ snapshot: { id: string } }>; total: number; limit: number; offset: number }> => ({ items: [], total: 0, limit: 20, offset: 0 })),
     create: vi.fn(async () => ({ employee: { id: EMPLOYEE_ID }, replayed: false })),
     update: vi.fn(),
     deactivate: vi.fn(),
@@ -90,8 +98,75 @@ function build(rejected?: Error) {
     reviseQuote: vi.fn(),
     decideQuote: vi.fn(async () => ({ quote: { id: EMPLOYEE_ID }, orderStatusHint: 'quote_approved', replayed: false })),
   };
-  return { gateway, operations, finance, graphql: new BusinessGraphql(gateway, operations, finance, [schemaPath, schedulePath, securityPath, operationsPath, financePath]) };
+  return { gateway, operations, finance, graphql: new BusinessGraphql(gateway, operations, finance, [schemaPath, schedulePath, securityPath, operationsPath, financePath, resolve(process.cwd(), '../../contracts/graphql/confirmations.graphql')]) };
 }
+
+describe('CU15 explicit fake upstream contract', () => {
+  const selection = 'sagaId status phase version orderVersion operationId steps { command direction status attempts resourceVersion }';
+  const input = { operationId: EMPLOYEE_ID, expectedVersion: 3, quoteId: EMPLOYEE_ID, quoteVersion: 2, employeeId: EMPLOYEE_ID, employeeVersion: 4, requiredSpecialty: 'frenos', startsAt: '2026-11-02T12:00:00Z', endsAt: '2026-11-02T13:00:00Z' };
+  const saga = { sagaId: EMPLOYEE_ID, status: 'recovery_pending', phase: 'reserve_assignment', version: 2, orderVersion: 4, operationId: EMPLOYEE_ID, steps: [{ command: 'reserve_assignment', direction: 'forward', status: 'uncertain', attempts: 1, resourceVersion: null }] };
+  it.each([[ADMIN, 'admin-token'], [HEAD, 'head-token'], [{ subject: 'custom', roles: ['supervisor'] }, 'custom-token']])('uses effective permissions for %j', async (identity, token) => {
+    const { graphql, operations } = build();
+    operations.startServiceConfirmation.mockResolvedValue(saga);
+    const response = await graphql.run({ query: 'mutation($input:StartServiceConfirmationInput!){startServiceConfirmation(orderId:"' + EMPLOYEE_ID + '",input:$input){' + selection + '}}', variables: { input } }, identity, token);
+    expect(response.errors).toBeUndefined();
+    expect(response.data).toEqual({ startServiceConfirmation: saga });
+    expect(operations.startServiceConfirmation).toHaveBeenCalledWith(EMPLOYEE_ID, input, token);
+  });
+  it('forwards retry and lookup by operation without replacing identity or version', async () => {
+    const { graphql, operations } = build();
+    operations.retryServiceConfirmation.mockResolvedValue(saga);
+    const retry = { operationId: EMPLOYEE_ID, expectedVersion: 2 };
+    const result = await graphql.run({ query: 'mutation($input:ConfirmationRetryInput!){retryServiceConfirmation(id:"' + EMPLOYEE_ID + '",input:$input){status}}', variables: { input: retry } }, HEAD, 'head-token');
+    expect(result.data).toEqual({ retryServiceConfirmation: { status: 'recovery_pending' } });
+    expect(operations.retryServiceConfirmation).toHaveBeenCalledWith(EMPLOYEE_ID, retry, 'head-token');
+    operations.confirmationByOperation.mockResolvedValue(saga);
+    await graphql.run({ query: '{confirmationByOperation(operationId:"' + EMPLOYEE_ID + '"){status}}' }, HEAD, 'head-token');
+    expect(operations.confirmationByOperation).toHaveBeenCalledWith(EMPLOYEE_ID, 'head-token');
+  });
+  it('denies CU15 without the permission even to a named admin role', async () => {
+    const { graphql, gateway, operations } = build();
+    gateway.permissions.mockResolvedValue({ catalog: [], effective: [], roles: [] });
+    const result = await graphql.run({ query: '{orderConfirmations(orderId:"' + EMPLOYEE_ID + '"){status}}' }, ADMIN, 'no-role-token');
+    expect(result.errors?.[0].extensions.code).toBe('FORBIDDEN');
+    expect(operations.orderConfirmations).not.toHaveBeenCalled();
+  });
+  it('forwards mechanic flags only when explicitly provided to existing employee CRUD', async () => {
+    const { graphql, gateway } = build();
+    gateway.update.mockResolvedValue({ employee: { id: EMPLOYEE_ID, mechanicEnabled: true }, replayed: false });
+    const fields = { operationId: EMPLOYEE_ID, expectedVersion: 1, firstName: 'Ana', lastName: 'Test', document: '12345', email: 'test@example.invalid', phone: '70000000', jobTitle: 'Técnica', startDate: '2026-01-01', specialties: ['frenos'] };
+    const query = 'mutation($input:UpdateEmployeeInput!){updateEmployee(id:"' + EMPLOYEE_ID + '",input:$input){employee{id mechanicEnabled}}}';
+    await graphql.run({ query, variables: { input: fields } }, ADMIN, 'admin-token');
+    expect(gateway.update).toHaveBeenLastCalledWith(EMPLOYEE_ID, fields, 'admin-token');
+    expect(gateway.update.mock.calls[0][1]).not.toHaveProperty('mechanicEnabled');
+    await graphql.run({ query, variables: { input: { ...fields, mechanicEnabled: false } } }, ADMIN, 'admin-token');
+    expect(gateway.update).toHaveBeenLastCalledWith(EMPLOYEE_ID, { ...fields, mechanicEnabled: false }, 'admin-token');
+    const denied = await graphql.run({ query, variables: { input: { ...fields, mechanicEnabled: true } } }, HEAD, 'head-token');
+    expect(denied.errors?.[0].extensions.code).toBe('FORBIDDEN');
+    expect(gateway.update).toHaveBeenCalledTimes(2);
+  });
+  it('keeps provisional reservations distinct from legacy assignments', async () => {
+    const { graphql, gateway } = build();
+    gateway.confirmationAvailability.mockResolvedValue({ assignments: [], reservations: [{ id: EMPLOYEE_ID, status: 'reserved', orderConfirmedObserved: false }] });
+    const result = await graphql.run({ query: '{confirmationAvailability(employeeId:"' + EMPLOYEE_ID + '",date:"2026-11-02"){assignments{id} reservations{id status orderConfirmedObserved}}}' }, HEAD, 'head-token');
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ confirmationAvailability: { assignments: [], reservations: [{ id: EMPLOYEE_ID, status: 'reserved', orderConfirmedObserved: false }] } });
+    expect(gateway.confirmationAvailability).toHaveBeenCalledWith(EMPLOYEE_ID, '2026-11-02', 'head-token');
+  });
+  it('keeps legacy history nullable', async () => {
+    const { graphql, gateway } = build();
+    gateway.history.mockResolvedValue({ items: [{ snapshot: { id: EMPLOYEE_ID } }], total: 1, limit: 20, offset: 0 });
+    const history = await graphql.run({ query: '{employeeHistory(id:"' + EMPLOYEE_ID + '"){items{snapshot{id mechanicEnabled}}}}' }, ADMIN, 'admin-token');
+    expect(history.errors).toBeUndefined();
+    expect(history.data).toEqual({ employeeHistory: { items: [{ snapshot: { id: EMPLOYEE_ID, mechanicEnabled: null } }] } });
+  });
+  it('propagates public saga errors without leaking upstream detail', async () => {
+    const { graphql, operations } = build();
+    operations.confirmationSaga.mockRejectedValue(new BusinessError(404, 'CONFIRMATION_NOT_FOUND'));
+    const result = await graphql.run({ query: '{confirmationSaga(id:"' + EMPLOYEE_ID + '"){status}}' }, HEAD, 'head-token');
+    expect(result.errors?.[0].extensions).toEqual({ code: 'CONFIRMATION_NOT_FOUND', statusCode: 404 });
+  });
+});
 
 describe('EmployeesGraphql allowlist and error mapping', () => {
   it('publishes exactly the seven CU03 root operations', () => {

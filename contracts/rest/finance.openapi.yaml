@@ -1,0 +1,1770 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AutoNexus AI — Finanzas CU13/CU14 y participante privado CU15",
+    "version": "1.0.0",
+    "description": "Código existente y saga.md aprobado. Publicar OpenAPI no acredita APIs probadas ni integración. Web mediante GraphQL/integration/bff; BFF sin base ni coordinación. Operaciones coordina CU15. GET cotización no autoriza. validUntil fecha civil inclusiva America/La_Paz evaluada al commit financiero: vínculo no expira por timeout. approved/vinculadas inmutables; compensación conserva aprobación e historial. Sin APIs públicas de vínculo ni DELETE cotizaciones/decisiones. Actor humano solo token/reloj servidor, metadata interna solo cliente confiable. Timeout/5xx/GET404 no es rechazo: conciliar ledger y repetir mismo cuerpo/operationId; no cambiar expectedVersion a ciegas. Autorizar valida approved, aprobación registrada, versión exacta, misma orden y vigencia; vínculo/ledger/auditoría/Outbox atómicos. Replay histórico no reactiva cancelled."
+  },
+  "paths": {
+    "/quotes": {
+      "get": {
+        "operationId": "listQuotes",
+        "x-permission": "quotes:read",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado propietario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR, QUOTE_ITEMS_INVALID, DISCOUNT_NOT_AUTHORIZED, TAX_INVALID, QUOTE_TOTAL_MISMATCH",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer ausente o inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso insuficiente o cliente técnico no admitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": 0
+            }
+          },
+          {
+            "name": "orderReference",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "superseded",
+                "expired"
+              ]
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createQuote",
+        "x-permission": "quotes:write",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuoteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay creación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Resultado propietario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR, QUOTE_ITEMS_INVALID, DISCOUNT_NOT_AUTHORIZED, TAX_INVALID, QUOTE_TOTAL_MISMATCH",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer ausente o inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso insuficiente o cliente técnico no admitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "QUOTE_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT, VERSION_CONFLICT, QUOTE_APPROVED_IMMUTABLE, QUOTE_LINKED_IMMUTABLE, QUOTE_NOT_PENDING, QUOTE_ALREADY_DECIDED, QUOTE_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quotes/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getQuote",
+        "x-permission": "quotes:read",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado propietario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR, QUOTE_ITEMS_INVALID, DISCOUNT_NOT_AUTHORIZED, TAX_INVALID, QUOTE_TOTAL_MISMATCH",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer ausente o inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso insuficiente o cliente técnico no admitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "QUOTE_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quotes/{id}/revisions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "reviseQuote",
+        "x-permission": "quotes:write",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviseQuoteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado propietario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR, QUOTE_ITEMS_INVALID, DISCOUNT_NOT_AUTHORIZED, TAX_INVALID, QUOTE_TOTAL_MISMATCH",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer ausente o inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso insuficiente o cliente técnico no admitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "QUOTE_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT, VERSION_CONFLICT, QUOTE_APPROVED_IMMUTABLE, QUOTE_LINKED_IMMUTABLE, QUOTE_NOT_PENDING, QUOTE_ALREADY_DECIDED, QUOTE_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quotes/{id}/decision": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "decideQuote",
+        "x-permission": "quotes:decide",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideQuoteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado propietario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR, QUOTE_ITEMS_INVALID, DISCOUNT_NOT_AUTHORIZED, TAX_INVALID, QUOTE_TOTAL_MISMATCH",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer ausente o inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permiso insuficiente o cliente técnico no admitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumanAuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "QUOTE_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT, VERSION_CONFLICT, QUOTE_APPROVED_IMMUTABLE, QUOTE_LINKED_IMMUTABLE, QUOTE_NOT_PENDING, QUOTE_ALREADY_DECIDED, QUOTE_EXPIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/cu15/quote-links/{sagaId}/authorize": {
+      "parameters": [
+        {
+          "name": "sagaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "authorizeQuoteLink",
+        "x-client-id": "autonexus-cu15-coordinator",
+        "security": [
+          {
+            "cu15ClientCredentials": [
+              "cu15.finance.authorize"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeQuoteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado durable (GET de operación incluye rejected) o recurso actual según ruta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/FinanceCommandResult"
+                    },
+                    {
+                      "properties": {
+                        "outcome": {
+                          "const": "applied"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR sin ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN: azp/cliente o scope incorrecto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "POST: rechazo durable o IDEMPOTENCY_CONFLICT estándar fuera del ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/FinanceCommandResult"
+                        },
+                        {
+                          "properties": {
+                            "outcome": {
+                              "const": "rejected"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "$ref": "#/components/schemas/BusinessError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR; resultado incierto, no rechazo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/cu15/quote-links/{sagaId}/cancel": {
+      "parameters": [
+        {
+          "name": "sagaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "cancelQuoteLink",
+        "x-client-id": "autonexus-cu15-coordinator",
+        "security": [
+          {
+            "cu15ClientCredentials": [
+              "cu15.finance.cancel"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelQuoteLinkInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado durable (GET de operación incluye rejected) o recurso actual según ruta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/FinanceCommandResult"
+                    },
+                    {
+                      "properties": {
+                        "outcome": {
+                          "const": "applied"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR sin ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN: azp/cliente o scope incorrecto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "POST: rechazo durable o IDEMPOTENCY_CONFLICT estándar fuera del ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/FinanceCommandResult"
+                        },
+                        {
+                          "properties": {
+                            "outcome": {
+                              "const": "rejected"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "$ref": "#/components/schemas/BusinessError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR; resultado incierto, no rechazo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/cu15/quote-links/{sagaId}": {
+      "parameters": [
+        {
+          "name": "sagaId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getQuoteLink",
+        "x-client-id": "autonexus-cu15-coordinator",
+        "security": [
+          {
+            "cu15ClientCredentials": [
+              "cu15.finance.read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado durable (GET de operación incluye rejected) o recurso actual según ruta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentQuoteLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR sin ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN: azp/cliente o scope incorrecto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "QUOTE_LINK_NOT_FOUND; vínculo desconocido en este instante, no prueba de ausencia definitiva.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR; resultado incierto, no rechazo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/cu15/operations/{operationId}": {
+      "parameters": [
+        {
+          "name": "operationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getFinanceOperation",
+        "x-client-id": "autonexus-cu15-coordinator",
+        "security": [
+          {
+            "cu15ClientCredentials": [
+              "cu15.finance.read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado durable (GET de operación incluye rejected) o recurso actual según ruta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceCommandResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR sin ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN: azp/cliente o scope incorrecto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "OPERATION_NOT_FOUND: desconocido en este instante, no rejected ni prueba de ausencia definitiva. Reintentar exactamente mismo comando.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR; resultado incierto, no rechazo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Humano, audiencia autonexus-finance-api; x-permission exigido por servidor. Rechaza coordinador."
+      },
+      "cu15ClientCredentials": {
+        "type": "oauth2",
+        "x-client-id": "autonexus-cu15-coordinator",
+        "description": "Solo cliente técnico azp exacto, firma/issuer/exp y audiencia autonexus-finance-api, no bearer humano.",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "http://127.0.0.1:8180/realms/autonexus/protocol/openid-connect/token",
+            "scopes": {
+              "cu15.finance.read": "Consultar vínculo/ledger",
+              "cu15.finance.authorize": "Autorizar vínculo durable",
+              "cu15.finance.cancel": "Compensar vínculo"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "BusinessError": {
+        "type": "object",
+        "required": [
+          "statusCode",
+          "message",
+          "code"
+        ],
+        "properties": {
+          "statusCode": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "HumanAuthError": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "unauthorized",
+              "forbidden"
+            ]
+          }
+        }
+      },
+      "QuoteItemInput": {
+        "type": "object",
+        "required": [
+          "serviceReference",
+          "quantity",
+          "unitPrice"
+        ],
+        "properties": {
+          "serviceReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "QuoteItem": {
+        "type": "object",
+        "required": [
+          "serviceReference",
+          "description",
+          "quantity",
+          "unitPrice",
+          "lineTotal"
+        ],
+        "properties": {
+          "serviceReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "lineTotal": {
+            "type": "number"
+          }
+        }
+      },
+      "QuoteDecision": {
+        "type": "object",
+        "required": [
+          "decision",
+          "decidedBy",
+          "evidence",
+          "reason",
+          "decidedAt"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ]
+          },
+          "decidedBy": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decidedAt": {
+            "type": "string",
+            "description": "Timestamp SQL serializado por Laravel; no se promete ISO-8601."
+          }
+        }
+      },
+      "Quote": {
+        "type": "object",
+        "required": [
+          "id",
+          "orderReference",
+          "orderNumber",
+          "customerReference",
+          "vehicleReference",
+          "vehiclePlate",
+          "version",
+          "status",
+          "subtotal",
+          "discountPercent",
+          "discountAmount",
+          "taxPercent",
+          "taxAmount",
+          "total",
+          "currency",
+          "notes",
+          "validUntil",
+          "currencyHint",
+          "decision",
+          "items"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderReference": {
+            "type": "string"
+          },
+          "orderNumber": {
+            "type": "string"
+          },
+          "customerReference": {
+            "type": "string"
+          },
+          "vehicleReference": {
+            "type": "string"
+          },
+          "vehiclePlate": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "superseded",
+              "expired"
+            ]
+          },
+          "subtotal": {
+            "type": "number"
+          },
+          "discountPercent": {
+            "type": "number"
+          },
+          "discountAmount": {
+            "type": "number"
+          },
+          "taxPercent": {
+            "type": "number"
+          },
+          "taxAmount": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "const": "BOB"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date",
+            "description": "Fecha civil inclusiva America/La_Paz."
+          },
+          "currencyHint": {
+            "type": "string"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteItem"
+            }
+          }
+        }
+      },
+      "QuotePage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Quote"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "QuoteResult": {
+        "type": "object",
+        "required": [
+          "quote",
+          "replayed"
+        ],
+        "properties": {
+          "quote": {
+            "$ref": "#/components/schemas/Quote"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "orderStatusHint": {
+            "type": "string",
+            "enum": [
+              "quote_approved",
+              "quote_rejected"
+            ]
+          }
+        },
+        "description": "orderStatusHint solo en decisión nueva, no replay; no modifica ni confirma la orden."
+      },
+      "CreateQuoteInput": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "orderReference",
+          "orderNumber",
+          "customerReference",
+          "vehicleReference",
+          "vehiclePlate",
+          "items",
+          "validUntil"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "orderNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "customerReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "vehicleReference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "vehiclePlate": {
+            "type": "string",
+            "minLength": 1
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteItemInput"
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "serviceReference distintos; importes calculados en servidor."
+          },
+          "discountPercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20,
+            "default": 0
+          },
+          "taxPercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 30,
+            "default": 13
+          },
+          "total": {
+            "type": "number",
+            "description": "Solo consistencia; diferencia superior a 0.009 produce QUOTE_TOTAL_MISMATCH."
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "examples": [
+          {
+            "operationId": "20000000-0000-4000-8000-000000000006",
+            "orderReference": "20000000-0000-4000-8000-000000000002",
+            "orderNumber": "SYNTH-001",
+            "customerReference": "20000000-0000-4000-8000-000000000007",
+            "vehicleReference": "20000000-0000-4000-8000-000000000008",
+            "vehiclePlate": "SYNTH01",
+            "items": [
+              {
+                "serviceReference": "20000000-0000-4000-8000-000000000009",
+                "description": "Servicio sintético",
+                "quantity": 1,
+                "unitPrice": 100
+              }
+            ],
+            "validUntil": "2026-11-03"
+          }
+        ]
+      },
+      "ReviseQuoteInput": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "expectedVersion",
+          "items"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteItemInput"
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "serviceReference distintos; importes calculados en servidor."
+          },
+          "discountPercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20,
+            "default": 0
+          },
+          "taxPercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 30
+          },
+          "total": {
+            "type": "number",
+            "description": "Solo consistencia; diferencia superior a 0.009 produce QUOTE_TOTAL_MISMATCH."
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "description": "Nueva fila id distinto/version+1; anterior superseded. approved/vinculada inmutable. Omisiones conservan vigencia, impuesto y notas; descuento omitido 0."
+      },
+      "DecideQuoteInput": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "decision",
+          "evidence"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ]
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          }
+        },
+        "description": "No recibe expectedVersion; solo fila seleccionada pending y vigente. reason truncado a 300. Actor del bearer, no del body."
+      },
+      "QuoteLink": {
+        "type": "object",
+        "required": [
+          "id",
+          "sagaId",
+          "orderId",
+          "quoteId",
+          "quoteVersion",
+          "status",
+          "version",
+          "authorizedAt",
+          "validUntil"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sagaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quoteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quoteVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "cancelled"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "authorizedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "QuoteLinkTombstone": {
+        "type": "object",
+        "required": [
+          "sagaId",
+          "status",
+          "version",
+          "tombstone"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "sagaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "const": "cancelled"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tombstone": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "examples": [
+          {
+            "sagaId": "20000000-0000-4000-8000-000000000005",
+            "status": "cancelled",
+            "version": 1,
+            "tombstone": true
+          }
+        ]
+      },
+      "CurrentQuoteLink": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/QuoteLink"
+          },
+          {
+            "$ref": "#/components/schemas/QuoteLinkTombstone"
+          }
+        ]
+      },
+      "AuthorizeQuoteInput": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "expectedVersion",
+          "initiatedBy",
+          "authorizedAt",
+          "orderId",
+          "quoteId",
+          "quoteVersion"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "const": 0
+          },
+          "initiatedBy": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[A-Za-z0-9:_@.\\-]+$",
+            "description": "Subject humano obtenido al inicio por servidor; metadata inmutable del cliente técnico confiable, no credencial."
+          },
+          "authorizedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "description": "Autorización inicial; normalizada UTC milisegundos. Vínculo usa reloj propio del commit."
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quoteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quoteVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "examples": [
+          {
+            "operationId": "20000000-0000-4000-8000-000000000001",
+            "expectedVersion": 0,
+            "initiatedBy": "synthetic-subject",
+            "authorizedAt": "2026-11-02T12:00:00.000Z",
+            "orderId": "20000000-0000-4000-8000-000000000002",
+            "quoteId": "20000000-0000-4000-8000-000000000003",
+            "quoteVersion": 1
+          }
+        ]
+      },
+      "CancelQuoteLinkInput": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "expectedVersion",
+          "initiatedBy",
+          "authorizedAt",
+          "reasonCode"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "initiatedBy": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[A-Za-z0-9:_@.\\-]+$",
+            "description": "Subject humano obtenido al inicio por servidor; metadata inmutable del cliente técnico confiable, no credencial."
+          },
+          "authorizedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})$",
+            "description": "Autorización inicial; normalizada UTC milisegundos. Vínculo usa reloj propio del commit."
+          },
+          "reasonCode": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        },
+        "description": "expectedVersion actual; 0 solo marca terminal de ausencia. Conserva cotización, ítems y decisión. Cancelación permitida aunque oferta haya vencido.",
+        "examples": [
+          {
+            "operationId": "20000000-0000-4000-8000-000000000004",
+            "expectedVersion": 1,
+            "initiatedBy": "synthetic-subject",
+            "authorizedAt": "2026-11-02T12:00:00.000Z",
+            "reasonCode": "SAGA_REJECTED"
+          }
+        ]
+      },
+      "FinanceCommandResult": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "sagaId",
+          "command",
+          "fingerprint",
+          "outcome",
+          "resource",
+          "errorCode",
+          "committedAt",
+          "replayed"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sagaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "command": {
+            "type": "string",
+            "enum": [
+              "authorize_quote",
+              "cancel_quote_link"
+            ]
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "rejected"
+            ]
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CurrentQuoteLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "QUOTE_NOT_FOUND",
+              "QUOTE_NOT_APPROVED",
+              "QUOTE_APPROVAL_MISSING",
+              "VERSION_CONFLICT",
+              "QUOTE_ORDER_MISMATCH",
+              "QUOTE_EXPIRED",
+              "QUOTE_LINK_CANCELLED",
+              "QUOTE_ALREADY_LINKED"
+            ]
+          },
+          "committedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "const": "applied"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "resource": {
+                  "$ref": "#/components/schemas/CurrentQuoteLink"
+                },
+                "errorCode": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "resource": {
+                  "type": "null"
+                },
+                "errorCode": {
+                  "type": "string",
+                  "enum": [
+                    "QUOTE_NOT_FOUND",
+                    "QUOTE_NOT_APPROVED",
+                    "QUOTE_APPROVAL_MISSING",
+                    "VERSION_CONFLICT",
+                    "QUOTE_ORDER_MISMATCH",
+                    "QUOTE_EXPIRED",
+                    "QUOTE_LINK_CANCELLED",
+                    "QUOTE_ALREADY_LINKED"
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "description": "Snapshot histórico durable, no recurso actual. SHA-256 del JSON canónico UTF-8 de clientId/command/sagaId/body validado completo; claves ordenadas recursivamente y arrays en orden. UUID minúsculas, fechas UTC milisegundos. Sin token en huella. POST replay=true; GET conserva resultado almacenado. Ejemplo enteramente sintético; huella calculada para AuthorizeQuoteInput.examples[0], sagaId del ejemplo y cliente coordinador.",
+        "examples": [
+          {
+            "operationId": "20000000-0000-4000-8000-000000000001",
+            "sagaId": "20000000-0000-4000-8000-000000000005",
+            "command": "authorize_quote",
+            "fingerprint": "c409ddc34726bec8b86ac05206c3dd8128343b7ce019b7fc9e2b78591c9388bc",
+            "outcome": "rejected",
+            "resource": null,
+            "errorCode": "QUOTE_NOT_APPROVED",
+            "committedAt": "2026-11-02T12:00:00.000Z",
+            "replayed": false
+          }
+        ]
+      }
+    }
+  }
+}

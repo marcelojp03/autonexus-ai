@@ -23,3 +23,4 @@ export class SessionView {
   }
 }
 export const sessionGuard: CanActivateFn = () => inject(SessionView).allowed();
+export const businessSessionGuard: CanActivateFn = () => !inject(DEMO_MODE);

@@ -61,6 +61,7 @@
     <nz-descriptions-item nzTitle="Cuenta vinculada">
       <nz-tag [nzColor]="current.access.status === 'synced' ? 'green' : current.access.status === 'failed' || current.access.status === 'conflict' ? 'red' : 'gold'">{{ accessLabel(current) }}</nz-tag>
     </nz-descriptions-item>
+    <nz-descriptions-item nzTitle="Habilitación mecánica"><span id="employee-mechanic-status">{{ current.mechanicEnabled === true ? 'Habilitado' : 'No habilitado' }}</span></nz-descriptions-item>
     <nz-descriptions-item nzTitle="Historial">
       <a [routerLink]="['/', current.id, 'history']">Ver historial</a>
     </nz-descriptions-item>
@@ -131,6 +132,11 @@
       <nz-form-label nzFor="specialties">Especialidades</nz-form-label>
       <nz-form-control nzErrorTip="Máximo 20 especialidades distintas, de 1 a 80 caracteres." nzExtra="Opcionales; no otorgan permisos. Escribí y presioná Enter para agregar cada una.">
         <nz-select id="specialties" formControlName="specialties" nzMode="tags" nzPlaceHolder="Motor, frenos, electricidad…"></nz-select>
+      </nz-form-control>
+    </nz-form-item>
+    <nz-form-item class="wide">
+      <nz-form-control nzExtra="Requiere al menos una especialidad. No asigna roles ni habilita una cuenta de acceso.">
+        <label nz-checkbox formControlName="mechanicEnabled" id="employee-mechanic-enabled">Habilitar para asignaciones mecánicas</label>
       </nz-form-control>
     </nz-form-item>
     @if (!editing) {

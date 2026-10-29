@@ -22,7 +22,7 @@ public class ManageWorkOrders {
         int size = queryInt(limit, 20, 1, MAX_PAGE);
         int skip = queryInt(offset, 0, 0, Integer.MAX_VALUE);
         String normalizedStatus = status == null || status.isBlank() ? null : status.trim();
-        if (normalizedStatus != null && !normalizedStatus.matches("pending_quote|quote_requested|quote_approved|cancelled")) {
+        if (normalizedStatus != null && !normalizedStatus.matches("pending_quote|quote_requested|quote_approved|cancelled|confirmation_pending|confirmed")) {
             throw OperationsError.invalid();
         }
         UUID customer = customerId == null || customerId.isBlank() ? null : Validation.uuid(customerId);

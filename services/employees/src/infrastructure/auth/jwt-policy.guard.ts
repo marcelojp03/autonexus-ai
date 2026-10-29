@@ -30,6 +30,12 @@ export class JwtPolicyGuard implements CanActivate {
       ? /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/i.exec(authorization) : null;
     if (!match) throw new UnauthorizedException();
     const verified = await this.verifier.verify(match[1]);
+    if (policy && 'technicalScope' in policy) {
+      if (verified.clientId !== 'autonexus-cu15-coordinator' || !verified.scopes?.includes(policy.technicalScope)) throw new ForbiddenException();
+      request.identity = verified;
+      return true;
+    }
+    if (verified.clientId === 'autonexus-cu15-coordinator' || verified.scopes?.some(scope => scope.startsWith('cu15.'))) throw new ForbiddenException();
     let effective;
     try {
       effective = await this.authorize.resolve(verified.subject, verified.roles);

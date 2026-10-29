@@ -1,3 +1,10 @@
+import { ManageAssignments } from './application/manage-assignments.js';
+import { AssignmentsController } from './infrastructure/http/assignments.controller.js';
+import { MechanicsController } from './infrastructure/http/mechanics.controller.js';
+import { PostgresAssignmentRepository } from './infrastructure/postgres/postgres-assignment-repository.js';
+import { PostgresMechanicProjection } from './infrastructure/postgres/postgres-mechanic-projection.js';
+import { PostgresCu15Inbox } from './infrastructure/postgres/postgres-cu15-inbox.js';
+import { Cu15Messaging } from './infrastructure/messaging/cu15-messaging.js';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { DataSource } from 'typeorm';
@@ -23,8 +30,36 @@ import { PostgresSecurityRepository } from './infrastructure/postgres/postgres-s
 
 @Module({
   imports: [AuthModule],
-  controllers: [HealthController, TechnicalController, EmployeesController, StaffingController, SecurityController],
+  controllers: [
+    AssignmentsController,
+    MechanicsController,
+    HealthController,
+    TechnicalController,
+    EmployeesController,
+    StaffingController,
+    SecurityController,
+  ],
   providers: [
+    {
+      provide: PostgresAssignmentRepository,
+      useFactory: () => new PostgresAssignmentRepository(),
+    },
+    {
+      provide: PostgresMechanicProjection,
+      useFactory: () => new PostgresMechanicProjection(),
+    },
+    { provide: PostgresCu15Inbox, useFactory: () => new PostgresCu15Inbox() },
+    {
+      provide: ManageAssignments,
+      inject: [PostgresAssignmentRepository],
+      useFactory: (repository: PostgresAssignmentRepository) =>
+        new ManageAssignments(repository),
+    },
+    {
+      provide: Cu15Messaging,
+      inject: [PostgresCu15Inbox],
+      useFactory: (inbox: PostgresCu15Inbox) => new Cu15Messaging(inbox),
+    },
     {
       provide: PostgresEmployeeRepository,
       useFactory: () => new PostgresEmployeeRepository(),
@@ -48,7 +83,8 @@ import { PostgresSecurityRepository } from './infrastructure/postgres/postgres-s
     {
       provide: ManageSchedules,
       inject: [PostgresScheduleRepository],
-      useFactory: (repository: PostgresScheduleRepository) => new ManageSchedules(repository),
+      useFactory: (repository: PostgresScheduleRepository) =>
+        new ManageSchedules(repository),
     },
     {
       provide: PostgresSecurityRepository,
@@ -61,12 +97,16 @@ import { PostgresSecurityRepository } from './infrastructure/postgres/postgres-s
     {
       provide: AuthorizeActor,
       inject: [PostgresSecurityRepository],
-      useFactory: (repository: PostgresSecurityRepository) => new AuthorizeActor(repository),
+      useFactory: (repository: PostgresSecurityRepository) =>
+        new AuthorizeActor(repository),
     },
     {
       provide: ManageSecurity,
       inject: [PostgresSecurityRepository, KeycloakRoleGateway],
-      useFactory: (repository: PostgresSecurityRepository, roles: KeycloakRoleGateway) => new ManageSecurity(repository, roles),
+      useFactory: (
+        repository: PostgresSecurityRepository,
+        roles: KeycloakRoleGateway,
+      ) => new ManageSecurity(repository, roles),
     },
     { provide: APP_GUARD, useClass: JwtPolicyGuard },
     {

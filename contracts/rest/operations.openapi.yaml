@@ -1,13 +1,17 @@
 openapi: 3.1.0
 info:
-  title: AutoNexus AI — Operaciones, clientes, vehículos, catálogo y citas
+  title: AutoNexus AI — Operaciones, recepción, órdenes y confirmación CU15
   version: 1.0.0
   description: >
-    Superficie REST propietaria de MS01 (CU06, CU07, CU09, CU10). La web consume estas
+    Superficie REST propietaria de MS01 (CU06, CU07, CU09, CU10, CU11, CU12, CU15). La web consume estas
     operaciones exclusivamente por GraphQL mediante integration/bff. Autorización por permiso
     del catálogo CU02 (`contracts/auth/permissions.md`): `<modulo>:read` para consultas y
     `<modulo>:write` para mutaciones. Una cita no es una orden de trabajo ni una asignación
-    de mecánico.
+    de mecánico. BFF no tiene base ni coordina participantes: delega CU15 a Operaciones.
+    Solo confirmed acredita el commit local final; 202, aprobación financiera y disponibilidad
+    no confirman el servicio. Timeout/5xx y GET404 no prueban rechazo. Recuperación conserva
+    comandos/IDs/versiones; compensación pendiente conserva exclusión. Este contrato documenta
+    fuentes existentes y saga.md aprobado; no acredita pruebas de APIs.
 servers:
   - url: http://127.0.0.1:8081
 security:
@@ -333,6 +337,469 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AppointmentResult' }
         '409': { $ref: '#/components/responses/Conflict' }
+  "/receptions":
+    "get":
+      "operationId": "listReceptions"
+      "x-permission": "receptions:read"
+      "security":
+        -
+          "bearerAuth": []
+      "responses":
+        "200":
+          "description": "Consulta propietaria"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ReceptionPage"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+      "parameters":
+        -
+          "name": "limit"
+          "in": "query"
+          "schema":
+            "type": "integer"
+            "minimum": 1
+            "maximum": 100
+            "default": 20
+        -
+          "name": "offset"
+          "in": "query"
+          "schema":
+            "type": "integer"
+            "minimum": 0
+            "maximum": 2147483647
+            "default": 0
+        -
+          "name": "vehicleId"
+          "in": "query"
+          "schema":
+            "type": "string"
+            "format": "uuid"
+        -
+          "name": "open"
+          "in": "query"
+          "schema":
+            "type": "boolean"
+          "description": "true: sin orden; false: con orden; omitido/vacío: ambos. Solo literales true/false."
+    "post":
+      "operationId": "createReception"
+      "x-permission": "receptions:write"
+      "security":
+        -
+          "bearerAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/CreateReceptionInput"
+      "responses":
+        "201":
+          "description": "Recurso registrado; replay también retorna 201"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ReceptionResult"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "RECEPTION_NOT_FOUND, ORDER_NOT_FOUND, VEHICLE_NOT_FOUND, APPOINTMENT_NOT_FOUND, SERVICE_NOT_FOUND"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "409":
+          "description": "IDEMPOTENCY_CONFLICT, VEHICLE_INACTIVE, CUSTOMER_INACTIVE, VEHICLE_OWNERSHIP_MISMATCH, APPOINTMENT_NOT_SCHEDULED, MILEAGE_REGRESSION, VEHICLE_ALREADY_IN_RECEPTION, ORDER_ALREADY_EXISTS, SERVICE_INACTIVE, DUPLICATE_SERVICE"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+  "/receptions/{id}":
+    "parameters":
+      -
+        "name": "id"
+        "in": "path"
+        "required": true
+        "schema":
+          "type": "string"
+          "format": "uuid"
+    "get":
+      "operationId": "getReception"
+      "x-permission": "receptions:read"
+      "security":
+        -
+          "bearerAuth": []
+      "responses":
+        "200":
+          "description": "Consulta propietaria"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Reception"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "RECEPTION_NOT_FOUND, ORDER_NOT_FOUND, VEHICLE_NOT_FOUND, APPOINTMENT_NOT_FOUND, SERVICE_NOT_FOUND"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+  "/orders":
+    "get":
+      "operationId": "listWorkOrders"
+      "x-permission": "orders:read"
+      "security":
+        -
+          "bearerAuth": []
+      "responses":
+        "200":
+          "description": "Consulta propietaria"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/WorkOrderPage"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+      "parameters":
+        -
+          "name": "limit"
+          "in": "query"
+          "schema":
+            "type": "integer"
+            "minimum": 1
+            "maximum": 100
+            "default": 20
+        -
+          "name": "offset"
+          "in": "query"
+          "schema":
+            "type": "integer"
+            "minimum": 0
+            "maximum": 2147483647
+            "default": 0
+        -
+          "name": "status"
+          "in": "query"
+          "schema":
+            "$ref": "#/components/schemas/WorkOrderStatus"
+        -
+          "name": "customerId"
+          "in": "query"
+          "schema":
+            "type": "string"
+            "format": "uuid"
+        -
+          "name": "vehicleId"
+          "in": "query"
+          "schema":
+            "type": "string"
+            "format": "uuid"
+    "post":
+      "operationId": "createWorkOrder"
+      "x-permission": "orders:write"
+      "security":
+        -
+          "bearerAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/CreateWorkOrderInput"
+      "responses":
+        "201":
+          "description": "Recurso registrado; replay también retorna 201"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/WorkOrderResult"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "RECEPTION_NOT_FOUND, ORDER_NOT_FOUND, VEHICLE_NOT_FOUND, APPOINTMENT_NOT_FOUND, SERVICE_NOT_FOUND"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "409":
+          "description": "IDEMPOTENCY_CONFLICT, VEHICLE_INACTIVE, CUSTOMER_INACTIVE, VEHICLE_OWNERSHIP_MISMATCH, APPOINTMENT_NOT_SCHEDULED, MILEAGE_REGRESSION, VEHICLE_ALREADY_IN_RECEPTION, ORDER_ALREADY_EXISTS, SERVICE_INACTIVE, DUPLICATE_SERVICE"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+  "/orders/{id}":
+    "parameters":
+      -
+        "name": "id"
+        "in": "path"
+        "required": true
+        "schema":
+          "type": "string"
+          "format": "uuid"
+    "get":
+      "operationId": "getWorkOrder"
+      "x-permission": "orders:read"
+      "security":
+        -
+          "bearerAuth": []
+      "responses":
+        "200":
+          "description": "Consulta propietaria"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/WorkOrder"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "RECEPTION_NOT_FOUND, ORDER_NOT_FOUND, VEHICLE_NOT_FOUND, APPOINTMENT_NOT_FOUND, SERVICE_NOT_FOUND"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+  "/orders/{orderId}/confirmations":
+    "parameters":
+      -
+        "name": "orderId"
+        "in": "path"
+        "required": true
+        "schema":
+          "type": "string"
+          "format": "uuid"
+    "get":
+      "operationId": "listOrderConfirmations"
+      "x-permission": "confirmations:read"
+      "security":
+        -
+          "bearerAuth": []
+      "responses":
+        "200":
+          "description": "Consulta propietaria"
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/ConfirmationSaga"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "ORDER_NOT_FOUND, CONFIRMATION_NOT_FOUND, OPERATION_NOT_FOUND; operación desconocida ahora no acredita rechazo ni ausencia de envío en vuelo"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "503":
+          "description": "CU15_DISABLED; no prueba de rechazo de una intención previamente aceptada"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+    "post":
+      "operationId": "startServiceConfirmation"
+      "x-permission": "confirmations:write"
+      "security":
+        -
+          "bearerAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/StartServiceConfirmationInput"
+      "responses":
+        "202":
+          "description": "Intención aceptada; consultar estado vigente, no servicio confirmado"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ConfirmationSaga"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "ORDER_NOT_FOUND, CONFIRMATION_NOT_FOUND, OPERATION_NOT_FOUND; operación desconocida ahora no acredita rechazo ni ausencia de envío en vuelo"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "409":
+          "description": "IDEMPOTENCY_CONFLICT, VERSION_CONFLICT, ORDER_ALREADY_CONFIRMED, ORDER_CONFIRMATION_IN_PROGRESS, ORDER_NOT_CONFIRMABLE, CONFIRMATION_TERMINAL, CONFIRMATION_BUSY"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "503":
+          "description": "CU15_DISABLED; no prueba de rechazo de una intención previamente aceptada"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+      "description": "Operaciones persiste inicio/orden confirmation_pending/Saga/comandos/Outbox local. Misma operationId y actor/cuerpo normalizados devuelve misma Saga con estado vigente; distinto contenido/destino/versión IDEMPOTENCY_CONFLICT. Solo una Saga no terminal por orden. BFF delega, no coordina. No persiste JWT humano."
+  "/confirmations/{sagaId}":
+    "parameters":
+      -
+        "name": "sagaId"
+        "in": "path"
+        "required": true
+        "schema":
+          "type": "string"
+          "format": "uuid"
+    "get":
+      "operationId": "getConfirmationSaga"
+      "x-permission": "confirmations:read"
+      "security":
+        -
+          "bearerAuth": []
+      "responses":
+        "200":
+          "description": "Consulta propietaria"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ConfirmationSaga"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "ORDER_NOT_FOUND, CONFIRMATION_NOT_FOUND, OPERATION_NOT_FOUND; operación desconocida ahora no acredita rechazo ni ausencia de envío en vuelo"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "503":
+          "description": "CU15_DISABLED; no prueba de rechazo de una intención previamente aceptada"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+  "/confirmations/operations/{operationId}":
+    "parameters":
+      -
+        "name": "operationId"
+        "in": "path"
+        "required": true
+        "schema":
+          "type": "string"
+          "format": "uuid"
+    "get":
+      "operationId": "getConfirmationByOperation"
+      "x-permission": "confirmations:read"
+      "security":
+        -
+          "bearerAuth": []
+      "responses":
+        "200":
+          "description": "Consulta propietaria"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ConfirmationSaga"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "ORDER_NOT_FOUND, CONFIRMATION_NOT_FOUND, OPERATION_NOT_FOUND; operación desconocida ahora no acredita rechazo ni ausencia de envío en vuelo"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "503":
+          "description": "CU15_DISABLED; no prueba de rechazo de una intención previamente aceptada"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+  "/confirmations/{sagaId}/retry":
+    "parameters":
+      -
+        "name": "sagaId"
+        "in": "path"
+        "required": true
+        "schema":
+          "type": "string"
+          "format": "uuid"
+    "post":
+      "operationId": "retryServiceConfirmation"
+      "x-permission": "confirmations:write"
+      "security":
+        -
+          "bearerAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/ConfirmationRetryInput"
+      "responses":
+        "202":
+          "description": "Intención aceptada; consultar estado vigente, no servicio confirmado"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ConfirmationSaga"
+        "400":
+          "$ref": "#/components/responses/Invalid"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "description": "ORDER_NOT_FOUND, CONFIRMATION_NOT_FOUND, OPERATION_NOT_FOUND; operación desconocida ahora no acredita rechazo ni ausencia de envío en vuelo"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "409":
+          "description": "IDEMPOTENCY_CONFLICT, VERSION_CONFLICT, ORDER_ALREADY_CONFIRMED, ORDER_CONFIRMATION_IN_PROGRESS, ORDER_NOT_CONFIRMABLE, CONFIRMATION_TERMINAL, CONFIRMATION_BUSY"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
+        "503":
+          "description": "CU15_DISABLED; no prueba de rechazo de una intención previamente aceptada"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BusinessError"
 components:
   securitySchemes:
     bearerAuth:
@@ -364,6 +831,401 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/BusinessError' }
   schemas:
+    "WorkOrderStatus":
+      "type": "string"
+      "enum": ["pending_quote","quote_requested","quote_approved","cancelled","confirmation_pending","confirmed"]
+      "description": "Estados anteriores conservados. Crear produce pending_quote; solo commit local final CU15 produce confirmed; rechazo compensado vuelve a pending_quote con nueva versión."
+    "CreateReceptionInput":
+      "type": "object"
+      "required": ["operationId","vehicleId","mileage","reason"]
+      "additionalProperties": false
+      "properties":
+        "operationId":
+          "type": "string"
+          "format": "uuid"
+        "vehicleId":
+          "type": "string"
+          "format": "uuid"
+        "appointmentId":
+          "type": ["string","null"]
+          "format": "uuid"
+        "mileage":
+          "type": "integer"
+          "minimum": 0
+          "maximum": 2000000
+        "reason":
+          "type": "string"
+          "minLength": 3
+          "maxLength": 300
+        "symptoms":
+          "type": ["string","null"]
+          "maxLength": 1000
+        "visibleConditions":
+          "type": ["string","null"]
+          "maxLength": 1000
+    "Reception":
+      "type": "object"
+      "required": ["id","vehicleId","vehiclePlate","customerId","customerName","appointmentId","mileage","reason","symptoms","visibleConditions","hasOrder","receivedAt","version"]
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "vehicleId":
+          "type": "string"
+          "format": "uuid"
+        "vehiclePlate":
+          "type": "string"
+        "customerId":
+          "type": "string"
+          "format": "uuid"
+        "customerName":
+          "type": "string"
+        "appointmentId":
+          "type": ["string","null"]
+          "format": "uuid"
+        "mileage":
+          "type": "integer"
+        "reason":
+          "type": "string"
+        "symptoms":
+          "type": ["string","null"]
+        "visibleConditions":
+          "type": ["string","null"]
+        "hasOrder":
+          "type": "boolean"
+        "receivedAt":
+          "type": "string"
+          "format": "date-time"
+        "version":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+    "CreateWorkOrderInput":
+      "type": "object"
+      "required": ["operationId","receptionId","description","priority","services"]
+      "additionalProperties": false
+      "properties":
+        "operationId":
+          "type": "string"
+          "format": "uuid"
+        "receptionId":
+          "type": "string"
+          "format": "uuid"
+        "description":
+          "type": "string"
+          "minLength": 3
+          "maxLength": 1000
+        "priority":
+          "type": "string"
+          "enum": ["baja","normal","alta","urgente"]
+        "notes":
+          "type": ["string","null"]
+          "maxLength": 1000
+        "services":
+          "type": "array"
+          "items":
+            "type": "object"
+            "required": ["serviceId"]
+            "additionalProperties": false
+            "properties":
+              "serviceId":
+                "type": "string"
+                "format": "uuid"
+              "quantity":
+                "type": "integer"
+                "minimum": 1
+                "maximum": 99
+                "default": 1
+          "minItems": 1
+          "maxItems": 20
+      "description": "serviceId distintos y activos. Copia duración y tarifa propietarias. Crear no asigna mecánico ni confirma servicio."
+    "WorkOrderItem":
+      "type": "object"
+      "required": ["serviceId","serviceName","quantity","estimatedMinutes","referenceRate"]
+      "properties":
+        "serviceId":
+          "type": "string"
+          "format": "uuid"
+        "serviceName":
+          "type": "string"
+        "quantity":
+          "type": "integer"
+        "estimatedMinutes":
+          "type": "integer"
+        "referenceRate":
+          "type": "number"
+    "WorkOrder":
+      "type": "object"
+      "required": ["id","number","receptionId","vehicleId","vehiclePlate","customerId","customerName","description","priority","notes","status","version","createdAt","updatedAt","items"]
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "number":
+          "type": "string"
+        "receptionId":
+          "type": "string"
+          "format": "uuid"
+        "vehicleId":
+          "type": "string"
+          "format": "uuid"
+        "vehiclePlate":
+          "type": "string"
+        "customerId":
+          "type": "string"
+          "format": "uuid"
+        "customerName":
+          "type": "string"
+        "description":
+          "type": "string"
+        "priority":
+          "type": "string"
+          "enum": ["baja","normal","alta","urgente"]
+        "notes":
+          "type": ["string","null"]
+        "status":
+          "$ref": "#/components/schemas/WorkOrderStatus"
+        "version":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "createdAt":
+          "type": "string"
+          "format": "date-time"
+        "updatedAt":
+          "type": "string"
+          "format": "date-time"
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/WorkOrderItem"
+      "description": "DTO actual sin assignmentId/quoteLinkId ni sus versiones; esas referencias se consultan en ConfirmationSaga, no se infieren de columnas SQL."
+    "ReceptionPage":
+      "type": "object"
+      "required": ["items","total","limit","offset"]
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/Reception"
+        "total":
+          "type": "integer"
+          "minimum": 0
+        "limit":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "offset":
+          "type": "integer"
+          "minimum": 0
+    "ReceptionResult":
+      "type": "object"
+      "required": ["reception","replayed"]
+      "properties":
+        "reception":
+          "$ref": "#/components/schemas/Reception"
+        "replayed":
+          "type": "boolean"
+    "WorkOrderPage":
+      "type": "object"
+      "required": ["items","total","limit","offset"]
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/WorkOrder"
+        "total":
+          "type": "integer"
+          "minimum": 0
+        "limit":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "offset":
+          "type": "integer"
+          "minimum": 0
+    "WorkOrderResult":
+      "type": "object"
+      "required": ["order","replayed"]
+      "properties":
+        "order":
+          "$ref": "#/components/schemas/WorkOrder"
+        "replayed":
+          "type": "boolean"
+    "StartServiceConfirmationInput":
+      "type": "object"
+      "required": ["operationId","expectedVersion","quoteId","quoteVersion","employeeId","employeeVersion","requiredSpecialty","startsAt","endsAt"]
+      "additionalProperties": false
+      "properties":
+        "operationId":
+          "type": "string"
+          "format": "uuid"
+        "expectedVersion":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "quoteId":
+          "type": "string"
+          "format": "uuid"
+        "quoteVersion":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "employeeId":
+          "type": "string"
+          "format": "uuid"
+        "employeeVersion":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "requiredSpecialty":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 80
+        "startsAt":
+          "type": "string"
+          "format": "date-time"
+        "endsAt":
+          "type": "string"
+          "format": "date-time"
+      "description": "Conjunto cerrado. expectedVersion de orden, employeeVersion laboral, quoteVersion exacta. Offset obligatorio; startsAt < endsAt; intervalo de un día America/La_Paz sin cruce de medianoche, futuro al reservar y revalidado por Empleados. initiatedBy/authorizedAt solo token verificado/reloj servidor, nunca body humano."
+      "examples":
+        -
+          "operationId": "10000000-0000-4000-8000-000000000001"
+          "expectedVersion": 1
+          "quoteId": "10000000-0000-4000-8000-000000000002"
+          "quoteVersion": 1
+          "employeeId": "10000000-0000-4000-8000-000000000003"
+          "employeeVersion": 2
+          "requiredSpecialty": "Especialidad sintética"
+          "startsAt": "2026-11-02T09:00:00-04:00"
+          "endsAt": "2026-11-02T10:00:00-04:00"
+    "ConfirmationRetryInput":
+      "type": "object"
+      "required": ["operationId","expectedVersion"]
+      "additionalProperties": false
+      "properties":
+        "operationId":
+          "type": "string"
+          "format": "uuid"
+        "expectedVersion":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+      "description": "Versión de Saga; recupera misma intención y comandos congelados. No crea otra confirmación ni cambia payload/expectedVersion del participante."
+      "examples":
+        -
+          "operationId": "10000000-0000-4000-8000-000000000004"
+          "expectedVersion": 2
+    "ConfirmationStatus":
+      "type": "string"
+      "enum": ["running","recovery_pending","compensating","compensation_pending","confirmed","rejected"]
+      "description": "Solo confirmed es éxito; rejected exige compensación completa y ningún efecto incierto. Sin TTL de reserva por timeout."
+    "ConfirmationStep":
+      "type": "object"
+      "required": ["operationId","command","direction","status","attempts","errorCode","resourceVersion","outcome","committedAt","resourceStatus"]
+      "properties":
+        "operationId":
+          "type": "string"
+          "format": "uuid"
+        "command":
+          "type": "string"
+          "enum": ["reserve_assignment","authorize_quote","confirm_assignment","release_assignment","cancel_quote_link"]
+        "direction":
+          "type": "string"
+          "enum": ["forward","compensation"]
+        "status":
+          "type": "string"
+          "enum": ["pending","dispatched","applied","rejected","uncertain"]
+        "attempts":
+          "type": "integer"
+          "minimum": 0
+        "errorCode":
+          "type": ["string","null"]
+        "resourceVersion":
+          "type": ["integer","null"]
+          "minimum": 1
+          "maximum": 2147483647
+        "outcome":
+          "type": ["string","null"]
+          "enum": ["applied","rejected",null]
+        "committedAt":
+          "type": ["string","null"]
+          "format": "date-time"
+        "resourceStatus":
+          "type": ["string","null"]
+    "ConfirmationSaga":
+      "type": "object"
+      "required": ["sagaId","orderId","status","phase","version","orderVersion","nextAttemptAt","errorCode","operationId","quoteId","quoteVersion","employeeId","employeeVersion","requiredSpecialty","startsAt","endsAt","assignmentId","assignmentVersion","quoteLinkId","quoteLinkVersion","steps"]
+      "properties":
+        "sagaId":
+          "type": "string"
+          "format": "uuid"
+        "orderId":
+          "type": "string"
+          "format": "uuid"
+        "status":
+          "$ref": "#/components/schemas/ConfirmationStatus"
+        "phase":
+          "type": "string"
+          "description": "Fases actuales: reserve_assignment, authorize_quote, confirm_assignment, confirm_order, release_assignment, cancel_quote_link, reject_order, confirmed, rejected."
+        "version":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "orderVersion":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "nextAttemptAt":
+          "type": ["string","null"]
+          "format": "date-time"
+        "errorCode":
+          "type": ["string","null"]
+        "operationId":
+          "type": "string"
+          "format": "uuid"
+        "quoteId":
+          "type": "string"
+          "format": "uuid"
+        "quoteVersion":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "employeeId":
+          "type": "string"
+          "format": "uuid"
+        "employeeVersion":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 2147483647
+        "requiredSpecialty":
+          "type": "string"
+        "startsAt":
+          "type": "string"
+          "format": "date-time"
+        "endsAt":
+          "type": "string"
+          "format": "date-time"
+        "assignmentId":
+          "type": ["string","null"]
+          "format": "uuid"
+        "assignmentVersion":
+          "type": ["integer","null"]
+          "minimum": 1
+          "maximum": 2147483647
+        "quoteLinkId":
+          "type": ["string","null"]
+          "format": "uuid"
+        "quoteLinkVersion":
+          "type": ["integer","null"]
+          "minimum": 1
+          "maximum": 2147483647
+        "steps":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/ConfirmationStep"
+      "description": "Proyección exacta de ConfirmationController.progress; claves presentes con null cuando no hay efecto/resultado, como campos opcionales GraphQL. Sin token, huella interna ni metadata de autoridad humana. assignmentId/quoteLinkId pueden faltar (null) mientras participantes no aplicaron. Ledger por operationId reconcilia inicio con Saga vigente, no snapshot del participante."
     BusinessError:
       type: object
       required: [statusCode, message, code]

@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { bffEnvironment } from './environment.js';
 
 describe('finance standalone origin', () => {
+  it('registers the CU15 schema and fails closed on an invalid override', () => {
+    expect(bffEnvironment({}).schemaPaths.at(-1)).toMatch(/confirmations.graphql$/);
+    expect(() => bffEnvironment({ BFF_CONFIRMATIONS_SCHEMA_PATH: 'missing.graphql' })).toThrow('BFF_CONFIRMATIONS_SCHEMA_PATH');
+  });
   it('includes 4204 by default and permits an explicit finance-only origin', () => {
     expect(bffEnvironment({}).origins).toContain('http://127.0.0.1:4204');
     expect(bffEnvironment({ WEB_ALLOWED_ORIGINS: 'http://127.0.0.1:4204' }).origins).toEqual(['http://127.0.0.1:4204']);

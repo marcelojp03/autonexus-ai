@@ -2,6 +2,9 @@ import { BusinessError } from './business-error.js';
 
 /** Only codes published by the operations contract may leave this BFF. */
 const PUBLIC_CODES = new Set([
+  'CU15_DISABLED', 'CONFIRMATION_NOT_FOUND', 'OPERATION_NOT_FOUND',
+  'ORDER_CONFIRMATION_IN_PROGRESS', 'ORDER_ALREADY_CONFIRMED',
+  'ORDER_NOT_CONFIRMABLE', 'CONFIRMATION_TERMINAL',
   'VALIDATION_ERROR',
   'CUSTOMER_NOT_FOUND',
   'VEHICLE_NOT_FOUND',
@@ -51,6 +54,11 @@ export interface OperationsCommand {
 
 /** Port to the Operations owner REST API. Never crosses into its database. */
 export interface OperationsGateway {
+  confirmationSaga(id: string, token: string): Promise<unknown>;
+  confirmationByOperation(operationId: string, token: string): Promise<unknown>;
+  orderConfirmations(orderId: string, token: string): Promise<unknown>;
+  startServiceConfirmation(orderId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  retryServiceConfirmation(id: string, input: OperationsCommand, token: string): Promise<unknown>;
   customers(query: OperationsPageQuery, token: string): Promise<unknown>;
   customer(id: string, token: string): Promise<unknown>;
   createCustomer(input: OperationsCommand, token: string): Promise<unknown>;
@@ -80,6 +88,21 @@ export interface OperationsGateway {
 }
 
 export class HttpOperationsGateway implements OperationsGateway {
+  confirmationSaga(id: string, token: string): Promise<unknown> {
+    return this.request('/confirmations/' + encodeURIComponent(id), token);
+  }
+  confirmationByOperation(operationId: string, token: string): Promise<unknown> {
+    return this.request('/confirmations/operations/' + encodeURIComponent(operationId), token);
+  }
+  orderConfirmations(orderId: string, token: string): Promise<unknown> {
+    return this.request('/orders/' + encodeURIComponent(orderId) + '/confirmations', token);
+  }
+  startServiceConfirmation(orderId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request('/orders/' + encodeURIComponent(orderId) + '/confirmations', token, { method: 'POST', body: JSON.stringify(input) }, [200, 202]);
+  }
+  retryServiceConfirmation(id: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request('/confirmations/' + encodeURIComponent(id) + '/retry', token, { method: 'POST', body: JSON.stringify(input) }, [200, 202]);
+  }
   constructor(
     private readonly baseUrl: string,
     private readonly transport: typeof fetch = fetch,
@@ -101,9 +124,9 @@ export class HttpOperationsGateway implements OperationsGateway {
     if (allowed.includes(response.status)) return body;
     if (response.status === 401) throw new BusinessError(401, 'UNAUTHENTICATED');
     if (response.status === 403) throw new BusinessError(403, 'FORBIDDEN');
-    if (response.status === 503) throw new BusinessError(503, 'PERSISTENCE_UNAVAILABLE');
     const candidate = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' ? body.code : undefined;
     const code = candidate && PUBLIC_CODES.has(candidate) ? candidate : undefined;
+    if (response.status === 503) throw new BusinessError(503, code ?? 'PERSISTENCE_UNAVAILABLE');
     const statusCode = response.status === 400 || response.status === 404 || response.status === 409 ? response.status : 503;
     throw new BusinessError(
       statusCode,

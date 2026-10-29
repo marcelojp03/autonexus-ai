@@ -448,7 +448,19 @@ components:
         - "jobTitle"
         - "startDate"
         - "specialties"
+      allOf:
+        - if:
+            required: ["mechanicEnabled"]
+            properties:
+              mechanicEnabled: { const: true }
+          then:
+            properties:
+              specialties: { minItems: 1 }
       properties:
+        mechanicEnabled:
+          type: "boolean"
+          default: false
+          description: "Optional labor eligibility, false when omitted on create. true requires at least one specialty. Requires employees:write; never grants a security role or creates an identity."
         operationId:
           type: "string"
           format: "uuid"
@@ -516,7 +528,18 @@ components:
         - "jobTitle"
         - "startDate"
         - "specialties"
+      allOf:
+        - if:
+            required: ["mechanicEnabled"]
+            properties:
+              mechanicEnabled: { const: true }
+          then:
+            properties:
+              specialties: { minItems: 1 }
       properties:
+        mechanicEnabled:
+          type: "boolean"
+          description: "Optional labor eligibility; omission preserves stored value (no default false on update). Effective true requires at least one specialty. Requires employees:write; never grants a role or creates an identity."
         operationId:
           type: "string"
           format: "uuid"
@@ -647,6 +670,9 @@ components:
         - "updatedAt"
         - "access"
       properties:
+        mechanicEnabled:
+          type: "boolean"
+          description: "Explicit labor eligibility; may be absent in legacy snapshots/replays. Absence is not evidence of historical eligibility; do not invent or backfill snapshot data."
         id:
           type: "string"
           format: "uuid"

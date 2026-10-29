@@ -2,6 +2,7 @@ import { BusinessError } from './business-error.js';
 
 /** Only codes published by the CU03/CU04/CU02 contracts may leave this BFF. */
 const PUBLIC_CODES = new Set([
+  'AFFECTS_PENDING_CONFIRMATION', 'AFFECTS_PENDING_ASSIGNMENT',
   'VALIDATION_ERROR',
   'EMPLOYEE_NOT_FOUND',
   'DUPLICATE_DOCUMENT',
@@ -57,6 +58,8 @@ export interface StaffingCommand {
 
 /** Port to the Employees owner REST API. Never crosses into its database. */
 export interface EmployeesGateway {
+  confirmationMechanics(query: EmployeePageQuery, token: string): Promise<unknown>;
+  confirmationAvailability(employeeId: string, date: string, token: string): Promise<unknown>;
   list(query: EmployeePageQuery, token: string): Promise<unknown>;
   get(id: string, token: string): Promise<unknown>;
   history(id: string, query: { limit?: number; offset?: number }, token: string): Promise<unknown>;
@@ -86,6 +89,18 @@ export interface EmployeesGateway {
 }
 
 export class HttpEmployeesGateway implements EmployeesGateway {
+  confirmationMechanics(query: EmployeePageQuery, token: string): Promise<unknown> {
+    const parameters = new URLSearchParams();
+    for (const key of ['limit', 'offset', 'search'] as const) {
+      const value = query[key];
+      if (value !== undefined && value !== null) parameters.set(key, String(value));
+    }
+    const suffix = parameters.toString();
+    return this.request('/staffing/mechanics' + (suffix ? '?' + suffix : ''), token);
+  }
+  confirmationAvailability(employeeId: string, date: string, token: string): Promise<unknown> {
+    return this.request('/staffing/mechanics/' + encodeURIComponent(employeeId) + '/availability?date=' + encodeURIComponent(date), token);
+  }
   constructor(
     private readonly baseUrl: string,
     private readonly transport: typeof fetch = fetch,

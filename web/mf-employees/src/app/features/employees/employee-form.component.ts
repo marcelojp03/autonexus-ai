@@ -14,6 +14,7 @@ import { NzSpinModule } from 'ng-zorro-antd/spin';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { EmployeesApi, EmployeesFailure, newOperationId } from './employees-api';
 import type { Employee, EmployeeFieldsInput } from './employees.contract';
+import { SESSION_PORT } from '../../auth/session';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -83,6 +84,8 @@ interface Attempt {
 })
 export class EmployeeFormComponent implements OnInit {
   readonly id = input<string>();
+  private readonly session = inject(SESSION_PORT, { optional: true });
+  readonly canManageMechanic = signal(false);
   private readonly api = inject(EmployeesApi);
   private readonly router = inject(Router);
   private readonly builder = inject(FormBuilder).nonNullable;
@@ -96,6 +99,7 @@ export class EmployeeFormComponent implements OnInit {
     jobTitle: this.builder.control('', [Validators.required, Validators.maxLength(100)]),
     startDate: this.builder.control<Date | null>(null, [Validators.required]),
     specialties: this.builder.control<string[]>([], [Validators.maxLength(20), distinctSpecialties]),
+    mechanicEnabled: this.builder.control(false),
     requested: this.builder.control(false)
   });
 
@@ -116,8 +120,21 @@ export class EmployeeFormComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.form.controls.mechanicEnabled.disable();
+    void this.loadMechanicPermission();
     const id = this.id();
     if (id) void this.load(id);
+  }
+
+  private async loadMechanicPermission(): Promise<void> {
+    if (!this.session) return;
+    try {
+      const result = await this.session.requestBusiness('query SecurityCatalog { securityCatalog { catalog { id module operation description } effective roles } }');
+      const data = result.data as { securityCatalog?: { effective: string[] } } | undefined;
+      if (!result.errors?.length && data?.securityCatalog?.effective.includes('employees:write')) {
+        this.canManageMechanic.set(true); this.form.controls.mechanicEnabled.enable();
+      }
+    } catch { /* Labor data remains readable if permission lookup is unavailable. */ }
   }
 
   async load(id = this.id()): Promise<void> {
@@ -137,7 +154,11 @@ export class EmployeeFormComponent implements OnInit {
   }
 
   async submit(): Promise<void> {
-    if (this.created() && !this.editing) return;
+    if (this.saving() || (this.created() && !this.editing)) return;
+    if (this.form.controls.mechanicEnabled.value && !this.form.controls.specialties.value.some(value => value.trim())) {
+      this.error.set('Para habilitar como mecánico, registrá al menos una especialidad.');
+      return;
+    }
     this.error.set(null);
     this.errorCode.set(null);
     this.reloadHint.set(false);
@@ -239,6 +260,7 @@ export class EmployeeFormComponent implements OnInit {
       jobTitle: employee.jobTitle,
       startDate: localDate(employee.startDate),
       specialties: [...employee.specialties],
+      mechanicEnabled: employee.mechanicEnabled === true,
       requested: employee.access.requested
     });
     this.form.controls.requested.disable();
@@ -264,6 +286,7 @@ export class EmployeeFormComponent implements OnInit {
       phone: value.phone.trim(),
       jobTitle: value.jobTitle.trim(),
       startDate,
+      ...(this.canManageMechanic() ? { mechanicEnabled: value.mechanicEnabled } : {}),
       specialties: (value.specialties ?? []).map(item => item.trim().split(/\s+/).join(' ')).filter(Boolean)
     };
   }

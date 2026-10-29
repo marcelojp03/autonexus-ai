@@ -20,7 +20,7 @@ describe('Access token validation (RSA fixtures, not real Keycloak)', () => {
   }
 
   it('accepts signed access tokens and keeps deduplicated slug realm roles', async () => {
-    expect(await verifier.verify(await token())).toEqual({ subject: 'synthetic-subject', roles: ['mecanico'], permissions: [], recognized: [] });
+    expect(await verifier.verify(await token())).toEqual({ subject: 'synthetic-subject', roles: ['mecanico'], permissions: [], recognized: [], clientId: undefined, scopes: [] });
   });
 
   it.each([
@@ -59,7 +59,7 @@ describe('Access token validation (RSA fixtures, not real Keycloak)', () => {
   it('does not infer workshop roles from client roles', async () => {
     expect(await verifier.verify(await token({ realm_access: undefined,
       resource_access: { 'autonexus-employees-api': { roles: ['administrador'] } } })))
-      .toEqual({ subject: 'synthetic-subject', roles: [], permissions: [], recognized: [] });
+      .toEqual({ subject: 'synthetic-subject', roles: [], permissions: [], recognized: [], clientId: undefined, scopes: [] });
   });
 
   it('fails closed if key lookup is unavailable', async () => {

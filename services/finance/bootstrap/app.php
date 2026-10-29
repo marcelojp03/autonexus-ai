@@ -18,11 +18,15 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: '',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->alias(['finance-auth' => AuthenticateFinance::class]);
+        $middleware->alias(['finance-auth' => AuthenticateFinance::class, 'cu15-auth' => \App\Http\Middleware\AuthenticateCu15::class]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Business failures keep a stable code; internals never reach the client.
         $exceptions->render(function (Throwable $error, Request $request) {
+            if ($error instanceof \App\Application\Cu15\ProtocolError) {
+                $status = $error->getMessage() === 'IDEMPOTENCY_CONFLICT' ? 409 : 404;
+                return response()->json(['statusCode' => $status, 'message' => 'Request failed', 'code' => $error->getMessage()], $status);
+            }
             if ($error instanceof HttpExceptionInterface) {
                 $status = $error->getStatusCode();
                 $messages = [400 => 'Invalid request', 401 => 'Unauthorized', 403 => 'Forbidden', 404 => 'Record not found', 409 => 'Operation conflict'];

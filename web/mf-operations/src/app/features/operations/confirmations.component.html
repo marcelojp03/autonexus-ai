@@ -1,0 +1,90 @@
+<nz-page-header nzTitle="Confirmar servicio" nzSubtitle="Cotización aprobada, mecánico y horario · CU15">
+  <nz-page-header-extra><a nz-button routerLink="/orders">Ver órdenes</a></nz-page-header-extra>
+</nz-page-header>
+<p>Aprobar una cotización no confirma el servicio. La confirmación necesita validar el horario y registrar la asignación y el vínculo financiero en el servidor.</p>
+@if (loading()) { <p role="status" id="confirmation-loading">Cargando datos autorizados…</p> }
+@if (error()) { <nz-alert class="panel" id="confirmation-error" [nzType]="unknown() ? 'warning' : 'error'" [nzMessage]="error()!" nzShowIcon></nz-alert> }
+@if (pending(); as attempt) {
+  <section class="panel wrap" aria-label="Seguimiento de confirmación">
+    <h2>Seguimiento de la confirmación</h2>
+    <p id="confirmation-operation">Operación: {{ attempt.operationId || 'Consultando por identificador de Saga' }}</p>
+    @if (progress(); as saga) {
+      <div aria-live="polite">
+        <nz-alert id="confirmation-status" [nzType]="saga.status === 'confirmed' ? 'success' : saga.status === 'rejected' ? 'error' : 'info'" [nzMessage]="statusLabels[saga.status]" nzShowIcon></nz-alert>
+      </div>
+      <p id="confirmation-saga-id">Saga: {{ saga.sagaId }} · Orden: {{ saga.orderId }} · Versión: {{ saga.version }} (orden {{ saga.orderVersion }})</p>
+      <p id="confirmation-phase">Fase: {{ phaseLabels[saga.phase] || saga.phase }}</p>
+      <p>Cotización: {{ saga.quoteId }} · versión {{ saga.quoteVersion }}. Empleado: {{ saga.employeeId }} · versión {{ saga.employeeVersion }}. Especialidad: {{ saga.requiredSpecialty }}.</p>
+      <p>Intervalo La Paz: {{ displayTime(saga.startsAt) }} – {{ displayTime(saga.endsAt) }}</p>
+      @if (saga.errorCode) { <p id="confirmation-reason">Motivo del servidor: {{ saga.errorCode }}</p> }
+      @if (saga.nextAttemptAt) { <p id="confirmation-next-attempt">Próxima recuperación: {{ displayTime(saga.nextAttemptAt) }} (La Paz)</p> }
+      @if (!isTerminal()) { <p>La orden permanece bloqueada mientras se recuperan o compensan los pasos. No iniciés otra confirmación.</p> }
+      @if (saga.status === 'confirmed') { <p id="confirmation-success">Servicio confirmado por el servidor. Asignación: {{ saga.assignmentId }}. Vínculo financiero: {{ saga.quoteLinkId }}.</p> }
+      <div class="scroll">
+        <nz-table #steps [nzData]="saga.steps" [nzFrontPagination]="false" [nzShowPagination]="false" nzSize="small" id="confirmation-steps">
+          <thead><tr><th>Paso</th><th>Dirección</th><th>Estado</th><th>Intentos</th><th>Motivo</th><th>Versión recurso</th></tr></thead>
+          <tbody>@for (step of steps.data; track step.operationId) { <tr><td>{{ phaseLabels[step.command] || step.command }}</td><td>{{ step.direction }}</td><td>{{ step.status }}</td><td>{{ step.attempts }}</td><td>{{ step.errorCode || '—' }}</td><td>{{ step.resourceVersion ?? '—' }}</td></tr> }</tbody>
+        </nz-table>
+      </div>
+    } @else if (!startBlocked()) { <p role="status" id="confirmation-unknown">Resultado desconocido. Recuperando el registro de la operación, sin repetir efectos.</p> }
+    <div class="actions">
+      <button nz-button type="button" (click)="refresh()" [disabled]="busy()" id="confirmation-refresh">Consultar estado</button>
+      @if (progress() && !isTerminal() && can('confirmations:write')) { <button nz-button type="button" (click)="retry()" [disabled]="busy()" id="confirmation-retry">Solicitar recuperación de esta Saga</button> }
+      @if (canResend()) { <button nz-button type="button" (click)="sendFrozen()" [disabled]="busy()" id="confirmation-resend">Reenviar la misma operación sin cambiar datos</button> }
+      @if (isTerminal() || startBlocked()) { <button nz-button type="button" (click)="newSelection()" id="confirmation-new-selection">Recargar y volver a seleccionar orden</button> }
+    </div>
+  </section>
+} @else if (can('confirmations:read')) {
+  @if (!can('confirmations:write')) { <nz-alert class="panel" nzType="info" nzMessage="Solo consulta: no tenés permiso para iniciar ni reintentar confirmaciones." id="confirmation-read-only"></nz-alert> }
+  <section aria-label="Seleccionar orden y cotización">
+    <h2>Orden y cotización aprobada</h2>
+    <label>Orden pendiente de cotización
+      <select id="confirmation-order" [(ngModel)]="orderId" (ngModelChange)="chooseOrder()"><option value="">Seleccioná una orden</option>@for (order of orders(); track order.id) { <option [value]="order.id">{{ order.number }} · {{ order.vehiclePlate }} · versión {{ order.version }}</option> }</select>
+    </label>
+    @if (!orders().length && !loading()) { <p id="confirmation-orders-empty">No hay órdenes pendientes en esta página.</p> }
+    <div class="actions"><button nz-button (click)="orderOffset = orderOffset - 20; loadOrders()" [disabled]="orderOffset === 0 || loading()">Órdenes anteriores</button><button nz-button (click)="orderOffset = orderOffset + 20; loadOrders()" [disabled]="orderOffset + 20 >= orderTotal() || loading()">Más órdenes</button></div>
+    @if (selectedOrder(); as order) {
+      <p class="wrap">Orden {{ order.id }} · {{ order.description }}</p>
+      <p id="confirmation-duration">Duración orientativa de catálogo: {{ duration() }} minutos. Referencia de servicios, no predicción de IA ni reserva de horario.</p>
+      <label>Cotización aprobada de esta orden
+        <select id="confirmation-quote" [(ngModel)]="quoteKey"><option value="">Seleccioná una versión aprobada</option>@for (quote of quotes(); track quote.id + ':' + quote.version) { <option [value]="quote.id + ':' + quote.version">{{ quote.id }} · versión {{ quote.version }} · {{ quote.total }} {{ quote.currency }} · vigente hasta {{ quote.validUntil }}</option> }</select>
+      </label>
+      @if (!quotes().length) { <p id="confirmation-quotes-empty">No hay cotizaciones aprobadas para esta orden en esta página. Aprobá la versión correspondiente en Finanzas antes de confirmar.</p> }
+      <div class="actions"><button nz-button (click)="quoteOffset = quoteOffset - 20; quoteKey = ''; loadQuotes()" [disabled]="quoteOffset === 0">Cotizaciones anteriores</button><button nz-button (click)="quoteOffset = quoteOffset + 20; quoteKey = ''; loadQuotes()" [disabled]="quoteOffset + 20 >= quoteTotal()">Más cotizaciones</button></div>
+      @for (saga of history(); track saga.sagaId) { <p><a [routerLink]="['/confirmations', saga.sagaId]">Consultar confirmación {{ saga.sagaId }}</a> · {{ statusLabels[saga.status] }}</p> }
+    }
+  </section>
+  @if (selectedOrder()) {
+    <section class="panel" aria-label="Mecánico y horario">
+      <h2>Mecánico y horario</h2>
+      <label>Buscar personal<input nz-input id="confirmation-mechanic-search" [(ngModel)]="mechanicSearch" maxlength="100" /></label>
+      <div class="actions"><button nz-button (click)="mechanicOffset = 0; loadMechanics()" id="confirmation-search-mechanics">Buscar mecánicos</button></div>
+      @if (!mechanics().length) { <p id="confirmation-mechanics-empty">Sin resultados. Revisá la búsqueda o la habilitación laboral; no se habilita automáticamente por cargo ni rol.</p> }
+      <label>Perfil laboral
+        <select id="confirmation-mechanic" [(ngModel)]="employeeId" (ngModelChange)="specialty = ''; loadAvailability()"><option value="">Seleccioná un perfil</option>@for (mechanic of mechanics(); track mechanic.id) { <option [value]="mechanic.id">{{ mechanic.fullName }} · {{ mechanic.eligible ? 'Elegible' : 'No elegible' }} · versión {{ mechanic.version }}</option> }</select>
+      </label>
+      <div class="actions"><button nz-button (click)="mechanicOffset = mechanicOffset - 20; loadMechanics()" [disabled]="mechanicOffset === 0">Personal anterior</button><button nz-button (click)="mechanicOffset = mechanicOffset + 20; loadMechanics()" [disabled]="mechanicOffset + 20 >= mechanicTotal()">Más personal</button></div>
+      @if (selectedMechanic(); as mechanic) {
+        <p id="confirmation-mechanic-profile">{{ mechanic.fullName }} · {{ mechanic.jobTitle }} · {{ mechanic.status }} · {{ mechanic.mechanicEnabled ? 'Habilitado para mecánica' : 'No habilitado para mecánica' }} · versión {{ mechanic.version }}</p>
+        @if (!mechanic.eligible) {
+          <div id="confirmation-ineligible"><p>Este perfil no puede asignarse. Motivos registrados:</p><ul>@for (reason of mechanic.eligibilityReasons; track reason) { <li>{{ eligibilityLabels[reason] || reason }}</li> }</ul>
+          @if (can('employees:write')) { <a [href]="'/employees/' + mechanic.id + '/edit'" id="confirmation-edit-employee">Revisar ficha y habilitación laboral</a> } @else { <p>Solicitá a una persona con permiso de gestión laboral que revise la ficha.</p> }</div>
+        }
+        <div class="fields">
+          <label>Especialidad requerida<select id="confirmation-specialty" [(ngModel)]="specialty"><option value="">Seleccioná la especialidad registrada</option>@for (value of mechanic.specialties; track value) { <option [value]="value">{{ value }}</option> }</select></label>
+          <label>Inicio (La Paz, UTC−4)<input nz-input id="confirmation-starts-at" type="datetime-local" [(ngModel)]="startsAt" (ngModelChange)="loadAvailability()" /></label>
+          <label>Fin (mismo día, La Paz)<input nz-input id="confirmation-ends-at" type="datetime-local" [(ngModel)]="endsAt" /></label>
+        </div>
+      }
+      <p>Disponibilidad informativa: el servidor revalida jornada, descansos, ausencias y solapamientos al reservar. Una reserva provisional también ocupa el intervalo.</p>
+      @if (availability(); as value) {
+        <div id="confirmation-availability"><p>{{ value.date }} · {{ value.absent ? 'Ausencia registrada' : 'Sin ausencia registrada' }}</p>
+          <ul>@for (slot of value.available; track slot.start) { <li>Jornada disponible: {{ slot.start }} – {{ slot.end }}</li> }</ul>
+          <ul>@for (assignment of value.assignments; track assignment.id) { <li>Asignación: {{ displayTime(assignment.startsAt) }} – {{ displayTime(assignment.endsAt) }} · {{ assignment.reference }}</li> }</ul>
+          <ul>@for (reservation of value.reservations || []; track reservation.id) { <li>Reserva {{ reservation.status }}: {{ displayTime(reservation.startsAt) }} – {{ displayTime(reservation.endsAt) }} · {{ reservation.orderConfirmedObserved ? 'Cierre global observado' : 'Provisional: cierre global pendiente' }}</li> }</ul>
+        </div>
+      }
+      @if (can('confirmations:write')) { <button nz-button nzType="primary" type="button" (click)="start()" [disabled]="busy() || !selectedMechanic()?.eligible" id="confirmation-submit">{{ busy() ? 'Registrando solicitud…' : 'Iniciar confirmación del servicio' }}</button> }
+    </section>
+  }
+}

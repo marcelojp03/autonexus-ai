@@ -1,5 +1,9 @@
 # MS02 Empleados
 
+## Lectura del estado CU15
+
+La sección CU15 al final separa implementación inicial delegada de verificación principal posterior. La migración 1793455200000 ya fue aplicada por el principal; el recorrido real posterior incluye los tres propietarios. Los apartados de CU03, base y CU01 conservan su contexto histórico de ejecución y no implican que CU15 carezca hoy de BFF/UI o de APIs ejecutadas. La matriz real6 está acreditada; regresión, revisión y cierre continúan pendientes; evidencia final en [STATUS](../../docs/context/STATUS.md) y la [especificación CU15](../../docs/compose/spec/cu15-confirmation-saga.md).
+
 ## CU03 — backend integrado localmente en main
 
 Consulta paginada/detalle/historial, alta, PUT completo y desactivación sin borrado; datos personales/laborales, cargo y especialidades. Documento/email únicos incluso inactivos, validaciones y control de versión. Todas las acciones requieren administrador en servidor usando JWT CU01. Cargo/especialidad no asignan roles. El BFF y las pantallas web de CU03 se entregaron después en `work/marcelo` (ver `docs/compose/spec/cu03-web.md`); esta sección describe el backend y no acredita CU02.
@@ -269,3 +273,64 @@ Amendment de revisión: email dot-atom ASCII/DNS-punycode (local64, etiquetas1�
 Si se interrumpe el verificador: node scripts/verify-cu03-real.mjs --cleanup-only inspecciona únicamente registros activos CU03 con documento C03-UUID/email UUID@example.invalid y snapshot inicial Synthetic/CU03, y los desactiva mediante API autorizada; no borra. La espera de restauración IdP está acotada a300s y exige Dockerhealthy+discovery. El primer intento con presupuesto anterior agotó espera (arranque observado118s), no se presenta como PASS; el log histórico agotado no quedó conservado y no se acredita como PASS; real.log/real.exit acreditan la ronda posterior.
 
 Cierre de límite ASCII: se comprueba el alfabeto antes de toLowerCase. U+212A en local/dominio es rechazado sin convertir silenciosamente la dirección; mayúsculas ASCII y punycode continúan válidos. Evidencia: red2→dominio27/27; ronda70unitarias/42HTTP y funcional real9grupos PASS después del ajuste.
+
+
+## CU15 — participante Empleados (2026-10-28)
+
+Código local implementado; las pruebas sintéticas iniciales se distinguen del recorrido principal posterior con PostgreSQL, Keycloak y RabbitMQ reales. Las políticas aceptadas se registran en la [decisión 016](../../docs/decisions/016-cu15-confirmation-saga.md). La matriz real6 está acreditada; no implica cierre global de CU15.
+
+- CU03 añade mechanicEnabled laboral, independiente del cargo, rol e identidad Keycloak. Crear/legacy: false; edición omitida: conserva; habilitar: requiere especialidades. No se sincroniza la identidad por cambiar solamente esa habilitación.
+- Migración nueva 1793455200000 registrada, synchronize=false y migrationsRun=false. Extiende employee_assignments conservando legacy; añade tombstones, ledger, auditoría, Outbox, Inbox y notificaciones. Amplía permisos a 23 con confirmations:read/write para administrador/jefe_taller mediante UNION; no restaura permisos que se hubieran retirado ni elimina personalizaciones previas.
+- Reserva/confirmación/liberación serializan por Saga/operación/orden y empleado. La clave employee:<id> es común con CU03 y todos los escritores CU04. Se revalidan activo, habilitación, especialidad, versión laboral al reservar, intervalo futuro al reservar, jornada/descansos/ausencias y ocupaciones semiabiertas reserved/confirmed. Confirmar usa versión de reserva, no la versión de contacto posterior del empleado. No hay TTL de negocio.
+- Cambio, resultado aplicado/rechazado, auditoría y Outbox comparten transacción. El replay conserva el snapshot original; GET de recurso muestra el estado actual. released/tombstone son terminales. OPERATION_NOT_FOUND/404 significa desconocido, nunca rechazo de negocio.
+- CU04 ahora incluye transacción para mutación, auditoría e idempotencia. No admite invalidar una reserva ni un confirmed de participante sin cierre global, aunque se reconozca el conflicto. Tras observar order.confirmed vuelve a aplicar el reconocimiento CU04. CU03 no permite desactivar/deshabilitar/retirar la especialidad requerida a una asignación CU15 aún no terminada.
+
+### API y autorización
+
+| Método/ruta | Política |
+| --- | --- |
+| POST /internal/cu15/assignments/:sagaId/reserve | cu15.staffing.reserve |
+| POST /internal/cu15/assignments/:sagaId/confirm | cu15.staffing.confirm |
+| POST /internal/cu15/assignments/:sagaId/release | cu15.staffing.release |
+| GET /internal/cu15/assignments/:sagaId | cu15.staffing.read |
+| GET /internal/cu15/operations/:operationId | cu15.staffing.read |
+| GET /staffing/mechanics?search=&limit=&offset= | confirmations:read humano |
+| GET /staffing/mechanics/:id/availability?date= | confirmations:read humano |
+
+El guard verifica firma/issuer/aud/exp/sub con el verificador existente y exige azp=autonexus-cu15-coordinator + scope exacto antes de consultar autorización humana. JWT humano no accede al participante; cliente/scopes CU15 no acceden a CRUD, proyección humana o sesión CU01. El DTO humano /technical/session se conserva.
+
+Formas cerradas y nombres reserve_assignment/confirm_assignment/release_assignment, recurso, envelope y SHA-256 de JSON recursivamente ordenado {clientId,command,sagaId,body}: contracts/rest/saga.md, sección Formas concretas v1. Fechas UTC con milisegundos, UUID normalizado; ningún token en huella/ledger/Outbox. applied devuelve 200; rejected durable devuelve 409. Validación, autenticación, IDEMPOTENCY_CONFLICT y fallos transitorios usan error estándar, sin envelope rechazado ficticio.
+
+Códigos de negocio: EMPLOYEE_NOT_FOUND, EMPLOYEE_VERSION_CONFLICT, EMPLOYEE_INACTIVE, MECHANIC_NOT_ENABLED, SPECIALTY_REQUIRED, SPECIALTY_MISMATCH, ASSIGNMENT_START_NOT_FUTURE, CROSSES_MIDNIGHT, OUTSIDE_WORKING_HOURS, EMPLOYEE_ABSENT, ASSIGNMENT_OVERLAP, ORDER_ASSIGNMENT_IN_PROGRESS, VERSION_CONFLICT, ASSIGNMENT_RELEASED, ASSIGNMENT_ALREADY_EXISTS, ASSIGNMENT_NOT_FOUND, ASSIGNMENT_NOT_RESERVED y ASSIGNMENT_ENDED. Protección de escritores: AFFECTS_PENDING_ASSIGNMENT (CU03) y AFFECTS_PENDING_CONFIRMATION (CU04).
+
+La proyección paginada devuelve todos los candidatos con motivos de inelegibilidad sin documento/contactos. Disponibilidad conserva assignments globalmente confirmadas/legacy y separa reservations provisionales con status, version y orderConfirmedObserved; confirmar un paso de Empleados no se presenta como éxito global.
+
+### Mensajería
+
+CU15_MESSAGING_ENABLED=false por defecto. Para habilitar: CU15_MESSAGING_ENABLED=true y CU15_BROKER_CLIENT_FILE apuntando a JSON privado con host, port numérico, vhost=autonexus, username y password. No se incluye ni se imprime un archivo real. Biblioteca amqplib=0.10.9 (engines Node>=10) y @types/amqplib=0.10.8 fijadas; instalación comprobada con Node22.22.3/pnpm12.6.0. Context7 contrastado y firmas comprobadas contra los tipos instalados; sin actualización de Nest/TypeORM.
+
+Infraestructura debe precrear exchange topic durable autonexus.business.v1, cola cu15.employees.order-confirmed.v1 enlazada a operations.order.confirmed.v1 y DLX autonexus.dlx.v1/cola cu15.employees.dlq.v1. Este cliente no declara ni modifica topología: no necesita permisos configure. Usa publisher confirms + mandatory/return, eventId estable, lease y fencing SQL; solo marca published_at tras ACK sin devolución. El fallo deja reintento, no revierte un commit de negocio.
+
+Consumo valida envelope v1/productor/referencias y límite64KiB; Inbox/huella, notificación y orderConfirmedObserved se guardan juntos sin crear otra asignación. ACK posterior al commit; duplicado idéntico sin repetir efecto; inválido/conflicto va a DLQ con nack sin requeue. Una caída SQL deja la entrega sin ACK y reconexión segura. No acredita CU05 ni lectura humana del aviso.
+
+### Historial de verificación local delegada
+
+Ejecutados con el Node22.22.3 absoluto y pnpm12.6.0 solicitado, con --config.manage-package-manager-versions=false al instalar. Comandos largos desacoplados con output/t21/run-check.mjs, cwd services/employees; logs y .exit en output/t21/.
+
+- node node_modules/vitest/vitest.mjs run: 144/144, 17 archivos; cu15-employees-final-unit-01.exit=0. Incluye regresiones CU03/CU04/CU02, verificador JWT y nuevos runners SQL/canal falsos explícitos.
+- node node_modules/vitest/vitest.mjs run --config vitest.config.e2e.ts test/cu15.e2e-spec.ts --hookTimeout=30000: 11/11 HTTP; cu15-employees-http-03.exit=0. Son firmas RSA sintéticas y puertos sustituidos, no integración Keycloak/SQL real. Primer intento detectó readiness sin sustituir; segundo agotó hook10s; ronda posterior pasó sin cambiar aserciones.
+- node node_modules/typescript/bin/tsc --noEmit: cu15-employees-final-types-01.exit=0.
+- node node_modules/@nestjs/cli/bin/nest.js build: cu15-employees-final-build-02.exit=0 (también build-01 previo).
+- node node_modules/oxlint/bin/oxlint --type-aware src/ test/: cu15-employees-final-lint-01.exit=0, cero errores y 14 advertencias previas unbound-method en manage-security.spec.ts. Se eliminó la advertencia del nuevo test de publisher, sin desactivar reglas.
+
+En esa fase delegada no se ejecutó migration:run, no se reinició/provisionó PostgreSQL/RabbitMQ/Keycloak ni se habilitaron adaptadores reales; UI/BFF quedaban fuera del alcance de ese participante. No se hicieron commit/push ni cambios en STATUS/contratos fuera de esta aplicación. Son límites históricos de la delegación, no pendientes vigentes de migración ni una afirmación de ausencia global de UI/BFF.
+
+### Verificación principal posterior y límites
+
+El principal aplicó E1793455200000, F2026_10_28_000002 y O V7, provisionó el coordinador técnico/RabbitMQ y desplegó los adaptadores habilitados. No hubo habilitación automática: mechanicEnabled permanece false para legacy hasta una edición explícita autorizada.
+
+En output/cu15/ ignorado, browser-real3.exit=0 y browser-real.json acreditan seis etapas reales: inelegibilidad visible; habilitación laboral explícita desde ficha existente, persistida sin identidad/roles automáticos; inicio versionado sin éxito prematuro; confirmación conservada tras recarga sin repetir efectos; referencias de O/E/F y Outbox/Inbox; evidencia desktop/mobile con consola limpia y tokens solo en RAM. La corrección JDBC de Operaciones precedió al recorrido exitoso; los primeros intentos no se cuentan como éxito.
+
+distributed-real1 y distributed-real3 acreditaron sus primeras tres etapas: concurrencia por orden/replay, exclusión por empleado/franja y rechazo F con liberación E. Ambas corridas terminaron en fallo en aserciones de navegador; matrix3 también sufrió caída espontánea de RabbitMQ exit137 (OOMKilled=false), no inyectada. El principal recuperó el contenedor propio healthy. No se acredita desde esos resultados la matriz completa de recuperación/compensaciones/duplicado.
+
+La matriz posterior real6 quedó acreditada: output/cu15/distributed-real6.exit=0 y distributed-2026-10-29T00-21-30-311Z-0749409d.json PASS7/7. Cubre carreras por orden/franja, rechazo F con release E, respuesta perdida tras commit F sin compensar el éxito, reinicio del coordinador con IDs/cuerpos durables e identidad técnica, compensación inicialmente pendiente que termina cancel F→release E y retransmisión del mismo eventId con un Inbox/notificación. Ambos browser-proof (recovery_pending y compensation_pending) terminaron PASS con issues=[] y failed=[]. final-check6.json registra restauración DIRECT, readiness200 y flag sintético restaurado. La última corrida no tuvo caídas inesperadas. Esto no convierte las corridas fallidas anteriores en PASS. Regresión proporcional, revisión y cierre permanecen pendientes; no se declara CU15 completo ni revisión independiente. Esta consolidación no ejecuta pruebas. CU05, Flutter, offline y cobros siguen fuera de alcance. El aviso durable no demuestra lectura por un mecánico.

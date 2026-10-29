@@ -55,6 +55,8 @@ final class JwtVerifier
         $roles = $claims['realm_access']['roles'] ?? [];
         return [
             'sub' => (string) $claims['sub'],
+            'azp' => is_string($claims['azp'] ?? null) ? $claims['azp'] : null,
+            'scopes' => is_string($claims['scope'] ?? null) ? preg_split('/\s+/', trim($claims['scope'])) : [],
             'roles' => is_array($roles) ? array_values(array_filter($roles, 'is_string')) : [],
         ];
     }

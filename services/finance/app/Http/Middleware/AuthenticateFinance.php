@@ -31,6 +31,9 @@ final class AuthenticateFinance
         } catch (\Throwable) {
             return response()->json(['error' => 'unauthorized'], 401);
         }
+        if (($identity['azp'] ?? null) === \App\Application\Cu15\QuoteLinks::CLIENT) {
+            return response()->json(['error' => 'forbidden'], 403);
+        }
         $granted = $this->permissions->for($matches[1], $identity['sub'], $identity['roles']);
         foreach (explode('|', $required) as $permission) {
             $permission = str_replace('.', ':', $permission);

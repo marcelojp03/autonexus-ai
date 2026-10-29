@@ -17,6 +17,7 @@ const ALL = [
   'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
   'receptions:read', 'receptions:write', 'orders:read', 'orders:write',
   'quotes:read', 'quotes:write', 'quotes:decide',
+  'confirmations:read', 'confirmations:write',
 ];
 /** Mirrors the owner resolution: realm roles plus persisted assignments. */
 const effectiveFor = (bearer: string): string[] => {
@@ -24,7 +25,7 @@ const effectiveFor = (bearer: string): string[] => {
     const payload = JSON.parse(Buffer.from(bearer.split('.')[1], 'base64url').toString()) as { realm_access?: { roles?: string[] } };
     const roles = payload.realm_access?.roles ?? [];
     if (roles.includes('administrador')) return ALL;
-    if (roles.includes('jefe_taller')) return ['schedules:read', 'schedules:write'];
+    if (roles.includes('jefe_taller')) return ['schedules:read', 'schedules:write', 'confirmations:read', 'confirmations:write'];
     return [];
   } catch {
     return [];
@@ -39,6 +40,8 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
   let head: string;
   let uncachedAdmin: string;
   const gateway = {
+    confirmationMechanics: vi.fn(async () => PAGE),
+    confirmationAvailability: vi.fn(),
     list: vi.fn(async () => PAGE),
     get: vi.fn(),
     history: vi.fn(),
@@ -67,6 +70,11 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     securityHistory: vi.fn(),
   };
   const operations = {
+    confirmationSaga: vi.fn(),
+    confirmationByOperation: vi.fn(),
+    orderConfirmations: vi.fn(async () => []),
+    startServiceConfirmation: vi.fn(),
+    retryServiceConfirmation: vi.fn(),
     customers: vi.fn(async () => PAGE),
     customer: vi.fn(),
     createCustomer: vi.fn(),
@@ -111,6 +119,26 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     app = module.createNestApplication<NestExpressApplication>();
     configureHttp(app, config);
     await app.init();
+  });
+
+  it('CU15 authorizes admin and head over HTTP without granting employee writes', async () => {
+    for (const bearer of [admin, head]) {
+      const response = await post({ query: '{confirmationMechanics{total} orderConfirmations(orderId:"' + EMPLOYEE_ID + '"){status}}' }, bearer).expect(200);
+      expect(response.body.errors).toBeUndefined();
+      expect(response.body.data).toEqual({ confirmationMechanics: { total: 0 }, orderConfirmations: [] });
+    }
+    const denied = await post({ query: '{confirmationMechanics{total}}' }, mechanic).expect(200);
+    expect(denied.body.errors[0].extensions.code).toBe('FORBIDDEN');
+    const cu03 = await post({ query: 'mutation{deactivateEmployee(id:"' + EMPLOYEE_ID + '",input:{operationId:"' + EMPLOYEE_ID + '",expectedVersion:1}){replayed}}' }, head).expect(200);
+    expect(cu03.body.errors[0].extensions.code).toBe('FORBIDDEN');
+  });
+  it('CU15 returns pending saga directly and forwards retry body and human bearer', async () => {
+    operations.retryServiceConfirmation.mockResolvedValue({ sagaId: EMPLOYEE_ID, status: 'compensation_pending', version: 6 });
+    const input = { operationId: EMPLOYEE_ID, expectedVersion: 5 };
+    const response = await post({ query: 'mutation($input:ConfirmationRetryInput!){retryServiceConfirmation(id:"' + EMPLOYEE_ID + '",input:$input){sagaId status version}}', variables: { input } }, head).expect(200);
+    expect(response.body.errors).toBeUndefined();
+    expect(response.body.data.retryServiceConfirmation.status).toBe('compensation_pending');
+    expect(operations.retryServiceConfirmation).toHaveBeenCalledWith(EMPLOYEE_ID, input, head);
   });
 
   afterAll(async () => {

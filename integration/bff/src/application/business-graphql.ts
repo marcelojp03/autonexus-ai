@@ -27,12 +27,20 @@ type Permission =
   | 'appointments:read' | 'appointments:write'
   | 'receptions:read' | 'receptions:write'
   | 'orders:read' | 'orders:write'
-  | 'quotes:read' | 'quotes:write' | 'quotes:decide';
+  | 'quotes:read' | 'quotes:write' | 'quotes:decide'
+  | 'confirmations:read' | 'confirmations:write';
 
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
 /** Root-field permission policy: CU03 stays employees:write (administrator only). */
 const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.freeze({
+  confirmationSaga: 'confirmations:read',
+  confirmationByOperation: 'confirmations:read',
+  orderConfirmations: 'confirmations:read',
+  confirmationMechanics: 'confirmations:read',
+  confirmationAvailability: 'confirmations:read',
+  startServiceConfirmation: 'confirmations:write',
+  retryServiceConfirmation: 'confirmations:write',
   employees: 'employees:read',
   employee: 'employees:read',
   employeeHistory: 'employees:read',
@@ -229,6 +237,13 @@ export class BusinessGraphql {
 
   private rootValue(token: string) {
     return {
+      confirmationSaga: (args: { id: string }) => this.operations.confirmationSaga(args.id, token),
+      confirmationByOperation: (args: { operationId: string }) => this.operations.confirmationByOperation(args.operationId, token),
+      orderConfirmations: (args: { orderId: string }) => this.operations.orderConfirmations(args.orderId, token),
+      startServiceConfirmation: (args: { orderId: string; input: OperationsCommand }) => this.operations.startServiceConfirmation(args.orderId, args.input, token),
+      retryServiceConfirmation: (args: { id: string; input: OperationsCommand }) => this.operations.retryServiceConfirmation(args.id, args.input, token),
+      confirmationMechanics: (args: EmployeePageQuery) => this.gateway.confirmationMechanics(args, token),
+      confirmationAvailability: (args: { employeeId: string; date: string }) => this.gateway.confirmationAvailability(args.employeeId, args.date, token),
       employees: (args: EmployeePageQuery) => this.gateway.list(args ?? {}, token),
       employee: (args: { id: string }) => this.gateway.get(args.id, token),
       employeeHistory: (args: { id: string; limit?: number; offset?: number }) => this.gateway.history(args.id, args, token),

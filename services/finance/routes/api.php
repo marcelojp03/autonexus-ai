@@ -5,6 +5,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => response()->json(['status' => 'UP']));
 
+Route::prefix('internal/cu15')->group(function () {
+    Route::post('/quote-links/{sagaId}/authorize', [\App\Http\Controllers\QuoteLinkController::class, 'authorize'])->middleware('cu15-auth:authorize');
+    Route::post('/quote-links/{sagaId}/cancel', [\App\Http\Controllers\QuoteLinkController::class, 'cancel'])->middleware('cu15-auth:cancel');
+    Route::get('/quote-links/{sagaId}', [\App\Http\Controllers\QuoteLinkController::class, 'show'])->middleware('cu15-auth:read');
+    Route::get('/operations/{operationId}', [\App\Http\Controllers\QuoteLinkController::class, 'operation'])->middleware('cu15-auth:read');
+});
+
 Route::middleware('finance-auth:quotes.read')->group(function () {
     Route::get('/quotes', [QuoteController::class, 'index']);
     Route::get('/quotes/{id}', [QuoteController::class, 'show']);

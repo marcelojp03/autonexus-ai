@@ -1,6 +1,20 @@
 # contracts/graphql
 Esquema y operaciones de la gestión web.
 
+## CU15 — contrato ejecutable del BFF
+
+[confirmations.graphql](confirmations.graphql) se registra junto a empleados, horarios, seguridad, operaciones y finanzas. Las cinco queries requieren confirmations:read y las dos mutaciones confirmations:write según permisos efectivos del propietario Empleados, no una inferencia de roles en el BFF. CU03 mantiene employees:write. El catálogo humano tiene 23 permisos; no incluye scopes técnicos.
+
+startServiceConfirmation y retryServiceConfirmation devuelven ConfirmationSaga directamente. Consultar sagaId, status, phase, version, orderVersion, nextAttemptAt, errorCode y steps. Solo status=confirmed acredita éxito; HTTP 202 no lo acredita. Se conservan operationId y expectedVersion del input, sin reintentos automáticos ni coordinación de participantes en el BFF. confirmationByOperation permite recuperar una respuesta perdida con el mismo operationId.
+
+confirmationMechanics es una proyección laboral paginada sin datos personales/contactos; confirmationAvailability devuelve Availability y reservations separadas de assignments, con status y orderConfirmedObserved explícitos. Una reserva no implica confirmación del servicio. El servidor revalida disponibilidad.
+
+Employee.mechanicEnabled es nullable para snapshots CU03 históricos; un valor ausente no habilita al empleado. CreateEmployeeInput y UpdateEmployeeInput aceptan el boolean opcional sin default GraphQL: omitirlo al editar conserva el dato propietario; no se asignan roles ni acceso al habilitarlo. WorkOrderStatus admite confirmation_pending y confirmed; no se publican campos de asignación/cotización en WorkOrder que su DTO todavía no expone. Esos datos se consultan en ConfirmationSaga.
+
+Queries aprobadas para el selector financiero: quotes(orderReference: orderId, status: approved); conservar id y version de la versión seleccionada. La aprobación financiera no confirma por sí sola el servicio.
+
+Verificación BFF: pruebas unitarias y HTTP con upstreams falsos explícitos, no evidencia de integración empresarial real. El archivo HTTP conserva su nombre histórico e2e-spec; no arranca servicios propietarios ni consulta bases.
+
 [employees.graphql](employees.graphql) define SDL **propuesto, no ejecutado** para CU03. No hay BFF/resolvers acreditados. Scalars UUID/Date/DateTime son parte del contrato y requieren implementación/validación servidor. Autorización por operación/campo/registro, mapping REST y errores: [auth/employees.md](../auth/employees.md). Todos los campos y operaciones de empleados requieren administrador; no confiar solo en UI o directivas.
 
 Operaciones propuestas (los nombres de raíz coinciden con el mapping documentado):

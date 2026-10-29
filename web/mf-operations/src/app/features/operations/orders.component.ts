@@ -29,7 +29,7 @@ export class OrdersComponent implements OnInit {
   readonly receptionError = signal<string | null>(null);
   readonly serviceError = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
-  readonly statuses: Record<WorkOrder['status'], string> = { pending_quote: 'Pendiente de cotización', quote_requested: 'Cotización solicitada', quote_approved: 'Cotización aprobada', cancelled: 'Cancelada' };
+  readonly statuses: Record<WorkOrder['status'], string> = { pending_quote: 'Pendiente de cotización', quote_requested: 'Cotización solicitada', quote_approved: 'Cotización aprobada', confirmation_pending: 'Confirmación en curso', confirmed: 'Servicio confirmado', cancelled: 'Cancelada' };
   offset = 0; status = ''; receptionId = ''; description = ''; notes = ''; serviceSearch = ''; receptionSearch = '';
   priority: WorkOrder['priority'] = 'normal';
   items: { serviceId: string; quantity: number | null }[] = [{ serviceId: '', quantity: 1 }];
