@@ -1,8 +1,8 @@
-# Traspaso 2026-10-28 — CU15 verificado y revisado
+# Traspaso 2026-10-28 — CU15 entregado y publicado
 
 ## Estado de código y alcance
 
-Rama personal reutilizada work/marcelo; base publicada 0fc8f7f. Implementación 69de9bd; correcciones verificadas/revisadas bdf75fa5c5beb5be5116a52a0179f719d9b6bfc7. No se creó otra rama ni worktree. Cierre técnico aprobado; integración/push normal de main y work/marcelo autorizados, pendientes de comprobar antes de acreditar publicación.
+Rama personal reutilizada work/marcelo; base publicada 0fc8f7f. Implementación 69de9bd y correcciones verificadas/revisadas bdf75fa5c5beb5be5116a52a0179f719d9b6bfc7. No se creó otra rama ni worktree. FF a main y push normal de main/work/marcelo ejecutados; ambos SHA remotos comprobados en 0350a46dab2a7dbedb209e42f704e00f2343cae0. El cierre posterior es solo documental y se publica conservando el código revisado.
 
 CU15 online: Operaciones orquesta Saga durable; Empleados reserva/confirma/libera con exclusión y revalidación; Finanzas crea/cancela vínculo durable/versionado conservando cotización y aprobación. Cambio + ledger + auditoría + Outbox por transacción local; RabbitMQ con confirms/mandatory e Inbox deduplicado. BFF delega, no coordina. Aprobar no confirma. Permisos confirmations:read/write, catálogo de 23.
 
@@ -34,6 +34,6 @@ Migraciones reales aplicadas E1793455200000, F2026_10_28_000002 y O V7. Brokers/
 
 Lectura mínima: AGENTS raíz/locales, docs/context/{PROJECT,STATUS,CONTEXT-MAP}.md, docs/compose/spec/cu15-confirmation-saga.md, docs/decisions/016-cu15-confirmation-saga.md, contracts/rest/saga.md, contracts/rest/staffing.md, contracts/events/cu15.v1.md y contratos de órdenes/cotizaciones.
 
-Próximo paso administrativo: FF a main desde raíz, push normal exacto de main y work/marcelo, ls-remote para ambos SHA; después actualizar entrega/publicación y cerrar T8. No force, no --all/--tags, no PR, no borrar ramas/worktrees.
+Cierre Git: FF y push normal exacto de main/work/marcelo comprobados mediante ls-remote en 0350a46dab2a7dbedb209e42f704e00f2343cae0; el commit documental posterior registra la publicación ya observada y se verifica nuevamente al publicarlo. Sin force, --all/--tags ni PR; ramas/worktrees conservados. No queda implementación pendiente de CU15 dentro del alcance declarado.
 
 Siguiente entrega funcional: CU05 con órdenes/asignaciones reales e identidad del mecánico. No se implementa ahora ni se acredita su alcance offline/Flutter; tampoco ejecución física, cobros, fotos/S3 o lectura humana de la notificación.

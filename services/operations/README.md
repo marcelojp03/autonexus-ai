@@ -216,3 +216,7 @@ Backend-foundation fue integrado por fast-forward a main3bbf499 por instrucción
 ## Cierre integrado CU01 web
 
 En feat/cu01-keycloak el código/binario se ejecuta desde .worktrees/cu01-keycloak; el párrafo anterior describe la base histórica de main. PostgreSQL conserva su propietario en infra/compose de la raíz y las configuraciones privadas copiadas mantienen sus bytes. Build46 tests, API con tokens reales de Keycloak y salud SQL/outage PASS. La revisión integral y la re-revisión cerraron los hallazgos sin críticos pendientes; el runtime se reactivó con live/ready200 y protegido anónimo401. No es CRUD, CU02 ni BFF. Comandos conjuntos, evidencia y límites en ../../scripts/cu01/README.md y ../../docs/context/STATUS.md. No se integró CU01 en main ni se hizo push automático.
+
+## Cierre CU15 observado (2026-10-28)
+
+Revisión independiente inicial no aprobatoria de 69de9bd; C1–C4/G1 corregidos y re-revisión de 69de9bd..bdf75fa aprobatoria, sin críticos residuales. Código y evidencia integrados por FF y publicados normalmente en main/work/marcelo, con ambos SHA remotos comprobados en 0350a46dab2a7dbedb209e42f704e00f2343cae0. El cierre posterior es solo documental. Los pendientes de rondas anteriores en este README son históricos; el estado final y los límites de evidencia están en [STATUS](../../docs/context/STATUS.md) y la [especificación CU15](../../docs/compose/spec/cu15-confirmation-saga.md). CU05, offline y Flutter no se acreditan.

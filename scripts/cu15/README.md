@@ -263,3 +263,7 @@ No se repiten ni se reinterpretan los intentos fallidos. La nueva evidencia del 
 | Matriz global corregida | node scripts/cu15/distributed-real.mjs --run --browser-proof --max-minutes=20 | review-distributed-real-07.exit=0: 7/7 y ambos navegadores, DIRECT restaurado, flag sintético y Outbox duplicado comprobados |
 
 Ejecutar exclusivamente con Node22.22.3, en el entorno local propietario ya preparado y bajo el supervisor desacoplado indicado arriba. No ejecutar estos verificadores al mismo tiempo: la matriz reinicia el coordinador. Los casos directos E/F de G1 no acreditan confirmación global ni entrega RabbitMQ; la matriz global sí mide sus eventos. Los abortos y barreras se etiquetan INYECTADO; la publicación no sustituye el commit del propietario. Re-revisión y cierre se registran en STATUS y la especificación.
+
+## Cierre CU15 observado (2026-10-28)
+
+Revisión independiente inicial no aprobatoria de 69de9bd; C1–C4/G1 corregidos y re-revisión de 69de9bd..bdf75fa aprobatoria, sin críticos residuales. Código y evidencia integrados por FF y publicados normalmente en main/work/marcelo, con ambos SHA remotos comprobados en 0350a46dab2a7dbedb209e42f704e00f2343cae0. El cierre posterior es solo documental. Los pendientes de rondas anteriores en este README son históricos; el estado final y los límites de evidencia están en [STATUS](../../docs/context/STATUS.md) y la [especificación CU15](../../docs/compose/spec/cu15-confirmation-saga.md). CU05, offline y Flutter no se acreditan.

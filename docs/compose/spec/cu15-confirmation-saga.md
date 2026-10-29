@@ -1,6 +1,6 @@
 ---
 feature: cu15-confirmation-saga
-status: in-progress
+status: delivered
 updated: 2026-10-28
 source: main
 ---
@@ -33,7 +33,7 @@ Artefactos locales ignorados y comandos detallados en STATUS y scripts/cu15/READ
 
 **Revisión** — Revisión independiente inicial de 69de9bd no aprobatoria: C1–C4 y brecha G1. Correcciones en bdf75fa5c5beb5be5116a52a0179f719d9b6bfc7, con re-revisión independiente aprobatoria del rango 69de9bd..bdf75fa: objeciones retiradas y sin críticos residuales. El revisor contrastó código/evidencia sin repetir suites ni mutar runtime. Auditoría de publicación de los dos commits de código: 163 rutas/174 blobs, findings vacío; se renueva contra cada HEAD de cierre.
 
-**Límites** — Evidencia de los intercalados observados, no prueba de todos los schedules posibles. C4 tiene regresión focalizada y revisión, no una inyección real de protocolo incompatible. HTTP loopback/infra local, sin acreditación de producción distribuida/HA. No CU05, offline, Flutter, ejecución física, cobros, fotos/S3 ni lectura humana de la notificación. Pendiente únicamente el cierre Git autorizado y su comprobación remota; no marcar T8 hasta observarla.
+**Límites** — Evidencia de los intercalados observados, no prueba de todos los schedules posibles. C4 tiene regresión focalizada y revisión, no una inyección real de protocolo incompatible. HTTP loopback/infra local, sin acreditación de producción distribuida/HA. No CU05, offline, Flutter, ejecución física, cobros, fotos/S3 ni lectura humana de la notificación. Código revisado y evidencia integrados por fast-forward y publicados mediante push normal de main/work/marcelo; ls-remote confirmó ambos en 0350a46dab2a7dbedb209e42f704e00f2343cae0. El cierre posterior es exclusivamente documental y se publica también, sin cambiar el código verificado.
 
 ## [S1] Problem
 
@@ -178,7 +178,7 @@ Revisión fresca tras terminar verificación; si la infraestructura del revisor 
 - [x] T5: Outbox, RabbitMQ e Inbox — acceptance: publicación confirmada y deduplicación real; aviso durable de asignación y recuperación de publicación pendiente (depends: T1; covers: S2.8).
 - [x] T6: BFF y pantallas CU15 — acceptance: seleccionar/iniciar/seguir/recargar sin repetir efectos, permisos servidor y no éxito prematuro (depends: T4; covers: S2.9).
 - [x] T7: Matriz distribuida real — acceptance: todos los escenarios S2.10 observados con tres bases/servicios y RabbitMQ; inyección y regresiones declaradas (depends: T2, T3, T4, T5, T6; covers: S2.10).
-- [ ] T8: Revisión y cierre — acceptance: revisión/documentación/evidencia, STATUS y traspaso; código verificado integrado y refs main/work/marcelo publicadas normalmente (depends: T7; covers: S2.10).
+- [x] T8: Revisión y cierre — acceptance: revisión/documentación/evidencia, STATUS y traspaso; código verificado integrado y refs main/work/marcelo publicadas normalmente (depends: T7; covers: S2.10).
 
 ## Journey log
 
