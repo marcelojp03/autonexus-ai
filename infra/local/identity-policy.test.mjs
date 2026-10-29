@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canReconcileInitialDefaults } from './bootstrap/identity.mjs';
+import { canReconcileInitialDefaults, clientScopesExpected } from './bootstrap/identity.mjs';
 const stock = [{ name: 'offline_access', clientRole: false }, { name: 'uma_authorization', clientRole: false }, { name: 'manage-account', clientRole: true, containerId: 'account-client' }, { name: 'view-profile', clientRole: true, containerId: 'account-client' }];
 test('partial initial provision can remove only stock default authorities, never arbitrary roles', () => {
   assert.equal(canReconcileInitialDefaults(stock, 'account-client', false), true);
@@ -10,4 +10,11 @@ test('completed identity policy rejects later drift rather than silently overwri
   assert.equal(canReconcileInitialDefaults([], 'account-client', true), true);
   assert.equal(canReconcileInitialDefaults(stock, 'account-client', true), false);
   assert.equal(canReconcileInitialDefaults(null, 'account-client', false), false);
+});
+test('automatic service-account identity scope is allowed only on technical clients', () => {
+  const defaults = [{ name: 'basic' }, { name: 'service_account' }];
+  assert.equal(clientScopesExpected(defaults, [], ['basic'], true), true);
+  assert.equal(clientScopesExpected(defaults, [], ['basic'], false), false);
+  assert.equal(clientScopesExpected([...defaults, { name: 'unapproved' }], [], ['basic'], true), false);
+  assert.equal(clientScopesExpected(defaults, [{ name: 'offline_access' }], ['basic'], true), false);
 });

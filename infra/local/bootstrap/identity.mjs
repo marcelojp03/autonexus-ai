@@ -16,6 +16,9 @@ export function canReconcileInitialDefaults(defaults, accountId, initialized) {
     (role.clientRole === false && ['offline_access', 'uma_authorization'].includes(role.name)) ||
     (role.clientRole === true && role.containerId === accountId && ['manage-account', 'view-profile'].includes(role.name)))));
 }
+export function clientScopesExpected(defaults, optional, names, serviceAccount) {
+  return optional.length === 0 && defaults.every(scope => names.includes(scope.name) || (serviceAccount && scope.name === 'service_account'));
+}
 export async function provisionIdentity(state, configDir, initialized = false) {
   const token = await retry(async () => {
     const response = await fetch(internal + '/realms/master/protocol/openid-connect/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'password', client_id: 'admin-cli', username: 'bootstrap', password: state.secrets.keycloak }), signal: AbortSignal.timeout(5000), redirect: 'error' });
@@ -45,8 +48,15 @@ export async function provisionIdentity(state, configDir, initialized = false) {
     let found = await api('/clients?clientId=' + encodeURIComponent(definition.clientId));
     if (!found.length) { await api('/clients', 'POST', definition); found = await api('/clients?clientId=' + encodeURIComponent(definition.clientId)); }
     ensure(found.length === 1, 'CLIENT_NOT_UNIQUE');
-    const actual = await api('/clients/' + found[0].id);
+    let actual = await api('/clients/' + found[0].id);
     const { defaultClientScopes, optionalClientScopes, protocolMappers, attributes, secret, ...expected } = definition;
+    if (!initialized && definition.clientId === 'autonexus-shell' && definition.fullScopeAllowed === true && actual.fullScopeAllowed === false) {
+      const { fullScopeAllowed, ...unchanged } = expected;
+      policy(actual, unchanged, 'CLIENT_POLICY_DRIFT');
+      policy(actual.attributes ?? {}, attributes, 'CLIENT_ATTRIBUTE_DRIFT');
+      await api('/clients/' + actual.id, 'PUT', { ...actual, fullScopeAllowed: true });
+      actual = await api('/clients/' + actual.id);
+    }
     policy(actual, expected, 'CLIENT_POLICY_DRIFT');
     if (attributes) policy(actual.attributes ?? {}, attributes, 'CLIENT_ATTRIBUTE_DRIFT');
     return actual;
@@ -55,7 +65,9 @@ export async function provisionIdentity(state, configDir, initialized = false) {
     const available = await api('/client-scopes');
     const defaults = await api('/clients/' + client.id + '/default-client-scopes');
     const optional = await api('/clients/' + client.id + '/optional-client-scopes');
-    ensure(optional.length === 0 && defaults.every(scope => names.includes(scope.name)), 'CLIENT_SCOPE_DRIFT');
+    // Keycloak26.8 attaches this built-in identity scope automatically to service accounts.
+    // Token audiences, technical scopes and management authority are checked below as well.
+    ensure(clientScopesExpected(defaults, optional, names, client.serviceAccountsEnabled === true), 'CLIENT_SCOPE_DRIFT');
     for (const name of names) {
       const scope = available.find(item => item.name === name); ensure(scope, 'CLIENT_SCOPE_MISSING');
       if (!defaults.some(item => item.id === scope.id)) await api('/clients/' + client.id + '/default-client-scopes/' + scope.id, 'PUT');
@@ -72,7 +84,9 @@ export async function provisionIdentity(state, configDir, initialized = false) {
   }
   const audiences = ['autonexus-operations-api', ...participantAudiences];
   for (const clientId of audiences) await client({ clientId, enabled: true, protocol: 'openid-connect', bearerOnly: true, publicClient: false, standardFlowEnabled: false, implicitFlowEnabled: false, directAccessGrantsEnabled: false, serviceAccountsEnabled: false });
-  const shell = await client({ clientId: 'autonexus-shell', enabled: true, protocol: 'openid-connect', publicClient: true, standardFlowEnabled: true, implicitFlowEnabled: false, directAccessGrantsEnabled: false, serviceAccountsEnabled: false, fullScopeAllowed: false, defaultClientScopes: ['basic', 'profile', 'roles'], optionalClientScopes: [], redirectUris: [state.publicOrigin + '/auth/callback'], webOrigins: [state.publicOrigin], attributes: { 'pkce.code.challenge.method': 'S256', 'post.logout.redirect.uris': state.publicOrigin + '/' } });
+  // Preserve the existing public-client policy so CU02 custom roles can be emitted.
+  // Roles remain metadata: current owner permissions and linkage authorize every request.
+  const shell = await client({ clientId: 'autonexus-shell', enabled: true, protocol: 'openid-connect', publicClient: true, standardFlowEnabled: true, implicitFlowEnabled: false, directAccessGrantsEnabled: false, serviceAccountsEnabled: false, fullScopeAllowed: true, defaultClientScopes: ['basic', 'profile', 'roles'], optionalClientScopes: [], redirectUris: [state.publicOrigin + '/auth/callback'], webOrigins: [state.publicOrigin], attributes: { 'pkce.code.challenge.method': 'S256', 'post.logout.redirect.uris': state.publicOrigin + '/' } });
   await scopes(shell, ['basic', 'profile', 'roles']);
   await mappers(shell, audiences.map(audienceMapper));
   const workshopRoles = await Promise.all(roles.realm.map(role => api('/roles/' + role.name)));
