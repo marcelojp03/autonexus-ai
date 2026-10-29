@@ -4,9 +4,17 @@ import { mkdtempSync, readFileSync, rmSync, statSync, existsSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
-import { civilDate, openLedger, command, prepareCredential, seed, run, pkceLogin, idpTransportUrl, callbackCode, session } from './demo.mjs';
+import { civilDate, openLedger, command, prepareCredential, seed, run, pkceLogin, idpTransportUrl, callbackCode, session, demoFailure } from './demo.mjs';
 
 const publicOrigin = 'http://127.0.0.1:18420';
+test('synthetic diagnostics omit upstream messages and retain constrained code/location only', () => {
+  const error = new TypeError('private-value-that-must-not-be-printed');
+  error.cause = { code: 'ECONNREFUSED', message: 'private-value-that-must-not-be-printed' };
+  error.stack = 'TypeError: private-value-that-must-not-be-printed at demo.mjs:77:12';
+  const result = demoFailure(error);
+  assert.deepEqual(result, { code: 'TYPEERROR', location: 'demo.mjs:77:12', cause: 'ECONNREFUSED' });
+  assert.ok(!JSON.stringify(result).includes('private-value'));
+});
 const now = new Date('2026-10-29T02:00:00Z');
 function temporary(t) {
   const dir = mkdtempSync(join(tmpdir(), 'autonexus-demo-synthetic-'));
@@ -236,7 +244,7 @@ function fakeTransport(dir) {
         resource.subject = resources.get('employees/employees/' + resource.employeeId).access.subject;
         resource.syncStatus = 'synced'; result = { assignment: resource };
       } else if (path.endsWith('/shifts')) {
-        resource.employeeId = path.split('/')[3]; result = { shift: resource };
+        resource.employeeId = path.split('/')[3]; resource.active = true; delete resource.status; result = { shift: resource };
       } else if (path.endsWith('/decision')) {
         resource = resources.get(owner + path.replace('/decision', ''));
         resource.status = 'approved'; resource.version++; result = { quote: resource };

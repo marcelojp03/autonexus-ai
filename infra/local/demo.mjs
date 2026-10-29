@@ -193,7 +193,7 @@ export async function seed(ledger, transport, { wait = pause, attempts = 180 } =
       const weekday = new Date(state.date + 'T12:00:00Z').getUTCDay() || 7;
       await command(ledger, api, 'shift.' + key, 'employees', '/staffing/employees/' + employee.id + '/shifts', { weekday, startsAt: '08:00', endsAt: '17:00' }, 'shift', async saved => {
         const schedule = await api('employees', '/staffing/employees/' + employee.id + '/schedule');
-        ensure(schedule.shifts.some(shift => shift.id === saved.id && shift.status === 'active' && shift.weekday === weekday && shift.startsAt <= '09:00' && shift.endsAt >= '09:30'), 'DEMO_SHIFT_DRIFT');
+        ensure(schedule.shifts.some(shift => shift.id === saved.id && shift.active === true && shift.weekday === weekday && shift.startsAt <= '09:00' && shift.endsAt >= '09:30'), 'DEMO_SHIFT_DRIFT');
       });
     }
     people[key] = employee;
@@ -221,6 +221,12 @@ export async function seed(ledger, transport, { wait = pause, attempts = 180 } =
   return { employees: 5, jobs: 2, date: state.date };
 }
 
+export function demoFailure(error) {
+  const code = /^DEMO_[A-Z0-9_]+$/.test(error.message ?? '') ? error.message : /^[A-Z0-9_]+$/.test(error.code ?? '') ? error.code : /^[A-Za-z]+$/.test(error.name ?? '') ? error.name.toUpperCase() : 'DEMO_FAILED';
+  const location = String(error.stack ?? '').match(/demo[.]mjs:[0-9]+:[0-9]+/)?.[0] ?? 'NO_LOCATION';
+  const cause = /^[A-Z0-9_]+$/.test(error.cause?.code ?? '') ? error.cause.code : 'WITHHELD';
+  return { code, location, cause };
+}
 export async function run({ enabled = process.env.DEMO_ENABLED, configDir = '/run/config', stateDir = '/demo-state', now = new Date() } = {}) {
   ensure(enabled === 'true', 'DEMO_EXPLICIT_ENABLE_REQUIRED');
   const config = readFileSync(resolve(configDir, 'service.env'), 'utf8');
@@ -237,7 +243,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const result = await run();
     console.log('PASS demo; employees=' + result.employees + '; confirmedJobs=' + result.jobs + '; date=' + result.date + '; private values omitted');
   } catch (error) {
-    console.error('FAIL ' + (/^[A-Z0-9_]+$/.test(error.message) ? error.message : 'DEMO_FAILED') + '; private diagnostics omitted');
+    console.error('FAIL demo ' + JSON.stringify(demoFailure(error)) + '; private values omitted');
     process.exitCode = 1;
   }
 }
