@@ -18,6 +18,12 @@ const rows = 'anx-agenda nz-table tbody tr';
 const consultButton = 'anx-agenda form.toolbar:has(input[name=from]) button[type=submit]';
 const normalize = value => value.replace(/\s+/gu, ' ').trim();
 
+export function chromiumRuntime(makeRequire = createRequire) {
+  const application = makeRequire('/app/web/mf-employees/package.json');
+  // Playwright is a locked peer of this direct dev dependency under pnpm.
+  return makeRequire(application.resolve('@vitest/browser-playwright'))('playwright').chromium;
+}
+
 export function relayAddress(value) {
   let url;
   try { url = new URL(value); } catch { throw new AcceptanceError('RELAY_ORIGIN_INVALID'); }
@@ -437,7 +443,7 @@ export async function run({ configDir = '/run/config', stateDir = '/demo-state',
     await stage('public-origin-tcp-relay', async () => { relay = await startRelay(state.publicOrigin); });
     const jobs = await stage('owner-bff-integration', () => integrationProbes(state, admin, stage));
     await stage('real-chromium-launch', async () => {
-      const { chromium } = createRequire('/app/web/mf-employees/package.json')('playwright');
+      const chromium = chromiumRuntime();
       browser = await chromium.launch({ headless: true });
     });
     await stage('browser-baseline', () => browserProbes(browser, state, admin, jobs, evidenceDir, stage));

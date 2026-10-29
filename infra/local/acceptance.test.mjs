@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { relayAddress, validateLedger, minimalWork, restResult, graphDenied, sanitizedError } from './acceptance.mjs';
+import { chromiumRuntime, relayAddress, validateLedger, minimalWork, restResult, graphDenied, sanitizedError } from './acceptance.mjs';
 
 const publicOrigin = 'http://127.0.0.1:4288';
 function ledger() {
@@ -92,9 +92,19 @@ test('diagnostics with credentials, URLs, bodies or JWT-like strings retain only
   try { relayAddress('private'); } catch (failure) { assert.equal(sanitizedError(failure).code, 'RELAY_ORIGIN_INVALID'); }
 });
 
+test('pnpm browser runtime resolves the locked peer without relying on top-level hoisting', () => {
+  const calls = [], engine = {};
+  const makeRequire = path => {
+    calls.push(path);
+    if (path === '/app/web/mf-employees/package.json') return { resolve(name) { assert.equal(name, '@vitest/browser-playwright'); return '/synthetic/peer.mjs'; } };
+    assert.equal(path, '/synthetic/peer.mjs');
+    return name => { assert.equal(name, 'playwright'); return { chromium: engine }; };
+  };
+  assert.equal(chromiumRuntime(makeRequire), engine);
+  assert.deepEqual(calls, ['/app/web/mf-employees/package.json', '/synthetic/peer.mjs']);
+});
 test('container runner preserves real browser and raw TCP paths without interception or session injection', () => {
   const source = readFileSync(new URL('./acceptance.mjs', import.meta.url), 'utf8');
-  assert.match(source, /createRequire\('\/app\/web\/mf-employees\/package\.json'\)\('playwright'\)/);
   assert.match(source, /client\.pipe\(upstream\); upstream\.pipe\(client\)/);
   assert.match(source, /host: 'web', port: 8080/);
   assert.match(source, /timezoneId: 'Pacific\/Auckland'/);
