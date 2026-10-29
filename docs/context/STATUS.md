@@ -1,5 +1,15 @@
 # Estado comprobado
 
+## Infraestructura local reproducible — implementación en curso (2026-10-29)
+
+Se continúa T25 conservando CU05 abierto solo por G2 visual: la consulta de secuencia fue descartada sin respuesta y compose-next permite seguir la alternativa recomendada no destructiva. Ninguna publicación ni entrega completa se acredita.
+
+Creado: Compose raíz de servicios reales, volúmenes/red por proyecto y solo web en loopback; recetas multietapa con imágenes fijadas por digest; bootstrap canónico sin rotación y configuración por consumidor; issuer público exacto/JWKS/token internos separados, binds/orígenes configurables y TLS PostgreSQL verificado opcional; configuración pública runtime del Shell sin secretos; readiness SQL de Finanzas y propuesta cloud sin despliegue.
+
+Verificación previa al primer arranque: Compose config --quiet PASS; tres pruebas estructurales de Compose PASS; bootstrap en Node22.22.3 11 PASS y1 comprobación POSIX omitida por Windows; sesión/rutas35 PASS y tipos Shell/Empleados PASS tras respetar noPropertyAccessFromIndexSignature. Subagente reporta E55/BFF22 focalizadas, tipos/build PASS, F25unitarias95aserciones y3readiness9aserciones PASS; no se convierten en integración real. Java21 verificado por principal: AccessTokenDecoderTest21 +TransportConfigurationTest4,25 PASS, output/stack/t25-ops-transport-01.exit=0.
+
+Pendiente: build y arranque desde copia limpia con proyecto aislado, provisión real repetida, demo por APIs/Saga, login/navegación, reinicio/persistencia/recuperación, métricas, README final y revisión integral. Los recursos antiguos permanecen intactos.
+
 ## Revisión CU05 — F1/G1 resueltos; G2 visual bloqueado (2026-10-29)
 
 La revisión inicial de 478b9bf no fue aprobatoria: F1 descartaba roles personalizados en sesión/guard web; el control real focalizado descubrió además el mismo filtro en el verificador JWT del BFF. Se conservan slugs válidos únicos como metadatos de presentación, sin modificar firma/issuer/audiencia/vigencia, permisos por campo ni vínculo vigente en propietarios. SessionIdentity.roles admite string[]; el DTO técnico CU01 conserva su tipo anterior.

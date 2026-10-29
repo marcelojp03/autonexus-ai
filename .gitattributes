@@ -1,0 +1,2 @@
+infra/local/*.sh text eol=lf
+infra/local/docker/*.Dockerfile text eol=lf

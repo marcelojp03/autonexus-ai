@@ -1,10 +1,10 @@
+import { identityEnvironment } from '../config/identity-environment.js';
 import { adminClientCredentials } from './admin-credentials.js';
 import {
   IdentitySyncError,
   type IdentityDesired,
   type IdentityGateway,
 } from '../../application/identity-gateway.js';
-const base = 'http://127.0.0.1:8180';
 interface IdpUser {
   id: string;
   username: string;
@@ -15,14 +15,14 @@ interface IdpUser {
   attributes?: Record<string, string[]>;
 }
 export class KeycloakIdentityGateway implements IdentityGateway {
-  constructor(private readonly transport: typeof fetch = fetch) {}
+  constructor(private readonly transport: typeof fetch = fetch, private readonly config = identityEnvironment()) {}
   private async request(
     path: string,
     options: RequestInit = {},
     allowed = [200, 201, 204],
   ): Promise<Response> {
     try {
-      const response = await this.transport(base + path, {
+      const response = await this.transport(path === '/realms/autonexus/protocol/openid-connect/token' ? this.config.tokenUrl : this.config.adminBase + path, {
         ...options,
         signal: AbortSignal.timeout(5000),
         redirect: 'error',

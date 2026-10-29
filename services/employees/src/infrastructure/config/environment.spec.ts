@@ -7,7 +7,7 @@ describe('environment', () => {
   });
 
   it('defaults to the dedicated local database and loopback HTTP', () => {
-    expect(databaseEnvironment({ DB_PASSWORD: 'test-only' })).toEqual({ host: '127.0.0.1', port: 55432, database: 'autonexus_employees', username: 'autonexus_employees', password: 'test-only' });
+    expect(databaseEnvironment({ DB_PASSWORD: 'test-only' })).toEqual({ ssl: false, host: '127.0.0.1', port: 55432, database: 'autonexus_employees', username: 'autonexus_employees', password: 'test-only' });
     expect(httpEnvironment({})).toEqual({ host: '127.0.0.1', port: 3002 });
     expect(httpEnvironment({ PORT: '3012' }).port).toBe(3012);
   });

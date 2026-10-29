@@ -19,7 +19,7 @@ export class AccessTokenVerifier {
   private keyResolver?: JWTVerifyGetKey;
 
   constructor(
-    private readonly config: Pick<BffConfiguration, 'issuer' | 'audience'>,
+    private readonly config: Pick<BffConfiguration, 'issuer' | 'audience' | 'jwksUri'>,
     keyResolver?: JWTVerifyGetKey,
   ) {
     this.keyResolver = keyResolver;
@@ -27,7 +27,7 @@ export class AccessTokenVerifier {
 
   async verify(token: string): Promise<VerifiedIdentity> {
     try {
-      this.keyResolver ??= createRemoteJWKSet(new URL(`${this.config.issuer}/protocol/openid-connect/certs`), {
+      this.keyResolver ??= createRemoteJWKSet(new URL(this.config.jwksUri), {
         timeoutDuration: 2000,
         cooldownDuration: 30000,
         cacheMaxAge: 600000,

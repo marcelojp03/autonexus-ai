@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createBrowserSession, safeReturnTo } from '../../browser-auth/session.ts';
+import { browserOidcConfig, createBrowserSession, safeReturnTo } from '../../browser-auth/session.ts';
 
 function browser(path = '/') {
   globalThis.location = new URL(path, 'http://127.0.0.1:4200');
@@ -16,6 +16,20 @@ function fake(authenticated = true) {
   };
 }
 function owner(sdk) { return createBrowserSession(sdk, { origin: location.origin, application: 'shell' }); }
+
+test('container deployment uses exact same-origin public OIDC and GraphQL endpoints', async () => {
+  browser(); const origin = location.origin;
+  globalThis.__AUTONEXUS_CONFIG__ = { version: 1, oidcUrl: origin + '/identity', graphqlUrl: origin + '/graphql', technicalUrls: { employees: origin + '/technical/employees', operations: origin + '/technical/operations' } };
+  const oldFetch = globalThis.fetch; const o = owner(fake());
+  try {
+    assert.equal(browserOidcConfig('shell').url, origin + '/identity');
+    await o.start();
+    globalThis.fetch = async url => { assert.equal(url, origin + '/graphql'); return new Response(JSON.stringify({ data: { ok: true } })); };
+    assert.deepEqual(await o.session.requestBusiness('{securityCatalog{effective}}'), { data: { ok: true } });
+    globalThis.fetch = async url => { assert.equal(url, origin + '/technical/employees/session'); return new Response(JSON.stringify({ resource: 'session', service: 'employees', subject: 'synthetic', roles: ['mecanico'] })); };
+    await o.session.requestTechnical('employees', 'session');
+  } finally { globalThis.fetch = oldFetch; delete globalThis.__AUTONEXUS_CONFIG__; o.dispose(); }
+});
 
 test('CU05 custom-only role survives session presentation without granting business authority', async () => {
   browser('/employees/agenda'); const sdk = fake();

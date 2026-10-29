@@ -1,3 +1,4 @@
+import { trustedHttpUrl, exactOrigin, httpHost } from './transport.js';
 import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { loadEnvFile } from 'node:process';
@@ -20,6 +21,8 @@ function port(value: string | undefined, fallback: number, name: string): number
 }
 
 export interface BffConfiguration {
+  readonly host: string;
+  readonly jwksUri: string;
   readonly port: number;
   readonly employeesUrl: string;
   readonly operationsUrl: string;
@@ -44,37 +47,18 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const financeSchema = env.BFF_FINANCE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/finance.graphql');
   const confirmationSchema = env.BFF_CONFIRMATIONS_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/confirmations.graphql');
   const agendaSchema = env.BFF_AGENDA_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/agenda.graphql');
-  if (issuer !== LOCAL_ISSUER) throw new Error('Invalid configuration: OIDC_ISSUER_URI');
+  trustedHttpUrl(issuer, 'OIDC_ISSUER_URI');
+  const jwksUri = env.OIDC_JWKS_URI ?? LOCAL_ISSUER + '/protocol/openid-connect/certs';
+  trustedHttpUrl(jwksUri, 'OIDC_JWKS_URI');
   if (audience !== OWN_AUDIENCE) throw new Error('Invalid configuration: OIDC_AUDIENCE');
-  if (!origins.length || origins.some((origin) => !LOCAL_ORIGINS.includes(origin))) {
+  if (!origins.length || origins.some((origin) => !exactOrigin(origin))) {
     throw new Error('Invalid configuration: WEB_ALLOWED_ORIGINS');
   }
-  let target: URL;
-  try {
-    target = new URL(employeesUrl);
-  } catch {
-    throw new Error('Invalid configuration: EMPLOYEES_API_URL');
-  }
-  if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1' || target.pathname !== '/' || target.search || target.hash) {
-    throw new Error('Invalid configuration: EMPLOYEES_API_URL');
-  }
-  let operationsTarget: URL;
-  try {
-    operationsTarget = new URL(operationsUrl);
-  } catch {
-    throw new Error('Invalid configuration: OPERATIONS_API_URL');
-  }
-  if (operationsTarget.protocol !== 'http:' || operationsTarget.hostname !== '127.0.0.1' || operationsTarget.pathname !== '/' || operationsTarget.search || operationsTarget.hash) {
-    throw new Error('Invalid configuration: OPERATIONS_API_URL');
-  }
-  let financeTarget: URL;
-  try {
-    financeTarget = new URL(financeUrl);
-  } catch {
-    throw new Error('Invalid configuration: FINANCE_API_URL');
-  }
-  if (financeTarget.protocol !== 'http:' || financeTarget.hostname !== '127.0.0.1' || financeTarget.pathname !== '/' || financeTarget.search || financeTarget.hash) {
-    throw new Error('Invalid configuration: FINANCE_API_URL');
+  const target = trustedHttpUrl(employeesUrl, 'EMPLOYEES_API_URL');
+  const operationsTarget = trustedHttpUrl(operationsUrl, 'OPERATIONS_API_URL');
+  const financeTarget = trustedHttpUrl(financeUrl, 'FINANCE_API_URL');
+  for (const [name, url] of [['EMPLOYEES_API_URL', target], ['OPERATIONS_API_URL', operationsTarget], ['FINANCE_API_URL', financeTarget]] as const) {
+    if (url.pathname !== '/') throw new Error(`Invalid configuration: ${name}`);
   }
   if (!isAbsolute(schemaPath) || !existsSync(schemaPath)) throw new Error('Invalid configuration: BFF_SCHEMA_PATH');
   if (!isAbsolute(scheduleSchema) || !existsSync(scheduleSchema)) throw new Error('Invalid configuration: BFF_SCHEDULE_SCHEMA_PATH');
@@ -84,6 +68,8 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   if (!isAbsolute(confirmationSchema) || !existsSync(confirmationSchema)) throw new Error('Invalid configuration: BFF_CONFIRMATIONS_SCHEMA_PATH');
   if (!isAbsolute(agendaSchema) || !existsSync(agendaSchema) || !statSync(agendaSchema).isFile()) throw new Error('Invalid configuration: BFF_AGENDA_SCHEMA_PATH');
   return Object.freeze({
+    host: httpHost(env.HTTP_HOST),
+    jwksUri,
     port: port(env.PORT, 3004, 'PORT'),
     employeesUrl: target.origin,
     issuer,

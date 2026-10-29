@@ -9,8 +9,11 @@ import org.springframework.web.client.RestOperations;
 public final class AccessTokenDecoder {
     private AccessTokenDecoder() {}
 
-    public static JwtDecoder create(String issuer, String audience, RestOperations rest) {
-        var decoder = NimbusJwtDecoder.withJwkSetUri(issuer + "/protocol/openid-connect/certs")
+    public static JwtDecoder create(String issuer, String audience, String jwksUri, RestOperations rest) {
+        bo.edu.uagrm.autonexus.operations.infrastructure.config.TransportConfiguration.url(issuer, "OIDC_ISSUER_URI");
+        bo.edu.uagrm.autonexus.operations.infrastructure.config.TransportConfiguration.url(jwksUri, "OIDC_JWKS_URI");
+        if (!"autonexus-operations-api".equals(audience)) throw new IllegalArgumentException("Invalid configuration: OIDC_AUDIENCE");
+        var decoder = NimbusJwtDecoder.withJwkSetUri(jwksUri)
             .jwsAlgorithm(SignatureAlgorithm.RS256).restOperations(rest).build();
         var required = new JwtClaimValidator<Object>("exp", value -> value != null);
         var subject = new JwtClaimValidator<Object>("sub", value -> value instanceof String text && !text.isBlank());

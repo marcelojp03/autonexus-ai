@@ -4,6 +4,14 @@ use App\Http\Controllers\QuoteController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => response()->json(['status' => 'UP']));
+Route::get('/health/ready', function () {
+    try {
+        \Illuminate\Support\Facades\DB::select('SELECT 1');
+        return response()->json(['status' => 'UP']);
+    } catch (\Throwable) {
+        return response()->json(['status' => 'DOWN'], 503);
+    }
+});
 
 Route::prefix('internal/cu15')->group(function () {
     Route::post('/quote-links/{sagaId}/authorize', [\App\Http\Controllers\QuoteLinkController::class, 'authorize'])->middleware('cu15-auth:authorize');

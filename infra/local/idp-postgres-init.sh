@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<'SQL'
+\getenv idp_password IDP_DB_PASSWORD
+CREATE ROLE autonexus_idp LOGIN PASSWORD :'idp_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+CREATE DATABASE autonexus_idp OWNER autonexus_idp;
+REVOKE ALL ON DATABASE autonexus_idp FROM PUBLIC;
+REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+REVOKE CONNECT ON DATABASE template1 FROM PUBLIC;
+SQL

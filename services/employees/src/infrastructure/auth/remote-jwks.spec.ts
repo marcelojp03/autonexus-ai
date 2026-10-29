@@ -17,8 +17,9 @@ describe('Remote JWKS adapter (ephemeral synthetic issuer, not Keycloak)', () =>
     });
     await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve); });
     try {
-      const issuer = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-      const verifier = new AccessTokenVerifier({ issuer, audience: 'autonexus-employees-api', origins: [] });
+      const internal = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const issuer = 'https://public.workshop.test/identity/realms/autonexus';
+      const verifier = new AccessTokenVerifier({ issuer, jwksUri: internal + '/protocol/openid-connect/certs', audience: 'autonexus-employees-api', origins: [] });
       expect(hits).toBe(0);
       async function token(kid = 'fixture-key') {
         return new SignJWT({ typ: 'Bearer' }).setIssuer(issuer).setAudience('autonexus-employees-api')
@@ -28,6 +29,9 @@ describe('Remote JWKS adapter (ephemeral synthetic issuer, not Keycloak)', () =>
       const signed = await token();
       await verifier.verify(signed);
       await verifier.verify(signed);
+      const wrongIssuer = await new SignJWT({ typ: 'Bearer' }).setIssuer(internal).setAudience('autonexus-employees-api')
+        .setSubject('fixture-subject').setExpirationTime('1m').setProtectedHeader({ alg: 'RS256', kid: 'fixture-key' }).sign(keys.privateKey);
+      await expect(verifier.verify(wrongIssuer)).rejects.toThrow('Unauthorized');
       expect(hits).toBe(1);
       expect(paths).toEqual(['/protocol/openid-connect/certs']);
       await expect(verifier.verify(await token('unknown-key'))).rejects.toThrow('Unauthorized');
@@ -42,8 +46,9 @@ describe('Remote JWKS adapter (ephemeral synthetic issuer, not Keycloak)', () =>
     const server = createServer(() => { /* Intentionally unresponsive external dependency. */ });
     await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve); });
     try {
-      const issuer = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-      const verifier = new AccessTokenVerifier({ issuer, audience: 'autonexus-employees-api', origins: [] });
+      const internal = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const issuer = 'https://public.workshop.test/identity/realms/autonexus';
+      const verifier = new AccessTokenVerifier({ issuer, jwksUri: internal + '/protocol/openid-connect/certs', audience: 'autonexus-employees-api', origins: [] });
       const signed = await new SignJWT({ typ: 'Bearer' }).setIssuer(issuer).setAudience('autonexus-employees-api')
         .setSubject('fixture-subject').setExpirationTime('1m').setProtectedHeader({ alg: 'RS256' }).sign(keys.privateKey);
       const started = performance.now();

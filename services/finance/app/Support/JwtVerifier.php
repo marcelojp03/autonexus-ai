@@ -14,6 +14,7 @@ final class JwtVerifier
         private readonly string $issuer,
         private readonly string $audience,
         private readonly int $tolerance = 5,
+        private readonly string $jwksUri = 'http://127.0.0.1:8180/realms/autonexus/protocol/openid-connect/certs',
     ) {
     }
 
@@ -74,15 +75,15 @@ final class JwtVerifier
 
     private function jwks(): array
     {
-        $file = storage_path('app/jwks.json');
+        $file = storage_path('app/jwks-'.hash('sha256', $this->issuer.'|'.$this->jwksUri).'.json');
         if (is_file($file) && filemtime($file) > time() - 600) {
             $cached = json_decode((string) file_get_contents($file), true);
             if (is_array($cached) && isset($cached['keys'])) {
                 return $cached;
             }
         }
-        $context = stream_context_create(['http' => ['timeout' => 2]]);
-        $body = @file_get_contents($this->issuer.'/protocol/openid-connect/certs', false, $context);
+        $context = stream_context_create(['http' => ['timeout' => 2, 'follow_location' => 0]]);
+        $body = @file_get_contents($this->jwksUri, false, $context);
         if (!is_string($body)) {
             throw new RuntimeException('jwks-unavailable');
         }

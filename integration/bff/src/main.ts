@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   
   configureHttp(app, config);
   app.enableShutdownHooks();
-  await app.listen(config.port, '127.0.0.1');
+  await app.listen(config.port, config.host);
 }
 
 void main();

@@ -1,17 +1,17 @@
+import { identityEnvironment } from '../config/identity-environment.js';
 import { RoleSyncError, type RoleGateway } from '../../application/role-gateway.js';
 import type { Permission } from '../../domain/permissions.js';
 import { adminClientCredentials } from './admin-credentials.js';
 
-const BASE = 'http://127.0.0.1:8180';
 const REALM = '/admin/realms/autonexus';
 
 /** Keycloak realm-role adapter. Only role endpoints are called, never other realm administration. */
 export class KeycloakRoleGateway implements RoleGateway {
-  constructor(private readonly transport: typeof fetch = fetch) {}
+  constructor(private readonly transport: typeof fetch = fetch, private readonly config = identityEnvironment()) {}
 
   private async request(path: string, options: RequestInit = {}, allowed = [200, 201, 204]): Promise<Response> {
     try {
-      const response = await this.transport(BASE + path, {
+      const response = await this.transport(path === '/realms/autonexus/protocol/openid-connect/token' ? this.config.tokenUrl : this.config.adminBase + path, {
         ...options,
         signal: AbortSignal.timeout(5000),
         redirect: 'error',

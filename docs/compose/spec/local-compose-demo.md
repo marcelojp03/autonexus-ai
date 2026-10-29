@@ -1,6 +1,6 @@
 ---
 feature: local-compose-demo
-status: designed
+status: in-progress
 updated: 2026-10-29
 source: work/marcelo
 ---
@@ -125,3 +125,6 @@ Cloud contratado/desplegado, producción/HA certificada, servicios IA/MS05/MF04/
 - [ ] T7: Cierre/publicación — acceptance: STATUS/decisiones/traspaso actualizados, FF y ambas refs remotas verificadas tras push normal (depends: T6; covers: S2.10).
 
 ## Journey log
+
+- Se inició la implementación en work/marcelo después de corregir y verificar funcionalmente CU05. G2 visual permanece abierto por falta de píxeles en la herramienta; la consulta de secuencia al usuario fue descartada sin respuesta y se aplicó la alternativa recomendada de compose-next: continuar la infraestructura ya aprobada sin declarar CU05 cerrado.
+- Recetas multietapa con bases verificadas por digest, Compose aislado, bootstrap de configuración/separación por consumidor y transportes configurables creados. No se acredita arranque por tener YAML válido. Pruebas Node de bootstrap (11 PASS/1 POSIX omitida en Windows), tres de Compose y35 sesión/rutas PASS; Java25 focalizadas PASS. Faltan aceptación limpia, demo, persistencia/recuperación y revisión integral.

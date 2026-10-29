@@ -4,7 +4,7 @@ import { AccessTokenVerifier } from './token-verifier.js';
 
 describe('CU05 custom role token verification', () => {
   let keys: Awaited<ReturnType<typeof generateKeyPair>>;
-  const config = { issuer: 'https://identity.example.invalid/realms/test', audience: 'autonexus-employees-api' };
+  const config = { jwksUri: 'https://trusted.test/certs', issuer: 'https://identity.example.invalid/realms/test', audience: 'autonexus-employees-api' };
   beforeAll(async () => { keys = await generateKeyPair('RS256'); });
   const token = (roles: unknown, issuer = config.issuer, audience = config.audience) => new SignJWT({ typ: 'Bearer', realm_access: { roles } })
     .setProtectedHeader({ alg: 'RS256' }).setSubject('synthetic-custom-role')

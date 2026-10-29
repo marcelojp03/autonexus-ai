@@ -26,18 +26,19 @@ public class SecurityConfiguration {
 
     @Bean
     JwtDecoder jwtDecoder(@Value("${OIDC_ISSUER_URI:http://127.0.0.1:8180/realms/autonexus}") String issuer,
-                          @Value("${OIDC_AUDIENCE:autonexus-operations-api}") String audience) {
+                          @Value("${OIDC_AUDIENCE:autonexus-operations-api}") String audience,
+                          @Value("${OIDC_JWKS_URI:http://127.0.0.1:8180/realms/autonexus/protocol/openid-connect/certs}") String jwksUri) {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(2000);
         factory.setReadTimeout(2000);
-        return AccessTokenDecoder.create(issuer, audience, new RestTemplate(factory));
+        return AccessTokenDecoder.create(issuer, audience, jwksUri, new RestTemplate(factory));
     }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder decoder, EmployeePermissionsClient permissions,
             @Value("${WEB_ALLOWED_ORIGINS:http://127.0.0.1:4200,http://127.0.0.1:4201,http://127.0.0.1:4202}") String origins) throws Exception {
         var cors = new CorsConfiguration();
-        cors.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::trim).toList());
+        cors.setAllowedOrigins(Arrays.stream(origins.split(",", -1)).map(String::trim).map(bo.edu.uagrm.autonexus.operations.infrastructure.config.TransportConfiguration::origin).toList());
         if (cors.getAllowedOrigins().stream().anyMatch(origin -> origin.contains("*"))) {
             throw new IllegalArgumentException("Explicit WEB_ALLOWED_ORIGINS required");
         }

@@ -28,9 +28,9 @@ public class HttpConfirmationParticipant implements Participant {
     public HttpConfirmationParticipant(CanonicalJson json, Time clock,
             @Value("${EMPLOYEES_API_URL:http://127.0.0.1:3002}") String employees,
             @Value("${FINANCE_API_URL:http://127.0.0.1:8000}") String finance,
-            @Value("${CU15_IDP_TOKEN_ENDPOINT:http://127.0.0.1:8180/realms/autonexus/protocol/openid-connect/token}") String endpoint,
+            @Value("${OIDC_TOKEN_URL:${CU15_IDP_TOKEN_ENDPOINT:http://127.0.0.1:8180/realms/autonexus/protocol/openid-connect/token}}") String endpoint,
             @Value("${CU15_IDP_CLIENT_FILE:}") String file) {
-        this.json=json; this.clock=clock; this.employees=employees; this.finance=finance; this.tokenEndpoint=endpoint; this.credentialFile=file;
+        this.json=json; this.clock=clock; this.employees=bo.edu.uagrm.autonexus.operations.infrastructure.config.TransportConfiguration.url(employees,"EMPLOYEES_API_URL"); this.finance=bo.edu.uagrm.autonexus.operations.infrastructure.config.TransportConfiguration.url(finance,"FINANCE_API_URL"); this.tokenEndpoint=bo.edu.uagrm.autonexus.operations.infrastructure.config.TransportConfiguration.url(endpoint,"OIDC_TOKEN_URL"); this.credentialFile=file;
     }
     @Override public String clientId() { return CLIENT; }
     private synchronized String accessToken() {

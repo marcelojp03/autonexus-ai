@@ -12,7 +12,7 @@ export class AccessTokenVerifier {
 
   async verify(token: string): Promise<VerifiedIdentity> {
     try {
-      this.keyResolver ??= createRemoteJWKSet(new URL(this.config.issuer + '/protocol/openid-connect/certs'), {
+      this.keyResolver ??= createRemoteJWKSet(new URL(this.config.jwksUri), {
         timeoutDuration: 2000,
         cooldownDuration: 30000,
         cacheMaxAge: 600000,

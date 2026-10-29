@@ -29,7 +29,7 @@ class AccessTokenDecoderTest {
         var server = MockRestServiceServer.bindTo(rest).build();
         server.expect(org.springframework.test.web.client.ExpectedCount.manyTimes(), requestTo(ISSUER + "/protocol/openid-connect/certs"))
             .andExpect(method(HttpMethod.GET)).andRespond(withSuccess(new JWKSet(key.toPublicJWK()).toString(), MediaType.APPLICATION_JSON));
-        decoder = AccessTokenDecoder.create(ISSUER, AUDIENCE, rest);
+        decoder = AccessTokenDecoder.create(ISSUER, AUDIENCE, ISSUER + "/protocol/openid-connect/certs", rest);
     }
     JWTClaimsSet.Builder claims() {
         return new JWTClaimsSet.Builder().issuer(ISSUER).audience(AUDIENCE).subject("synthetic-subject")
@@ -43,6 +43,17 @@ class AccessTokenDecoderTest {
     void rejected(JWTClaimsSet claims) throws Exception {
         String fixture = sign(claims, key);
         assertThrows(JwtException.class, () -> decoder.decode(fixture), "Synthetic token must be rejected");
+    }
+    @Test void separatesPublicIssuerFromTrustedInternalJwks() throws Exception {
+        String publicIssuer = "https://workshop.test/identity/realms/autonexus";
+        String internalJwks = "http://keycloak:8080/identity/realms/autonexus/protocol/openid-connect/certs";
+        var rest = new RestTemplate();
+        var server = MockRestServiceServer.bindTo(rest).build();
+        server.expect(requestTo(internalJwks)).andRespond(withSuccess(new JWKSet(key.toPublicJWK()).toString(), MediaType.APPLICATION_JSON));
+        var portable = AccessTokenDecoder.create(publicIssuer, AUDIENCE, internalJwks, rest);
+        assertNotNull(portable.decode(sign(claims().issuer(publicIssuer).build(), key)));
+        assertThrows(JwtException.class, () -> portable.decode(sign(claims().build(), key)));
+        server.verify();
     }
     @Test void acceptsRealRsaSignature() throws Exception {
         assertEquals("synthetic-subject", decoder.decode(sign(claims().build(), key)).getSubject());
@@ -90,7 +101,7 @@ class AccessTokenDecoderTest {
         var rotated = new RSAKeyGenerator(2048).keyID("synthetic-rotated-key").generate();
         server.expect(requestTo(ISSUER + "/protocol/openid-connect/certs"))
             .andRespond(withSuccess(new JWKSet(rotated.toPublicJWK()).toString(), MediaType.APPLICATION_JSON));
-        var cached = AccessTokenDecoder.create(ISSUER, AUDIENCE, rest);
+        var cached = AccessTokenDecoder.create(ISSUER, AUDIENCE, ISSUER + "/protocol/openid-connect/certs", rest);
         String original = sign(claims().build(), key);
         assertNotNull(cached.decode(original));
         assertNotNull(cached.decode(original));
@@ -102,7 +113,7 @@ class AccessTokenDecoderTest {
         var rest = new RestTemplate();
         MockRestServiceServer.bindTo(rest).build().expect(requestTo(ISSUER + "/protocol/openid-connect/certs"))
             .andRespond(withServerError());
-        var unavailable = AccessTokenDecoder.create(ISSUER, AUDIENCE, rest);
+        var unavailable = AccessTokenDecoder.create(ISSUER, AUDIENCE, ISSUER + "/protocol/openid-connect/certs", rest);
         String fixture = sign(claims().build(), key);
         assertThrows(JwtException.class, () -> unavailable.decode(fixture));
     }

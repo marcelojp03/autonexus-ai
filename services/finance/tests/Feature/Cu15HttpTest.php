@@ -24,7 +24,7 @@ final class Cu15HttpTest extends TestCase
         file_put_contents($this->temporaryStorage.'/openssl.cnf', "[req]\ndistinguished_name = req_distinguished_name\n[req_distinguished_name]\n");
         $this->privateKey = openssl_pkey_new(['config' => $this->temporaryStorage.'/openssl.cnf', 'private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
         $details = openssl_pkey_get_details($this->privateKey);
-        file_put_contents($this->temporaryStorage.'/app/jwks.json', json_encode(['keys' => [[
+        file_put_contents($this->jwksCacheFile(), json_encode(['keys' => [[
             'kid' => 'test-key', 'kty' => 'RSA', 'n' => $this->base64($details['rsa']['n']), 'e' => $this->base64($details['rsa']['e']),
         ]]]));
         $this->store = new InMemoryQuoteLinkStore();
@@ -33,13 +33,18 @@ final class Cu15HttpTest extends TestCase
 
     protected function tearDown(): void
     {
-        if (is_file($this->temporaryStorage.'/app/jwks.json')) {
-            unlink($this->temporaryStorage.'/app/jwks.json');
+        if (is_file($this->jwksCacheFile())) {
+            unlink($this->jwksCacheFile());
         }
         unlink($this->temporaryStorage.'/openssl.cnf');
         rmdir($this->temporaryStorage.'/app');
         rmdir($this->temporaryStorage);
         parent::tearDown();
+    }
+
+    private function jwksCacheFile(): string
+    {
+        return $this->temporaryStorage.'/app/jwks-'.hash('sha256', config('finance.issuer').'|'.config('finance.jwks_uri')).'.json';
     }
 
     private function base64(string $value): string { return rtrim(strtr(base64_encode($value), '+/', '-_'), '='); }

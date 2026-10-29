@@ -15,6 +15,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(JwtVerifier::class, fn () => new JwtVerifier(
             (string) config('finance.issuer'),
             (string) config('finance.audience'),
+            jwksUri: (string) config('finance.jwks_uri'),
         ));
         $this->app->singleton(Permissions::class, fn () => new Permissions((string) config('finance.employees_url')));
     }

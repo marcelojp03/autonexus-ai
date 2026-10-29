@@ -32,7 +32,7 @@ public class EmployeePermissionsClient {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(2000);
         factory.setReadTimeout(2000);
-        this.client = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+        this.client = RestClient.builder().baseUrl(bo.edu.uagrm.autonexus.operations.infrastructure.config.TransportConfiguration.url(baseUrl, "EMPLOYEES_API_URL")).requestFactory(factory).build();
         this.ttlMillis = Math.max(1, ttlSeconds) * 1000L;
     }
 

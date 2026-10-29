@@ -1,0 +1,275 @@
+name: "${COMPOSE_PROJECT_NAME:-autonexus-local}"
+services:
+  config-init:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bootstrap:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/bootstrap.Dockerfile"
+    environment:
+      PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-4280}}"
+    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
+    init: true
+    command: ["init"]
+  postgres:
+    image: "postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27"
+    entrypoint: ["/bin/sh","/infra/service-entrypoint.sh","docker-entrypoint.sh"]
+    command: ["postgres"]
+    volumes: ["config-postgres:/run/config:ro","postgres-data:/var/lib/postgresql/data","./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro","./infra/local/postgres-init.sh:/docker-entrypoint-initdb.d/10-owners.sh:ro"]
+    depends_on:
+      config-init:
+        condition: "service_completed_successfully"
+    healthcheck:
+      test: ["CMD-SHELL",". /run/config/service.env && pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: "5s"
+      timeout: "4s"
+      retries: 40
+      start_period: "10s"
+    restart: "unless-stopped"
+  idp-postgres:
+    image: "postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27"
+    entrypoint: ["/bin/sh","/infra/service-entrypoint.sh","docker-entrypoint.sh"]
+    command: ["postgres"]
+    volumes: ["config-idp-postgres:/run/config:ro","idp-postgres-data:/var/lib/postgresql/data","./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro","./infra/local/idp-postgres-init.sh:/docker-entrypoint-initdb.d/10-owners.sh:ro"]
+    depends_on:
+      config-init:
+        condition: "service_completed_successfully"
+    healthcheck:
+      test: ["CMD-SHELL",". /run/config/service.env && pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: "5s"
+      timeout: "4s"
+      retries: 40
+      start_period: "10s"
+    restart: "unless-stopped"
+  keycloak:
+    image: "quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b"
+    entrypoint: ["/bin/sh","/infra/service-entrypoint.sh","/opt/keycloak/bin/kc.sh"]
+    command: ["start-dev","--hostname-strict=true"]
+    environment:
+      KC_HTTP_RELATIVE_PATH: "/identity"
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: "/"
+      KC_HTTP_MANAGEMENT_SCHEME: "http"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_PROXY_HEADERS: "xforwarded"
+    volumes: ["config-keycloak:/run/config:ro","./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro"]
+    depends_on:
+      config-init:
+        condition: "service_completed_successfully"
+      idp-postgres:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD","bash","-ec","exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; grep -q '200 OK' <&3"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 70
+      start_period: "30s"
+    restart: "unless-stopped"
+  rabbitmq:
+    image: "rabbitmq:4.2.9-management@sha256:d1fb8b38bd0805935907a22b2b7483fba38c9a8dd7e8a74bfba4a6e7a9e91707"
+    entrypoint: ["/bin/sh","/infra/service-entrypoint.sh","docker-entrypoint.sh"]
+    command: ["rabbitmq-server"]
+    volumes: ["config-rabbitmq:/run/config:ro","rabbitmq-data:/var/lib/rabbitmq","./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro"]
+    depends_on:
+      config-init:
+        condition: "service_completed_successfully"
+    healthcheck:
+      test: ["CMD","rabbitmq-diagnostics","-q","ping"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 50
+      start_period: "15s"
+    restart: "unless-stopped"
+  provision:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bootstrap:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/bootstrap.Dockerfile"
+    environment:
+      PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-4280}}"
+    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
+    init: true
+    command: ["provision"]
+    depends_on:
+      config-init:
+        condition: "service_completed_successfully"
+      keycloak:
+        condition: "service_healthy"
+      rabbitmq:
+        condition: "service_healthy"
+      postgres:
+        condition: "service_healthy"
+  employees-migrate:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-employees:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/employees.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-employees:/run/config:ro"]
+    command: ["node","node_modules/typeorm/cli.js","migration:run","-d","dist/infrastructure/postgres/data-source.js"]
+    depends_on:
+      provision:
+        condition: "service_completed_successfully"
+  employees:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-employees:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/employees.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-employees:/run/config:ro"]
+    depends_on:
+      employees-migrate:
+        condition: "service_completed_successfully"
+      keycloak:
+        condition: "service_healthy"
+      rabbitmq:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:3002/health/ready').then(async r=>process.exit(r.ok&&(await r.json()).status==='UP'?0:1)).catch(()=>process.exit(1))"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 40
+      start_period: "10s"
+    restart: "unless-stopped"
+  finance-migrate:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-finance:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/finance.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-finance:/run/config:ro"]
+    command: ["php","artisan","migrate","--force","--no-interaction"]
+    depends_on:
+      provision:
+        condition: "service_completed_successfully"
+  finance:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-finance:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/finance.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-finance:/run/config:ro"]
+    depends_on:
+      finance-migrate:
+        condition: "service_completed_successfully"
+      employees:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD","php","-r","exit(@file_get_contents('http://127.0.0.1:8000/health/ready') !== false ? 0 : 1);"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 40
+      start_period: "10s"
+    restart: "unless-stopped"
+  finance-publisher:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-finance:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/finance.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-finance:/run/config:ro"]
+    command: ["php","artisan","cu15:publish-outbox","--loop"]
+    depends_on:
+      finance-migrate:
+        condition: "service_completed_successfully"
+      rabbitmq:
+        condition: "service_healthy"
+      provision:
+        condition: "service_completed_successfully"
+    restart: "unless-stopped"
+  operations:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-operations:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/operations.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-operations:/run/config:ro"]
+    depends_on:
+      employees:
+        condition: "service_healthy"
+      finance:
+        condition: "service_healthy"
+      provision:
+        condition: "service_completed_successfully"
+      rabbitmq:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD","bash","-ec","exec 3<>/dev/tcp/127.0.0.1/8081; printf 'GET /actuator/health/readiness HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; grep -q '200' <&3"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 50
+      start_period: "15s"
+    restart: "unless-stopped"
+  bff:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bff:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/bff.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-bff:/run/config:ro"]
+    depends_on:
+      employees:
+        condition: "service_healthy"
+      operations:
+        condition: "service_healthy"
+      finance:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:3004/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 40
+      start_period: "10s"
+    restart: "unless-stopped"
+  web:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-web:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/web.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-public:/run/config:ro"]
+    ports: ["127.0.0.1:${WEB_PORT:-4280}:8080"]
+    depends_on:
+      bff:
+        condition: "service_healthy"
+      keycloak:
+        condition: "service_healthy"
+      provision:
+        condition: "service_completed_successfully"
+    healthcheck:
+      test: ["CMD","wget","-q","--spider","http://127.0.0.1:8080/health/live"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 20
+      start_period: "10s"
+    restart: "unless-stopped"
+volumes:
+  bootstrap-state: {}
+  config-postgres: {}
+  config-idp-postgres: {}
+  config-keycloak: {}
+  config-rabbitmq: {}
+  config-employees: {}
+  config-operations: {}
+  config-finance: {}
+  config-bff: {}
+  config-public: {}
+  config-demo: {}
+  postgres-data: {}
+  idp-postgres-data: {}
+  rabbitmq-data: {}

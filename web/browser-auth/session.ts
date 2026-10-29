@@ -16,8 +16,44 @@ export interface BrowserOidcAdapter {
 }
 export interface BrowserSessionOwner { session: SessionPort; start(): Promise<void>; dispose(): void; }
 export const workshopRoles: readonly WorkshopRole[] = Object.freeze(['administrador', 'recepcionista', 'mecanico', 'jefe_taller', 'responsable_financiero']);
+/** Public deployment configuration only. Never credentials, tokens or request-derived URLs. */
+export interface PublicRuntimeConfig {
+  readonly version: 1;
+  readonly oidcUrl: string;
+  readonly graphqlUrl: string;
+  readonly technicalUrls: Readonly<{ employees: string; operations: string }>;
+}
+
+export function parsePublicRuntimeConfig(value: unknown, origin: string): Readonly<PublicRuntimeConfig> {
+  const invalid = () => { throw new Error('Configuración pública inválida.'); };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
+  const input = value as Record<string, unknown>;
+  if (Object.keys(input).some(k => !['version', 'oidcUrl', 'graphqlUrl', 'technicalUrls'].includes(k)) || input['version'] !== 1) return invalid();
+  let publicOrigin: URL;
+  try { publicOrigin = new URL(origin); } catch { return invalid(); }
+  if (!['http:', 'https:'].includes(publicOrigin.protocol) || publicOrigin.origin !== origin) return invalid();
+  function endpoint(raw: unknown, path: string): string {
+    if (typeof raw !== 'string') return invalid();
+    let url: URL;
+    try { url = new URL(raw); } catch { return invalid(); }
+    if (url.origin !== origin || url.username || url.password || url.search || url.hash || url.pathname !== path || url.href !== origin + path) return invalid();
+    return url.href;
+  }
+  const technical = input['technicalUrls'];
+  if (!technical || typeof technical !== 'object' || Array.isArray(technical)) return invalid();
+  const urls = technical as Record<string, unknown>;
+  if (Object.keys(urls).some(k => !['employees', 'operations'].includes(k))) return invalid();
+  return Object.freeze({ version: 1, oidcUrl: endpoint(input['oidcUrl'], '/identity'), graphqlUrl: endpoint(input['graphqlUrl'], '/graphql'), technicalUrls: Object.freeze({ employees: endpoint(urls['employees'], '/technical/employees'), operations: endpoint(urls['operations'], '/technical/operations') }) });
+}
+
+export function publicRuntimeConfig(origin: string): Readonly<PublicRuntimeConfig> | undefined {
+  const value = (globalThis as { __AUTONEXUS_CONFIG__?: unknown }).__AUTONEXUS_CONFIG__;
+  return value === undefined ? undefined : parsePublicRuntimeConfig(value, origin);
+}
+
 export function browserOidcConfig(application: BrowserApplication) {
-  return { url: 'http://127.0.0.1:8180', realm: 'autonexus', clientId: application === 'shell' ? 'autonexus-shell' : `autonexus-mf-${application}` };
+  const deployment = publicRuntimeConfig(globalThis.location?.origin ?? '');
+  return { url: deployment?.oidcUrl ?? 'http://127.0.0.1:8180', realm: 'autonexus', clientId: application === 'shell' ? 'autonexus-shell' : `autonexus-mf-${application}` };
 }
 export function safeReturnTo(value: unknown, application: BrowserApplication): string | null {
   if (typeof value !== 'string' || value.length > 2048 || /[\\\u0000-\u0020]/.test(value)) return null;
@@ -51,6 +87,7 @@ function parseBusinessResult(value: unknown): BusinessResult {
 
 export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin: string; application: BrowserApplication }): BrowserSessionOwner {
   const { origin, application } = options;
+  const deployment = publicRuntimeConfig(origin);
   const callback = origin + '/auth/callback';
   const defaultRoute = application === 'shell' ? '/employees' : application === 'finance' ? '/finance' : '/#/widgets';
   const storageKey = `autonexus:returnTo:${application}`;
@@ -138,7 +175,8 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
       requests.add(controller);
       const timeout = setTimeout(() => controller.abort(), 10000);
       try {
-        const response = await fetch(`http://127.0.0.1:${service === 'employees' ? '3002' : '8081'}/technical/${resource}`, { method: 'GET', headers: { Authorization: `Bearer ${sdk.token}` }, credentials: 'omit', redirect: 'error', signal: controller.signal });
+        const technicalBase = deployment?.technicalUrls[service] ?? `http://127.0.0.1:${service === 'employees' ? '3002' : '8081'}/technical`;
+        const response = await fetch(technicalBase + '/' + resource, { method: 'GET', headers: { Authorization: `Bearer ${sdk.token}` }, credentials: 'omit', redirect: 'error', signal: controller.signal });
         if (disposed || version !== epoch) throw new Error('Sesión no disponible.');
         if (response.status === 401) { fail(); throw new Error('Sesión rechazada (401). Ingresa nuevamente.'); }
         if (response.status === 403) throw new Error('Acceso insuficiente (403). Este recurso requiere el rol autorizado en el servidor.');
@@ -163,7 +201,7 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
       requests.add(controller);
       const timeout = setTimeout(() => controller.abort(), 15000);
       try {
-        const response = await fetch('http://127.0.0.1:3004/graphql', {
+        const response = await fetch(deployment?.graphqlUrl ?? 'http://127.0.0.1:3004/graphql', {
           method: 'POST',
           headers: { Authorization: `Bearer ${sdk.token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ query, ...(variables === undefined ? {} : { variables }) }),
