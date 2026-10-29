@@ -12,6 +12,28 @@ function fixture(t) {
   return { stateDir: join(root, 'state'), configDir: join(root, 'config'), publicOrigin: 'http://127.0.0.1:18420' };
 }
 const bytes = path => readFileSync(path, 'utf8');
+test('Finance receives its owner permission endpoint, not a loopback fallback', t => {
+  const options = fixture(t), state = init(options);
+  assert.equal(configuration(state).finance.EMPLOYEES_API_URL, 'http://employees:3002');
+  assert.ok(bytes(join(options.configDir, 'finance/service.env')).includes("EMPLOYEES_API_URL='http://employees:3002'"));
+});
+test('exact legacy Finance transport upgrade preserves all credential bytes and rejects edited endpoints', { skip: process.platform === 'win32' }, t => {
+  const options = fixture(t), state = init(options);
+  const statePath = join(options.stateDir, 'bootstrap.json'), originalState = bytes(statePath);
+  const files = consumers.filter(owner => owner !== 'finance').map(owner => join(options.configDir, owner, 'service.env'));
+  const before = files.map(path => bytes(path));
+  const path = join(options.configDir, 'finance/service.env');
+  const expected = bytes(path), legacy = { ...configuration(state).finance }; delete legacy.EMPLOYEES_API_URL;
+  chmodSync(path, 0o600); writeFileSync(path, shellEnv(legacy)); chmodSync(path, 0o444);
+  init(options);
+  assert.ok(bytes(path) === expected);
+  assert.ok(bytes(statePath) === originalState);
+  assert.ok(files.every((path, i) => bytes(path) === before[i]));
+  const edited = expected.replace('http://employees:3002', 'http://edited.invalid');
+  chmodSync(path, 0o600); writeFileSync(path, edited); chmodSync(path, 0o444);
+  assert.throws(() => init(options), /CONFIG_DRIFT/);
+  assert.ok(bytes(path) === edited);
+});
 test('repeat init preserves state, credentials and every consumer byte', t => {
   const options = fixture(t), state = init(options);
   const statePath = join(options.stateDir, 'bootstrap.json'), before = bytes(statePath);

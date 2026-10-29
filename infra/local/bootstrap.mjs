@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, chmodSync, renameSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -45,7 +45,7 @@ export function configuration(state) {
   }
   Object.assign(result.employees, { HTTP_HOST: '0.0.0.0', PORT: 3002, OIDC_ADMIN_BASE_URL: internal, OIDC_TOKEN_URL: internal + '/realms/autonexus/protocol/openid-connect/token', EMPLOYEES_IDP_CLIENT_FILE: '/run/config/employees-client.json' });
   Object.assign(result.operations, { HTTP_HOST: '0.0.0.0', PORT: 8081, CU15_ENABLED: 'true', EMPLOYEES_API_URL: 'http://employees:3002', FINANCE_API_URL: 'http://finance:8000', OIDC_TOKEN_URL: internal + '/realms/autonexus/protocol/openid-connect/token', CU15_IDP_CLIENT_FILE: '/run/config/cu15-coordinator-client.json' });
-  Object.assign(result.finance, { APP_ENV: 'local', APP_DEBUG: 'false', APP_KEY: s.appKey, APP_URL: publicOrigin, DB_CONNECTION: 'pgsql', DB_DATABASE: 'autonexus_finance', DB_USERNAME: 'autonexus_finance', SESSION_DRIVER: 'file', CACHE_STORE: 'file', QUEUE_CONNECTION: 'sync' });
+  Object.assign(result.finance, { APP_ENV: 'local', APP_DEBUG: 'false', APP_KEY: s.appKey, APP_URL: publicOrigin, DB_CONNECTION: 'pgsql', DB_DATABASE: 'autonexus_finance', DB_USERNAME: 'autonexus_finance', SESSION_DRIVER: 'file', CACHE_STORE: 'file', QUEUE_CONNECTION: 'sync', EMPLOYEES_API_URL: 'http://employees:3002' });
   return result;
 }
 export function init({ stateDir = '/state', configDir = '/config', publicOrigin = process.env.PUBLIC_ORIGIN } = {}) {
@@ -71,6 +71,17 @@ export function init({ stateDir = '/state', configDir = '/config', publicOrigin 
   for (const consumer of consumers) {
     const directory = resolve(configDir, consumer);
     mkdirSync(directory, { recursive: true, mode: 0o755 }); chmodSync(directory, 0o755);
+    if (consumer === 'finance') {
+      const target = resolve(directory, 'service.env');
+      const legacy = { ...configs.finance }; delete legacy.EMPLOYEES_API_URL;
+      // One exact generated predecessor may gain this non-secret endpoint atomically.
+      // Any other drift still fails; no credentials or business records are rewritten.
+      if (existsSync(target) && readFileSync(target, 'utf8') === shellEnv(legacy)) {
+        const temporary = resolve(directory, '.transport-' + randomBytes(8).toString('hex') + '.env');
+        writeFileSync(temporary, shellEnv(configs.finance), { flag: 'wx', mode: 0o444 });
+        renameSync(temporary, target);
+      }
+    }
     preserve(resolve(directory, 'service.env'), shellEnv(configs[consumer]), 0o444);
   }
   for (const owner of ['employees', 'operations', 'finance']) preserve(resolve(configDir, owner, 'broker-client.json'), json({ host: 'rabbitmq', port: 5672, vhost: 'autonexus', username: 'autonexus_' + owner, password: state.secrets[owner + 'Rabbit'] }), 0o444);
