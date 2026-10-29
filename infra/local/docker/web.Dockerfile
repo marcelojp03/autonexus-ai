@@ -46,6 +46,7 @@ RUN addgroup -g 1000 app && adduser -D -u 1000 -G app app \
     && touch /var/run/nginx.pid && chown app:app /var/run/nginx.pid
 COPY --from=build /app/web/shell/dist/ /usr/share/nginx/html/
 COPY infra/local/nginx.conf /etc/nginx/conf.d/default.conf
+RUN nginx -t
 COPY --chmod=0555 infra/local/service-entrypoint.sh /usr/local/bin/service-entrypoint
 USER app
 EXPOSE 8080

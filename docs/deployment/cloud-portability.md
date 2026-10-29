@@ -27,6 +27,10 @@ Cada propietario conserva base, rol, migraciones e idempotencia. El BFF no recib
 
 Preparar endpoints, puerto, nombre de base, usuario, secreto y CA/TLS por propietario. Para conexión remota usar verificación completa de certificado y nombre del servidor (verify-full o su equivalente del driver). La CA debe montarse como configuración confiable; no desactivar la verificación para resolver un error de conectividad. Las variables exactas de cada adaptador se documentan con su implementación y pruebas, no como un alias universal ficticio.
 
+Los adaptadores implementados reciben DB_HOST, DB_PORT, DB_SSLMODE (disable o verify-full) y DB_CA_FILE. Empleados/Operaciones usan DB_NAME y DB_USER; Finanzas usa DB_DATABASE y DB_USERNAME. DB_PASSWORD se entrega privadamente. Ver [plantilla sin secretos](managed-postgres.env.example). Se probaron validaciones/configuración, no un handshake contra un proveedor remoto.
+
+El bootstrap de este Compose genera deliberadamente configuración local. Para otro orquestador, entregar su propia configuración privada en /run/config/service.env mediante el gestor de secretos elegido y preaprovisionar bases/roles; no reutilizar el bootstrap administrativo local ni esperar que variables externas sobrescriban ese archivo. Las imágenes consumidoras no requieren rutas del host ni recompilación para recibir dichos endpoints.
+
 El bootstrap local crea roles/bases con una identidad administrativa separada. En servicios administrados que no permiten esa operación, preaprovisionar dichos recursos con autoridad administrativa y ejecutar después solo las migraciones propietarias. No ejecutar el bootstrap local contra una base remota sin revisar su alcance. No usar resets, migraciones fresh, synchronize ni recreación de volúmenes como preparación habitual.
 
 Revisar el pool y los límites de conexión con los workers y migraciones. Empleados usa locks de sesión en planificación y transaccionales en seguridad; un pooler transaccional no equivale a una conexión de sesión y requiere validación específica. Preferir endpoints directos o un modo de pooling compatible antes de acreditar la equivalencia.
