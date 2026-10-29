@@ -51,7 +51,12 @@ export async function main(args = process.argv.slice(2)) {
       const pending = await poll(() => transport.api('operations', '/confirmations/' + state.sagaId), s => s.status === 'recovery_pending');
       assert.ok(pending.steps.some(step => step.command === 'reserve_assignment' && step.outcome === 'applied'));
       assert.ok(!pending.steps.some(step => step.outcome === 'rejected'));
+      const actor = await transport.login(demo.accounts.mechanicA);
+      const agenda = await fetch('http://operations:8081/agenda/me?from=' + demo.date + '&to=' + demo.date, { headers: { Authorization: 'Bearer ' + actor.token }, signal: AbortSignal.timeout(15000) });
+      assert.equal(agenda.status, 200);
+      assert.ok(!(await agenda.json()).items.some(item => item.orderId === state.orderId), 'A provisional reservation must not appear as globally confirmed work');
       state.pendingObserved = true; save(); report.status = pending.status;
+      report.provisionalWorkHidden = true;
     } else {
       assert.equal(state.pendingObserved, true);
       const saga = await poll(() => transport.api('operations', '/confirmations/' + state.sagaId), s => ['confirmed', 'rejected'].includes(s.status));
