@@ -1,10 +1,10 @@
-FROM php:8.2-cli-bookworm@sha256:8bfff0e5249f2073504c335b9f7ae54bbe84c3bc9338bfc8d2a04e77d112360b AS extensions
+FROM php:8.4.26-cli-bookworm@sha256:58a95e5fe74d1d9f41c5f48ff1ebf10199c77bbe00a07d9236917154717e228c AS extensions
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends libpq-dev libzip-dev \
     && docker-php-ext-install -j2 pdo_pgsql bcmath sockets zip pcntl \
     && rm -rf /var/lib/apt/lists/*
 
-FROM php:8.2-cli-bookworm@sha256:8bfff0e5249f2073504c335b9f7ae54bbe84c3bc9338bfc8d2a04e77d112360b AS runtime-base
+FROM php:8.4.26-cli-bookworm@sha256:58a95e5fe74d1d9f41c5f48ff1ebf10199c77bbe00a07d9236917154717e228c AS runtime-base
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends libpq5 libzip4 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
