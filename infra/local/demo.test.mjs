@@ -139,6 +139,7 @@ test('synthetic full demo ordering, two distinct jobs, completed replay is GET-o
   const dir = temporary(t), ledger = openLedger(dir, publicOrigin, now), transport = fakeTransport(dir);
   assert.deepEqual(await seed(ledger, transport), { employees: 5, jobs: 2, date: '2026-11-04' });
   assert.equal(Object.keys(ledger.state.steps).length, 28);
+  assert.equal(ledger.state.steps['employee.mechanicA'].body.startDate, '2026-10-28');
   assert.equal(transport.credentials.size, 5);
   const accounts = readFileSync(join(dir, 'accounts.json'), 'utf8');
   const customer = transport.resources.get('operations/customers/' + ledger.state.steps['mechanicA.customer'].result.id);

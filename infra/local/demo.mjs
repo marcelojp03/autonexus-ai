@@ -178,7 +178,7 @@ export async function seed(ledger, transport, { wait = pause, attempts = 180 } =
   const people = {};
   for (const [key, account] of Object.entries(state.accounts)) {
     const mechanicEnabled = key === 'mechanicA' || key === 'mechanicB';
-    let employee = await create('employee.' + key, 'employees', '/employees', { firstName: mechanicEnabled ? 'Mecánico' : 'Personal', lastName: marker + '-' + key, document: marker + '-' + key, email: (marker + '-' + key).toLowerCase() + '@example.invalid', phone: '+59170000000', jobTitle: 'Demostración local', startDate: state.createdAt.slice(0, 10), specialties: mechanicEnabled ? ['Diagnóstico general'] : [], mechanicEnabled, access: { requested: true } }, 'employee');
+    let employee = await create('employee.' + key, 'employees', '/employees', { firstName: mechanicEnabled ? 'Mecánico' : 'Personal', lastName: marker + '-' + key, document: marker + '-' + key, email: (marker + '-' + key).toLowerCase() + '@example.invalid', phone: '+59170000000', jobTitle: 'Demostración local', startDate: civilDate(new Date(state.createdAt)), specialties: mechanicEnabled ? ['Diagnóstico general'] : [], mechanicEnabled, access: { requested: true } }, 'employee');
     employee = await poll(() => api('employees', '/employees/' + employee.id), e => e.access.status === 'synced', 'DEMO_EMPLOYEE_SYNC_TIMEOUT');
     ensure(employee.status === 'active' && uuid(employee.access.subject) && (!account.subject || account.subject === employee.access.subject), 'DEMO_EMPLOYEE_DRIFT');
     Object.assign(account, { employeeId: employee.id, username: 'employee-' + employee.id, subject: employee.access.subject }); ledger.save();

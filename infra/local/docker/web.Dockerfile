@@ -10,6 +10,7 @@ COPY web/mf-employees/patches /app/web/mf-employees/patches
 RUN pnpm --dir /app/web/mf-employees install --frozen-lockfile
 COPY web/mf-employees/angular.json web/mf-employees/tsconfig.json web/mf-employees/tsconfig.app.json /app/web/mf-employees/
 COPY web/mf-employees/src /app/web/mf-employees/src
+COPY web/mf-employees/_mock /app/web/mf-employees/_mock
 COPY web/mf-employees/public /app/web/mf-employees/public
 RUN pnpm --dir /app/web/mf-employees run build:integrated
 COPY web/mf-operations/package.json web/mf-operations/pnpm-lock.yaml web/mf-operations/pnpm-workspace.yaml web/mf-operations/.npmrc /app/web/mf-operations/
@@ -17,6 +18,7 @@ COPY web/mf-operations/patches /app/web/mf-operations/patches
 RUN pnpm --dir /app/web/mf-operations install --frozen-lockfile
 COPY web/mf-operations/angular.json web/mf-operations/tsconfig.json web/mf-operations/tsconfig.app.json /app/web/mf-operations/
 COPY web/mf-operations/src /app/web/mf-operations/src
+COPY web/mf-operations/_mock /app/web/mf-operations/_mock
 COPY web/mf-operations/public /app/web/mf-operations/public
 RUN pnpm --dir /app/web/mf-operations run build:integrated
 COPY web/mf-finance/package.json web/mf-finance/pnpm-lock.yaml /app/web/mf-finance/
