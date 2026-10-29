@@ -17,6 +17,30 @@ function fake(authenticated = true) {
 }
 function owner(sdk) { return createBrowserSession(sdk, { origin: location.origin, application: 'shell' }); }
 
+test('CU15 logout cleans owned recovery even without a mounted consumer, never other subjects or tokens', async () => {
+  const stored = browser(); const sdk = fake(); const o = owner(sdk); await o.start();
+  stored.set('cu15:pending:synthetic', 'synthetic-command'); stored.set('cu15:pending:other', 'other-command');
+  const unsubscribe = o.session.subscribe(() => {}); unsubscribe();
+  try { await o.session.logout(); assert.equal(stored.has('cu15:pending:synthetic'), false); assert.deepEqual([...stored], [['cu15:pending:other', 'other-command']]); }
+  finally { o.dispose(); }
+});
+
+test('CU15 owner disposal is not logout and preserves recovery through reload', async () => {
+  const stored = browser(); const sdk = fake(); const o = owner(sdk); await o.start();
+  stored.set('cu15:pending:synthetic', 'synthetic-command');
+  o.session.subscribe(state => { if (!state.authenticated) stored.delete('cu15:pending:synthetic'); });
+  o.dispose();
+  assert.deepEqual([...stored], [['cu15:pending:synthetic', 'synthetic-command']]);
+});
+
+test('CU15 IdP logout or refresh failure removes owned metadata without active views', async () => {
+  for (const event of ['onAuthLogout', 'onAuthRefreshError']) {
+    const stored = browser(); const sdk = fake(); const o = owner(sdk); await o.start();
+    stored.set('cu15:pending:synthetic', 'synthetic-command'); stored.set('unrelated', 'preserved');
+    try { sdk[event](); assert.deepEqual([...stored], [['unrelated', 'preserved']]); } finally { o.dispose(); }
+  }
+});
+
 test('return routes accept only owned paths and reject OAuth metadata and escapes', () => {
   for (const path of ['/employees', '/operations/dashboard/v1?tab=work', '/employees/widgets']) assert.equal(safeReturnTo(path, 'shell'), path);
   for (const path of ['https://outside.invalid', '//outside.invalid', '/employees-other', '/employees/../auth/callback', '/employees/%2e%2e/auth', '/employees/%252e%252e/auth', '/employees/\\evil', '/employees?code=secret', '/employees?%61ccess_token=x', '/operations#access_token=x']) assert.equal(safeReturnTo(path, 'shell'), null);

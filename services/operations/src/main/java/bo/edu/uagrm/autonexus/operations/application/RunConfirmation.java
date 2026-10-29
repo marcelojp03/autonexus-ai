@@ -34,7 +34,9 @@ public final class RunConfirmation {
                 if (store.load(claim,clock.now()) == null) return;
                 result=remote.execute(saga,step);
             }
-            validate(saga,step,result);
+            try { validate(saga,step,result); }
+            catch (ProtocolFailure failure) { throw failure; }
+            catch (RuntimeException malformed) { throw new ProtocolFailure(ProtocolProblem.PARTICIPANT_PROTOCOL_INVALID); }
             step.result=result; step.errorCode=null;
             boolean applied="applied".equals(result.get("outcome"));
             step.status=applied ? "applied" : "rejected";
@@ -56,7 +58,8 @@ public final class RunConfirmation {
             saga.failures=0; saga.nextAttemptAt=clock.now().toString();
             if (!saga.compensating()) saga.status="running";
         } catch (RuntimeException failure) {
-            step.status="uncertain"; step.errorCode="PARTICIPANT_RESULT_UNKNOWN";
+            step.status="uncertain";
+            step.errorCode=failure instanceof ProtocolFailure protocol ? protocol.code() : "PARTICIPANT_RESULT_UNKNOWN";
             saga.status=saga.compensating() ? "compensation_pending" : "recovery_pending";
             saga.failures++;
             defer(saga);
@@ -69,8 +72,9 @@ public final class RunConfirmation {
     }
     private static void validate(Saga saga, Step step, Map<String,Object> result) {
         if (result == null || !step.operationId.equals(result.get("operationId")) || !saga.id.equals(result.get("sagaId"))
-                || !step.command.equals(result.get("command")) || !step.fingerprint.equals(result.get("fingerprint"))
+                || !step.command.equals(result.get("command"))
                 || !(result.get("committedAt") instanceof String committed)) throw new IllegalStateException();
+        if (!step.fingerprint.equals(result.get("fingerprint"))) throw new ProtocolFailure(ProtocolProblem.PARTICIPANT_FINGERPRINT_MISMATCH);
         java.time.Instant.parse(committed);
         if ("rejected".equals(result.get("outcome"))) {
             if (!(result.get("errorCode") instanceof String code) || !code.matches("[A-Z][A-Z0-9_]{1,99}")

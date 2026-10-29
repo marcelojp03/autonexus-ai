@@ -9,6 +9,12 @@ public final class ConfirmationPorts {
     public interface Time { Instant now(); double jitter(); }
     public interface Hash { String hash(Object value); }
     public record Claim(UUID sagaId, UUID owner, long fence) {}
+    public enum ProtocolProblem { PARTICIPANT_PROTOCOL_INVALID, PARTICIPANT_FINGERPRINT_MISMATCH }
+    public static final class ProtocolFailure extends IllegalStateException {
+        private final ProtocolProblem problem;
+        public ProtocolFailure(ProtocolProblem problem) { super(problem.name()); this.problem=problem; }
+        public String code() { return problem.name(); }
+    }
     public interface Participant {
         Map<String,Object> lookup(Saga saga, Step step);
         Map<String,Object> execute(Saga saga, Step step);

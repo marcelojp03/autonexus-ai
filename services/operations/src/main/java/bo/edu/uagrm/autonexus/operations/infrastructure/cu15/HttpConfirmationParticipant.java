@@ -63,8 +63,9 @@ public class HttpConfirmationParticipant implements Participant {
         if(response.statusCode()==401) { synchronized(this) { token=null; } }
         if(ledger && response.statusCode()==404) return null;
         if(response.statusCode()!=200 && response.statusCode()!=201 && response.statusCode()!=409) throw new IllegalStateException("CU15_RESULT_UNKNOWN");
-        if(response.body().length()>65536) throw new IllegalStateException("CU15_INVALID_ENVELOPE");
-        return (Map<String,Object>)json.read(response.body(),Map.class);
+        if(response.body().length()>65536) throw new ProtocolFailure(ProtocolProblem.PARTICIPANT_PROTOCOL_INVALID);
+        try { return (Map<String,Object>)json.read(response.body(),Map.class); }
+        catch(RuntimeException malformed) { throw new ProtocolFailure(ProtocolProblem.PARTICIPANT_PROTOCOL_INVALID); }
     }
     @Override public Map<String,Object> lookup(Saga saga, Step step) {
         return request(base(step)+"/internal/cu15/operations/"+step.operationId,null,true);

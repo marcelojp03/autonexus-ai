@@ -57,6 +57,14 @@ class HttpConfirmationParticipantTest {
         status=500;var failure=assertThrows(IllegalStateException.class,()->participant.execute(saga,step));
         assertEquals("CU15_RESULT_UNKNOWN",failure.getMessage());assertFalse(failure.toString().contains("synthetic-unit-fixture"));
     }
+    @Test void malformedSuccessfulResponseExposesOnlyASanitizedProtocolCode() {
+        response="not-json-synthetic-private-detail";
+        var failure=assertThrows(IllegalStateException.class,()->participant.execute(saga,step));
+        assertEquals("PARTICIPANT_PROTOCOL_INVALID",failure.getMessage());
+        assertFalse(failure.toString().contains(response));
+        response="x".repeat(65537);
+        assertEquals("PARTICIPANT_PROTOCOL_INVALID",assertThrows(IllegalStateException.class,()->participant.execute(saga,step)).getMessage());
+    }
     @Test void exactFinanceAndEmployeeActionPaths() {
         Map<String,String> suffix=Map.of("confirm_assignment","assignments/confirm","release_assignment","assignments/release","authorize_quote","quote-links/authorize","cancel_quote_link","quote-links/cancel");
         suffix.forEach((command,path)->{step.command=command;participant.execute(saga,step);String[] split=path.split("/");assertEquals("/internal/cu15/"+split[0]+"/"+saga.id+"/"+split[1],paths.getLast());});

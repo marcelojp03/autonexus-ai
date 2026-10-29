@@ -24,7 +24,7 @@ public final class Confirmation {
         Map<String, Object> body = new TreeMap<>(input);
         for (String key : List.of("operationId","quoteId","employeeId")) body.put(key, Validation.uuid(input.get(key)).toString());
         for (String key : List.of("expectedVersion","quoteVersion","employeeVersion")) body.put(key, number(input.get(key), 1));
-        body.put("requiredSpecialty", Validation.text(input.get("requiredSpecialty"), 1, 80));
+        body.put("requiredSpecialty", specialty(input.get("requiredSpecialty")));
         try {
             Instant start = OffsetDateTime.parse((String) input.get("startsAt")).toInstant();
             Instant end = OffsetDateTime.parse((String) input.get("endsAt")).toInstant();
@@ -32,6 +32,14 @@ public final class Confirmation {
             body.put("startsAt", utc(start)); body.put("endsAt", utc(end));
         } catch (RuntimeException error) { throw OperationsError.invalid(); }
         return body;
+    }
+    private static String specialty(Object value) {
+        if (!(value instanceof String raw)) throw OperationsError.invalid();
+        // Exactly ECMAScript WhiteSpace + LineTerminator, also used by Empleados.
+        // Java's default \s misses NBSP/FEFF; Unicode \s additionally includes NEL.
+        String normalized=raw.replaceAll("[\\x09-\\x0D \\x{00A0}\\x{1680}\\x{2000}-\\x{200A}\\x{2028}\\x{2029}\\x{202F}\\x{205F}\\x{3000}\\x{FEFF}]+", " ");
+        if (normalized.chars().anyMatch(ch -> ch < 32 || ch == 127)) throw OperationsError.invalid();
+        return Validation.text(normalized,1,80);
     }
     public static final class Step {
         public String operationId = UUID.randomUUID().toString();

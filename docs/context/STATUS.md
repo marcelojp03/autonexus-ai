@@ -2,6 +2,8 @@
 
 ## CU15 — implementación y verificación distribuida en curso (2026-10-28)
 
+Revisión independiente inicial de 69de9bd: **no aprobatoria**. Identificó C1 normalización interoperable, C2 replay tras recarga de inicio no registrado, C3 limpieza terminal/logout, C4 diagnóstico de protocolo y G1 carreras reales adicionales. Las correcciones quedaron implementadas y verificadas: Operaciones 120 pruebas; Angular 45; sesión 19 dentro de 28 pruebas Shell; tipos/lint/builds PASS. Unicode O/E real, C2/C3 navegador real 6/6 y G1 real 10/10 PASS. La matriz completa se repitió sobre el código corregido: review-distributed-real-07, 7/7 + ambos navegadores y exit0, con restauración DIRECT comprobada. Falta re-revisión y cierre Git; no se declara aprobada ni publicada todavía. Se conservan todas las evidencias fallidas históricas.
+
 T23 en work/marcelo desde 0fc8f7f. Diseño aprobado mediante compose-next, sin otra rama ni worktree. Operaciones orquesta; Empleados reserva/confirma/libera; Finanzas registra y cancela un vínculo durable/versionado de la cotización aprobada. Aprobar una cotización por sí solo no confirma el servicio. CU05, offline y Flutter no se acreditan.
 
 Políticas aprobadas: habilitación laboral explícita mechanicEnabled (backfill false, sin identidad/roles automáticos), especialidad declarada, intervalo del mismo día de La Paz, vigencia financiera inclusiva validada al autorizar y reserva sin TTL de negocio. Estados, permisos, identidad técnica y compensaciones: contracts/rest/saga.md y docs/compose/spec/cu15-confirmation-saga.md.
@@ -12,9 +14,9 @@ Implementación creada: dominio/puertos/adaptadores propietarios, ledger y Outbo
 | --- | --- |
 | Empleados, unidades / HTTP sintético / tipos / build | PASS 144 + 11; los dobles no acreditan integración |
 | Finanzas, PHPUnit / lint PHP | PASS 24 pruebas y 113 aserciones / 29 archivos |
-| Operaciones, suite / regresión JDBC posterior / package | PASS 111 pruebas + 1 regresión JDBC rojo-verde; JAR reconstruido y desplegado |
+| Operaciones, suite / regresiones / package | PASS 120 pruebas tras corregir C1/C4 y proyección; rojo22/6fallos→verde28focalizadas; package y runtime corregidos |
 | BFF, unidades / HTTP sintético / tipos / build | PASS 54 + 15 |
-| Web focalizada / tipos / builds integrados y Shell | PASS 32 pruebas y compilaciones |
+| Web focalizada / tipos / builds integrados y Shell | PASS 45 de confirmación (27 nuevas + 18 previas), 28 Shell (incluye 19 de sesión); tipos, ESLint focalizado y builds de Operaciones/Shell PASS |
 | Infraestructura real | RabbitMQ 4.2.9-management fijado por digest, topología/identidades por productor; coordinador Keycloak con 7 scopes y solo audiencias E/F, sin realm-management |
 | Migraciones reales | Empleados 1793455200000, Finanzas 2026_10_28_000002 y Operaciones Flyway V7 aplicadas |
 | Finanzas real, scripts/cu15/verify-finance-real.mjs | PASS 6 etapas: identidad, ledger/replay/conflicto, vínculo/cancelación conservadora, carrera SQL y publicación confirmada medida |
@@ -31,7 +33,14 @@ Matriz final: output/cu15/distributed-real6.exit=0 y distributed-2026-10-29T00-2
 
 La regresión conservó la evidencia fallida inicial: CU02 esperaba 14 permisos en vez del catálogo vigente de 23; CU03 esperaba HTTP403 aunque la autorización por campo usa GraphQL200 con FORBIDDEN/statusCode403. Se corrigieron solo los verificadores, comprobando ausencia de datos y denegación tipada; no se cambiaron permisos productivos. Reanudación CU03→CU04→CU11–14 exit0 sin repetir CU01/CU02 ya verdes.
 
-Pendientes de cierre: revisión fresca y resolución de hallazgos; documentación final, integración y push normal verificado de main/work/marcelo. No se declara CU15 completo ni publicado.
+Correcciones de revisión verificadas (artefactos ignorados en output/cu15):
+- review-ops-all.exit=0: 120 pruebas; review-ops-package.exit=0 y despliegue con flags CU15. Unicode real (review-unicode-real.exit=0 y unicode-real-1793237617193.json) confirmó una Saga con NBSP/FEFF/espacio ideográfico normalizados antes de congelar, huellas O/E idénticas y una reserva.
+- c2-c3-post-lint-unit.exit=0: 45 pruebas; sesión 19 y Shell 28 PASS; tipos/ESLint sin errores. review-web-builds2.exit=0: build integrado de Operaciones, pruebas/tipos/build/staging Shell. Detector funcional UI sin hallazgos; sin rediseño.
+- review-recovery-web-02.exit=0 y recovery-web-real-2026-10-29T01-39-51-287Z-b671961b.json: 6/6, dos abortos pre-upstream INYECTADOS; 404 real persistente tras reload, replay manual idéntico, una Saga/efectos en tres bases, limpieza terminal y logout con wizard desmontado; cero errores/fallos inesperados, sin JWT/storage alterado por harness. El intento01 falló por una espera ajena al ShadowRoot y se conserva.
+- g1-boundaries-real-02.exit=0 y boundaries-b0924291-9da3-4031-9b15-2b09c2b89493/{result,postcheck}.json: 10/10 cruces reales (dos financieros y ocho de Empleados), esperas SQL observadas, nueve limpiezas idempotentes y estado final íntegro. Son fronteras E/F, no confirmación global. El intento01 no acreditó los dos waiters en plazo y permanece FAIL.
+- review-distributed-real-07.exit=0 y distributed-2026-10-29T01-43-46-062Z-295b0153.json: matriz 7/7 y ambos navegadores PASS tras los fixes. review-distributed-final07.json verifica DIRECT, readiness200, flag sintético restaurado y un Inbox/una notificación tras retransmisión idéntica. No hubo caídas inesperadas.
+
+Pendientes de cierre: re-revisión de C1–C4/G1 y áreas afectadas; documentación final, integración y push normal verificado de main/work/marcelo. No se declara CU15 completo ni publicado.
 
 
 ## T21 — React y pantallas de recepción, órdenes y cotizaciones (2026-10-28)

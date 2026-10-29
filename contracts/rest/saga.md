@@ -109,6 +109,10 @@ Cada propietario guarda operationId, sagaId, acción, huella canónica, outcome=
 
 No se cambian el payload, expectedVersion, operationId o Saga para superar a ciegas una respuesta perdida. El coordinador conserva el cuerpo preparado antes del envío y registra toda operación nueva explícita que resulte necesaria tras resolver un conflicto.
 
+Normalización interoperable de requiredSpecialty: antes de congelar cuerpo y huella, Operaciones colapsa exactamente WhiteSpace y LineTerminator de ECMAScript a un espacio ASCII y retira bordes; Empleados aplica la misma normalización. Incluye NBSP U+00A0, FEFF y los separadores de espacio Unicode de ese conjunto; U+0085, U+180E y U+200B no se colapsan. Texto resultante de 1–80 unidades UTF-16, sin C0/DEL. No se aplica case folding ni se cambia la especialidad por otra. Ordenar claves JSON por sí solo no garantiza interoperabilidad entre lenguajes.
+
+Diagnóstico de conciliación: el paso conserva PARTICIPANT_RESULT_UNKNOWN para transporte/resultado no observado, PARTICIPANT_FINGERPRINT_MISMATCH si la huella durable difiere y PARTICIPANT_PROTOCOL_INVALID para un envelope inválido. Los dos últimos requieren intervención visible y siguen siendo inciertos: no son rejected, no autorizan compensación y no cambian el comando congelado. La proyección global muestra el motivo de negocio original si existe; en otro caso muestra el motivo saneado del paso actual. No publica respuesta remota, huella interna, tokens ni excepciones.
+
 ## Compensaciones inversas
 
 Primero resolver cualquier paso dispatched/uncertain. Después de rechazo durable:

@@ -250,3 +250,16 @@ completos. Esta consolidación documental conserva esa separación histórica y 
 declara cierre: la matriz real6 ya está acreditada; el principal mantiene la evidencia de
 regresión, revisión y cierre y cualquier defecto de producción en STATUS/especificación.
 El harness no corrige la app.
+
+## Regresiones posteriores a la revisión C1–C4/G1
+
+No se repiten ni se reinterpretan los intentos fallidos. La nueva evidencia del código corregido es:
+
+| Verificador versionado | Comando desde raíz del worktree | Evidencia observada |
+| --- | --- | --- |
+| Unicode entre propietarios | node scripts/cu15/verify-unicode-real.mjs --run | review-unicode-real.exit=0: normalización antes de freeze, huellas O/E idénticas, una reserva y Saga confirmed |
+| Petición perdida antes de registro / logout | node scripts/cu15/verify-recovery-web-real.mjs --run | review-recovery-web-02.exit=0: 6/6 con dos abortos INYECTADOS, reload404→replay manual idéntico, efecto único, limpieza terminal/logout, cero fallos inesperados |
+| Cruces SQL propietarios | node scripts/cu15/verify-boundaries-real.mjs --run | g1-boundaries-real-02.exit=0: 10/10 y nueve limpiezas idempotentes, waiters reales observados y postcheck SQL PASS |
+| Matriz global corregida | node scripts/cu15/distributed-real.mjs --run --browser-proof --max-minutes=20 | review-distributed-real-07.exit=0: 7/7 y ambos navegadores, DIRECT restaurado, flag sintético y Outbox duplicado comprobados |
+
+Ejecutar exclusivamente con Node22.22.3, en el entorno local propietario ya preparado y bajo el supervisor desacoplado indicado arriba. No ejecutar estos verificadores al mismo tiempo: la matriz reinicia el coordinador. Los casos directos E/F de G1 no acreditan confirmación global ni entrega RabbitMQ; la matriz global sí mide sus eventos. Los abortos y barreras se etiquetan INYECTADO; la publicación no sustituye el commit del propietario. Re-revisión y cierre se registran en STATUS y la especificación.

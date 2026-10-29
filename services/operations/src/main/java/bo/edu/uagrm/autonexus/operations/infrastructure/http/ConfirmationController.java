@@ -34,7 +34,9 @@ public class ConfirmationController {
     public static Map<String,Object> progress(Saga saga) {
         Map<String,Object> dto=new LinkedHashMap<>();
         dto.put("sagaId",saga.id); dto.put("orderId",saga.orderId); dto.put("status",saga.status); dto.put("phase",saga.phase);
-        dto.put("version",saga.version); dto.put("orderVersion",saga.orderVersion); dto.put("nextAttemptAt",saga.terminal()?null:saga.nextAttemptAt); dto.put("errorCode",saga.errorCode);
+        dto.put("version",saga.version); dto.put("orderVersion",saga.orderVersion); dto.put("nextAttemptAt",saga.terminal()?null:saga.nextAttemptAt);
+        String activeError=saga.steps.stream().filter(step->step.command.equals(saga.phase)).map(step->step.errorCode).filter(Objects::nonNull).findFirst().orElse(null);
+        dto.put("errorCode",saga.errorCode!=null?saga.errorCode:activeError);
         dto.put("operationId",saga.input.get("operationId"));
         for(String k:List.of("quoteId","quoteVersion","employeeId","employeeVersion","requiredSpecialty","startsAt","endsAt")) dto.put(k,saga.input.get(k));
         dto.put("assignmentId",saga.step("reserve_assignment").resource()==null?null:saga.step("reserve_assignment").resource().get("id"));

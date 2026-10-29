@@ -115,6 +115,8 @@ En mf-operations se selecciona orden, cotización aprobada/versionada, mecánico
 
 No se repite start al hacer polling, doble clic o reload. Estados en curso/recuperación/compensación/rechazo/confirmed explícitos, con pasos y códigos saneados. Solo confirmed devuelve éxito de negocio y referencias definitivas. La aprobación de cotización sigue siendo una decisión financiera, no una confirmación de servicio.
 
+Recuperación local: antes del envío se conserva el comando inmutable con operationId, orden y subject en sessionStorage (máximo de lectura 2 KiB, campos cerrados y valores validados). Un GET404 tras recarga no acredita rechazo ni autoriza otra intención: permite el replay manual del mismo comando. La metadata se elimina al concluir o cerrar/perder sesión, también si el wizard ya se desmontó. El desmontaje normal y dispose del propietario no son logout y no destruyen una intención recuperable; no se guardan tokens.
+
 ### [S2.10] Verificación y revisión
 
 Primero pruebas focalizadas de dominio, repositorios y HTTP con fallos controlados; después SQL/RabbitMQ/Keycloak reales. Nunca mocks como evidencia final. Matriz obligatoria:
@@ -158,3 +160,6 @@ Revisión fresca tras terminar verificación; si la infraestructura del revisor 
 - La prueba de recuperación debe consultar el motivo del paso incierto, no exigir un rechazo global inexistente. Autenticar en Shell antes del deep-link evitó cancelar assets Angular durante OIDC sin relajar aserciones.
 - La ausencia de readiness no prueba que el puerto esté libre: el harness espera TCP ECONNREFUSED antes de relanzar. La corrida final bajo supervisor e hijo detached/windowsHide completó finally/exit0, sin inferir por ello la causa del cierre Windows previo.
 - RabbitMQ sufrió una caída no inyectada exit137/OOMKilled=false en una corrida fallida; se recuperó el contenedor propio conservando volumen/privados. distributed-real6 completó 7/7 más ambos estados de navegador sin caída inesperada, y final-check6 verificó restauración directa y flag sintético.
+
+- Revisión independiente de 69de9bd no aprobatoria: C1 normalización de cadenas entre Java/TypeScript, C2 recuperación del inicio anterior al registro, C3 limpieza de metadata y C4 diagnóstico de protocolo, más evidencia G1 insuficiente. Se corrigieron con regressiones rojo/verde (120 Java, 45 Angular, 19 sesión; Shell28), tipos/lint/builds, Unicode real, navegador C2/C3 real6/6 y cruces propietarios G1 real10/10.
+- La matriz se repitió tras los fixes (review-distributed-real-07: 7/7 y ambos navegadores, exit0, restauración directa). Los abortos pre-upstream y barreras G1 son inyecciones identificadas, no resultados ficticios. Re-revisión de las áreas afectadas pendiente antes de T8.

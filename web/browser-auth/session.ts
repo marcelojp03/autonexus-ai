@@ -78,8 +78,13 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
   function fail() {
     if (disposed || current.phase === 'anonymous' || current.phase === 'error') return;
     stop();
+    clearConfirmationRecovery();
     publish('error', 'La sesión terminó o no pudo renovarse. Ingresa nuevamente.');
     sdk.clearToken();
+  }
+  function clearConfirmationRecovery() {
+    const subject = current.identity?.subject;
+    if (subject) { try { sessionStorage.removeItem('cu15:pending:' + subject); } catch {} }
   }
   async function refresh() {
     const version = epoch;
@@ -114,6 +119,7 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
       if (disposed || current.phase === 'anonymous') return;
       loggingOut = true;
       stop();
+      clearConfirmationRecovery();
       publish('anonymous');
       try { sessionStorage.removeItem(storageKey); } catch {}
       try {
@@ -205,6 +211,6 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
         if (!disposed && version === epoch) fail();
       }
     },
-    dispose() { disposed = true; stop(); publish('anonymous'); listeners.clear(); sdk.onAuthLogout = undefined; sdk.onAuthRefreshError = undefined; sdk.onTokenExpired = undefined; sdk.clearToken(); },
+    dispose() { disposed = true; stop(); listeners.clear(); publish('anonymous'); sdk.onAuthLogout = undefined; sdk.onAuthRefreshError = undefined; sdk.onTokenExpired = undefined; sdk.clearToken(); },
   };
 }

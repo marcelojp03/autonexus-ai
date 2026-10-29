@@ -110,6 +110,34 @@ class RunConfirmationTest {
     @Test void malformedResultIsUnknownNotARejection() {
         remote.corrupt=true; tick(); assertEquals("recovery_pending",store.state.status); assertEquals("reserve_assignment",store.state.phase);
     }
+    @Test void fingerprintMismatchIsVisibleAndKeepsTheFrozenCommandForReconciliation() {
+        remote.corrupt=true; tick();
+        Step first=store.state.step("reserve_assignment");
+        String body=json.write(first.body), operation=first.operationId;
+        assertEquals("PARTICIPANT_FINGERPRINT_MISMATCH",first.errorCode);
+        tick();
+        assertEquals("recovery_pending",store.state.status);
+        assertEquals("PARTICIPANT_FINGERPRINT_MISMATCH",store.state.step("reserve_assignment").errorCode);
+        assertEquals(operation,store.state.step("reserve_assignment").operationId);
+        assertEquals(body,json.write(store.state.step("reserve_assignment").body));
+        assertEquals(1,remote.commands.size()); assertFalse(store.finished);
+    }
+    @Test void invalidDurableEnvelopeIsVisibleWithoutInventingARejection() {
+        remote.loseResponse=true; tick();
+        assertEquals("PARTICIPANT_RESULT_UNKNOWN",store.state.step("reserve_assignment").errorCode);
+        remote.ledger.get(store.state.step("reserve_assignment").operationId).put("committedAt","not-a-timestamp");
+        tick();
+        assertEquals("recovery_pending",store.state.status);
+        assertEquals("PARTICIPANT_PROTOCOL_INVALID",store.state.step("reserve_assignment").errorCode);
+        assertNull(store.state.errorCode); assertEquals(1,remote.commands.size());
+    }
+    @Test void protocolFailureDuringCompensationKeepsTheOriginalBusinessReason() {
+        remote.reject.add("authorize_quote"); tick(); tick(); remote.corrupt=true; tick();
+        assertEquals("compensation_pending",store.state.status);
+        assertEquals("BUSINESS_REJECTED",store.state.errorCode);
+        assertEquals("PARTICIPANT_FINGERPRINT_MISMATCH",store.state.step("release_assignment").errorCode);
+        assertFalse(store.finished);
+    }
     @Test void financialRejectionReleasesOnlyKnownReservation() {
         remote.reject.add("authorize_quote"); tick(); tick(); assertEquals("release_assignment",store.state.phase);
         tick(); assertEquals("reject_order",store.state.phase); tick(); assertEquals("rejected",store.state.status);
@@ -150,5 +178,21 @@ class RunConfirmationTest {
         var body=input(); body.put("startsAt","2026-11-01T08:00:00-04:00"); assertEquals("2026-11-01T12:00:00.000Z",Confirmation.start(body).get("startsAt"));
         assertEquals(json.hash(Map.of("a",List.of(Map.of("z",1,"b",2)),"c",3)),json.hash(Map.of("c",3,"a",List.of(Map.of("b",2,"z",1)))));
         assertNotEquals(json.hash(List.of(1,2)),json.hash(List.of(2,1)));
+    }
+    @Test void specialtyUsesExactlyEcmaScriptWhitespaceBeforeFreezingTheCommand() {
+        int[] whitespace={9,10,11,12,13,32,160,0x1680,0x2000,0x2001,0x2002,0x2003,0x2004,0x2005,0x2006,0x2007,0x2008,0x2009,0x200a,0x2028,0x2029,0x202f,0x205f,0x3000,0xfeff};
+        for(int codepoint:whitespace) {
+            String space=Character.toString(codepoint); var body=input();
+            body.put("requiredSpecialty",space+"Motor"+space+space+"Diesel"+space);
+            assertEquals("Motor Diesel",Confirmation.start(body).get("requiredSpecialty"),Integer.toHexString(codepoint));
+        }
+        for(int codepoint:new int[]{0x85,0x180e,0x200b}) {
+            String specialty="Motor"+Character.toString(codepoint)+"Diesel"; var body=input(); body.put("requiredSpecialty",specialty);
+            assertEquals(specialty,Confirmation.start(body).get("requiredSpecialty"));
+        }
+    }
+    @Test void invalidParticipantSpecialtyIsRejectedBeforeCreatingTheSaga() {
+        var body=input(); body.put("requiredSpecialty","Motor"+Character.toString(127)+"Diesel");
+        assertThrows(OperationsError.class,()->Confirmation.start(body));
     }
 }
