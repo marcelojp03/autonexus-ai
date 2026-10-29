@@ -27,7 +27,7 @@ export async function main(args = process.argv.slice(2)) {
     const role = (await transport.api('employees', '/security/roles', 'POST', state.roleCommand)).role;
     assert.equal(role.name, account.roleName); assert.equal(role.syncStatus, 'synced');
     const marker = 'PROOF-' + suffix.toUpperCase();
-    state.employeeCommand = { operationId: randomUUID(), firstName: 'Control', lastName: marker, document: marker, email: marker.toLowerCase() + '@example.invalid', phone: '+59170000000', jobTitle: 'Control de autorización', startDate: civilDate(), specialties: [], mechanicEnabled: false, access: { requested: true } }; ledger.save();
+    state.employeeCommand = { operationId: randomUUID(), firstName: 'Control', lastName: marker, document: marker, email: marker.toLowerCase() + '@example.invalid', phone: '+59170000000', jobTitle: 'Mecánico de prueba', startDate: civilDate(), specialties: ['Diagnóstico general'], mechanicEnabled: true, access: { requested: true } }; ledger.save();
     employee = (await transport.api('employees', '/employees', 'POST', state.employeeCommand)).employee;
     for (let i = 0; i < 120 && employee.access.status !== 'synced'; i++) { await pause(500); employee = await transport.api('employees', '/employees/' + employee.id); }
     assert.equal(employee.access.status, 'synced');

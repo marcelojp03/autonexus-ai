@@ -3,9 +3,18 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { chromiumRuntime, relayAddress, validateLedger, minimalWork, restResult, graphDenied, sanitizedError } from './acceptance.mjs';
+import { matchesGraphResponse, chromiumRuntime, relayAddress, validateLedger, minimalWork, restResult, graphDenied, sanitizedError } from './acceptance.mjs';
 
 const publicOrigin = 'http://127.0.0.1:4288';
+test('UI response correlation rejects automatic or stale filter requests', () => {
+  const response = (variables, field = 'myAgenda') => ({ url: () => publicOrigin + '/graphql', request: () => ({ method: () => 'POST', postDataJSON: () => ({ query: field + '(from:$from,to:$to){total}', variables }) }) });
+  const expected = { from: '2026-11-05', to: '2026-11-05', priority: undefined, employeeId: undefined };
+  assert.equal(matchesGraphResponse(response({ from: '2026-10-29', to: '2026-10-29' }), publicOrigin, 'myAgenda', expected), false);
+  assert.equal(matchesGraphResponse(response({ from: expected.from, to: expected.to }), publicOrigin, 'myAgenda', expected), true);
+  assert.equal(matchesGraphResponse(response({ ...expected, priority: 'alta' }), publicOrigin, 'myAgenda', expected), false);
+  assert.equal(matchesGraphResponse(response(expected, 'teamAgenda'), publicOrigin, 'myAgenda', expected), false);
+  assert.equal(matchesGraphResponse(response({ ...expected, employeeId: 'other' }), publicOrigin, 'myAgenda', expected), false);
+});
 function ledger() {
   const state = { version: 1, completedAt: '2026-10-29T12:00:00Z', publicOrigin, date: '2026-11-05', accounts: {}, steps: {} };
   for (const key of ['mechanicA', 'mechanicB', 'chief']) {

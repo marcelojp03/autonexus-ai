@@ -18,6 +18,14 @@ const rows = 'anx-agenda nz-table tbody tr';
 const consultButton = 'anx-agenda form.toolbar:has(input[name=from]) button[type=submit]';
 const normalize = value => value.replace(/\s+/gu, ' ').trim();
 
+export function matchesGraphResponse(response, origin, field, expectedVariables = {}) {
+  const request = response.request();
+  if (response.url() !== origin + '/graphql' || request.method() !== 'POST') return false;
+  const body = request.postDataJSON();
+  const queryField = new RegExp(String.fromCharCode(92) + 'b' + field + String.fromCharCode(92) + 's*' + String.fromCharCode(92) + '(');
+  return queryField.test(body?.query ?? '') && Object.entries(expectedVariables).every(([key, value]) => (body?.variables?.[key] ?? undefined) === (value ?? undefined));
+}
+
 export function chromiumRuntime(makeRequire = createRequire) {
   const application = makeRequire('/app/web/mf-employees/package.json');
   // Playwright is a locked peer of this direct dev dependency under pnpm.
@@ -222,12 +230,8 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
   const contexts = [];
   const faults = { console: 0, page: 0, network: 0, http: 0, transport: 0 };
   const origin = state.publicOrigin;
-  async function graphAction(page, field, action) {
-    const response = page.waitForResponse(response => {
-      const request = response.request();
-      return response.url() === origin + '/graphql' && request.method() === 'POST' &&
-        new RegExp('\\b' + field + '\\s*\\(').test(request.postDataJSON()?.query ?? '');
-    });
+  async function graphAction(page, field, action, expectedVariables = {}) {
+    const response = page.waitForResponse(response => matchesGraphResponse(response, origin, field, expectedVariables));
     const [result] = await Promise.all([response, action()]);
     equal(result.status(), 200, 'UI_GRAPHQL_STATUS');
     const body = await result.json(); check(!body.errors && body.data?.[field], 'UI_GRAPHQL_FAILED');
@@ -314,7 +318,7 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
     await page.locator('anx-agenda input[name=to]').fill(state.date);
     await page.locator('anx-agenda select[name=priority]').selectOption(priority);
     if (path === teamPath) await page.locator('anx-agenda select[name=employeeId]').selectOption(employeeId);
-    const result = await graphAction(page, path === teamPath ? 'teamAgenda' : 'myAgenda', () => page.locator(consultButton).click());
+    const result = await graphAction(page, path === teamPath ? 'teamAgenda' : 'myAgenda', () => page.locator(consultButton).click(), { from: state.date, to: state.date, priority: priority || undefined, employeeId: employeeId || undefined });
     minimalPage(result); equal(result.from, state.date, 'UI_DATE_MISMATCH'); equal(result.to, state.date, 'UI_DATE_MISMATCH');
     await page.locator('anx-agenda > p').filter({ hasText: state.date }).waitFor({ state: 'visible' });
     return result;
@@ -387,7 +391,7 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
       await capture(page, 'chief-team');
       await page.locator('anx-agenda details summary').click();
       await page.locator('anx-agenda input[name=search]').fill(jobs[0].employee.fullName);
-      const staff = await graphAction(page, 'agendaTeamEmployees', () => page.locator('anx-agenda form.toolbar:has(input[name=search]) button[type=submit]').click());
+      const staff = await graphAction(page, 'agendaTeamEmployees', () => page.locator('anx-agenda form.toolbar:has(input[name=search]) button[type=submit]').click(), { search: jobs[0].employee.fullName, offset: 0 });
       check(staff.items.some(employee => employee.id === jobs[0].employee.id), 'UI_STAFF_MISSING');
       for (const employee of staff.items) keys(employee, new Set(['id', 'fullName', 'status']));
       const filtered = await consult(page, teamPath, '', jobs[0].employee.id);
