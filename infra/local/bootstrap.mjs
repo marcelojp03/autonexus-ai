@@ -141,9 +141,15 @@ export async function provisionRabbit(state) {
 }
 export async function provision(options = {}) {
   const state = init(options);
+  const identityMarker = resolve(options.stateDir ?? '/state', 'identity-ready.json');
+  const markerBytes = json({ version: 1, publicOrigin: state.publicOrigin });
+  if (existsSync(identityMarker)) ensure(readFileSync(identityMarker, 'utf8') === markerBytes, 'IDENTITY_MARKER_DRIFT');
   for (const [stage, action] of [
     ['DATABASES', () => provisionDatabases(state)],
-    ['IDENTITY', () => provisionIdentity(state, options.configDir ?? '/config')],
+    ['IDENTITY', async () => {
+      await provisionIdentity(state, options.configDir ?? '/config', existsSync(identityMarker));
+      preserve(identityMarker, markerBytes);
+    }],
     ['BROKER', () => provisionRabbit(state)],
   ]) {
     try { await action(); console.log('PASS bootstrap stage ' + stage); }

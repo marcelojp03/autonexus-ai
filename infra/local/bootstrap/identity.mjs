@@ -11,7 +11,12 @@ function policy(actual, expected, code) {
   ensure(Object.entries(expected).every(([key, value]) => equal(actual[key], value)), code);
 }
 const audienceMapper = audience => ({ name: audience, protocol: 'openid-connect', protocolMapper: 'oidc-audience-mapper', config: { 'included.client.audience': audience, 'access.token.claim': 'true', 'id.token.claim': 'false', 'introspection.token.claim': 'true' } });
-export async function provisionIdentity(state, configDir) {
+export function canReconcileInitialDefaults(defaults, accountId, initialized) {
+  return Array.isArray(defaults) && (defaults.length === 0 || (!initialized && defaults.every(role =>
+    (role.clientRole === false && ['offline_access', 'uma_authorization'].includes(role.name)) ||
+    (role.clientRole === true && role.containerId === accountId && ['manage-account', 'view-profile'].includes(role.name)))));
+}
+export async function provisionIdentity(state, configDir, initialized = false) {
   const token = await retry(async () => {
     const response = await fetch(internal + '/realms/master/protocol/openid-connect/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'password', client_id: 'admin-cli', username: 'bootstrap', password: state.secrets.keycloak }), signal: AbortSignal.timeout(5000), redirect: 'error' });
     ensure(response.status === 200, 'IDP_NOT_READY');
@@ -32,7 +37,8 @@ export async function provisionIdentity(state, configDir) {
   const realm = await api('');
   if (realm.defaultRole) {
     const defaults = await api('/roles-by-id/' + realm.defaultRole.id + '/composites');
-    ensure(!existingRealm || defaults.length === 0, 'DEFAULT_ROLE_POLICY_DRIFT');
+    const account = (await api('/clients?clientId=account'))[0];
+    ensure(canReconcileInitialDefaults(defaults, account?.id, initialized), 'DEFAULT_ROLE_POLICY_DRIFT');
     if (defaults.length) await api('/roles-by-id/' + realm.defaultRole.id + '/composites', 'DELETE', defaults);
   }
   async function client(definition) {
