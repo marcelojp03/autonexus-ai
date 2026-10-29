@@ -228,7 +228,16 @@ async function integrationProbes(state, admin, stage) {
 
 async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
   const contexts = [];
-  const faults = { console: 0, page: 0, network: 0, http: 0, transport: 0 };
+  const faults = { console: 0, page: 0, network: 0, http: 0, transport: 0, details: [] };
+  let currentAction = 'browser-initializing';
+  const observedStage = stage;
+  stage = async (name, action) => { currentAction = name; return observedStage(name, action); };
+  const locationKind = value => {
+    try {
+      const path = new URL(value).pathname;
+      return path.startsWith('/identity/') ? 'identity' : path === '/auth/callback' ? 'callback' : path === '/graphql' ? 'graphql' : path.startsWith('/mfs/') ? 'microfrontend-asset' : path.startsWith('/assets/') ? 'shell-asset' : 'shell';
+    } catch { return 'unknown'; }
+  };
   const origin = state.publicOrigin;
   async function graphAction(page, field, action, expectedVariables = {}) {
     const response = page.waitForResponse(response => matchesGraphResponse(response, origin, field, expectedVariables));
@@ -247,11 +256,13 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
       catch { return false; }
     };
     page.on('console', message => {
+      if (message.type() === 'error') faults.details.push({ kind: 'console', action: currentAction, authenticating: handle.authenticating, location: locationKind(message.location().url), networkCode: message.text().match(/net::[A-Z_]+/)?.[0] ?? 'OTHER', line: message.location().lineNumber });
       if (message.type() === 'error' && !(handle.authenticating && /net::ERR_ABORTED/.test(message.text()) &&
         isOidc(message.location().url || origin))) faults.console++;
     });
     page.on('pageerror', () => faults.page++);
     page.on('requestfailed', request => {
+      faults.details.push({ kind: 'network', action: currentAction, authenticating: handle.authenticating, location: locationKind(request.url()), resource: request.resourceType(), networkCode: request.failure()?.errorText?.match(/^net::[A-Z_]+$/)?.[0] ?? 'WITHHELD' });
       if (!(handle.authenticating && isOidc(request.url()) && request.failure()?.errorText === 'net::ERR_ABORTED')) faults.network++;
     });
     page.on('request', request => {
@@ -261,7 +272,7 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
           url.pathname.startsWith('/mfs/') || url.pathname.startsWith('/assets/') || url.pathname === '/runtime-config.js')) faults.transport++;
       }
     });
-    page.on('response', response => { if (response.status() >= 400) faults.http++; });
+    page.on('response', response => { if (response.status() >= 400) { faults.http++; faults.details.push({ kind: 'http', action: currentAction, location: locationKind(response.url()), status: response.status() }); } });
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     await login(handle, account);
     return handle;
@@ -339,7 +350,9 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
     for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
       await page.setViewportSize({ width, height });
       const file = resolve(evidenceDir, key + '-' + name + '.png');
-      await page.screenshot({ path: file, fullPage: true, mask: [page.locator('#session-identity')] }); chmodSync(file, 0o600);
+      if (process.env.ACCEPTANCE_CAPTURE !== 'false') {
+        await page.screenshot({ path: file, fullPage: true, mask: [page.locator('#session-identity')] }); chmodSync(file, 0o600);
+      }
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
   }
@@ -418,7 +431,9 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
       await logout(handle);
     });
     await stage('browser-console-page-network-and-graphql-transport', async () => {
-      for (const [kind, count] of Object.entries(faults)) equal(count, 0, 'BROWSER_' + kind.toUpperCase() + '_FAILURES');
+      const { privateWrite } = await import('./demo.mjs');
+      privateWrite(resolve(evidenceDir, 'browser-diagnostics.json'), faults);
+      for (const [kind, count] of Object.entries(faults)) if (typeof count === 'number') equal(count, 0, 'BROWSER_' + kind.toUpperCase() + '_FAILURES');
     });
   } finally {
     await Promise.all(contexts.map(context => context.close()));
@@ -426,7 +441,7 @@ async function browserProbes(browser, state, admin, jobs, evidenceDir, stage) {
 }
 
 export async function run({ configDir = '/run/config', stateDir = '/demo-state', evidenceDir = '/evidence' } = {}) {
-  const report = { status: 'FAIL', stages: [], limitations: [
+  const report = { status: 'FAIL', captureMode: process.env.ACCEPTANCE_CAPTURE === 'false' ? 'retained-unchanged-ui' : 'fresh-batch', stages: [], limitations: [
     { stage: 'visual-pixels-and-focus', status: 'NOT_APPROVED', code: 'HUMAN_VISUAL_REVIEW_REQUIRED' },
     { stage: 'seed-repeat-persistence-recovery', status: 'NOT_RUN', code: 'MAIN_AGENT_SEPARATE_ACCEPTANCE' },
     { stage: 'revocation-inactivity-dependency-outage-offline', status: 'NOT_RUN', code: 'BASELINE_ONLY_NO_BUSINESS_MUTATION' },
