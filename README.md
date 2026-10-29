@@ -47,7 +47,25 @@ Una cotización aprobada no es todavía un servicio confirmado. La coordinación
 
 ## Uso local
 
-La preparación y las comprobaciones del entorno integral están en la [guía de Docker Compose](docs/deployment/local-compose.md). La configuración pública se separa de las credenciales privadas; las cuentas de preparación/demo no se publican como contraseñas en el repositorio.
+Necesitás Docker con Compose y acceso a internet para descargar imágenes y paquetes. Desde la raíz de una copia del repositorio, ejecutá:
+
+```sh
+docker compose --env-file .env.example --profile demo up --build -d
+docker compose --env-file .env.example --profile demo ps -a
+docker compose --env-file .env.example --profile demo logs --no-log-prefix demo
+```
+
+Abrí **http://127.0.0.1:4280** cuando las aplicaciones estén saludables y `demo` termine con código `0`. No necesitás instalar Java, Node.js ni PHP en el host. La primera compilación puede tardar varios minutos.
+
+Las cuentas se generan una sola vez y se conservan en volúmenes privados; no hay contraseñas públicas comunes. La [guía de Docker Compose](docs/deployment/local-compose.md) explica cómo exportarlas en privado, elegir la fecha de los trabajos demo, cambiar el puerto y detener el entorno conservando datos. El perfil `demo` es opcional y explícito: sin él no se crean datos de muestra.
+
+Para detener este entorno sin borrar sus datos:
+
+```sh
+docker compose --env-file .env.example stop
+```
+
+La configuración pública se separa de las credenciales privadas. No compartas archivos de cuentas ni elimines los volúmenes para reiniciar.
 
 La propuesta para llevar el sistema a proveedores administrados está en [preparación remota y portabilidad](docs/deployment/cloud-portability.md). No representa un despliegue cloud realizado.
 
@@ -59,4 +77,4 @@ La agenda de esta entrega es web y online. La consulta offline, Flutter, el regi
 
 [Arquitectura y alcance](docs/context/PROJECT.md) · [Casos de uso](docs/use-cases) · [Contratos](contracts) · [Decisiones técnicas](docs/decisions) · [Evidencia técnica](docs/context/STATUS.md)
 
-La documentación técnica conserva las verificaciones y antecedentes fuera de esta presentación.
+La documentación técnica conserva las verificaciones y antecedentes fuera de esta presentación. El [README técnico anterior](docs/archive/README-before-local-compose.md) se conserva como antecedente histórico; sus instrucciones antiguas no reemplazan la guía vigente.

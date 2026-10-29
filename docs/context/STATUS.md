@@ -1,6 +1,6 @@
 # Estado comprobado
 
-## Infraestructura local reproducible — implementación en curso (2026-10-29)
+## Infraestructura local reproducible — aceptación funcional verificada, revisión en curso (2026-10-29)
 
 Se continúa T25 conservando CU05 abierto solo por G2 visual: la consulta de secuencia fue descartada sin respuesta y compose-next permite seguir la alternativa recomendada no destructiva. Ninguna publicación ni entrega completa se acredita.
 
@@ -8,7 +8,19 @@ Creado: Compose raíz de servicios reales, volúmenes/red por proyecto y solo we
 
 Verificación previa al primer arranque: Compose config --quiet PASS; tres pruebas estructurales de Compose PASS; bootstrap en Node22.22.3 11 PASS y1 comprobación POSIX omitida por Windows; sesión/rutas35 PASS y tipos Shell/Empleados PASS tras respetar noPropertyAccessFromIndexSignature. Subagente reporta E55/BFF22 focalizadas, tipos/build PASS, F25unitarias95aserciones y3readiness9aserciones PASS; no se convierten en integración real. Java21 verificado por principal: AccessTokenDecoderTest21 +TransportConfigurationTest4,25 PASS, output/stack/t25-ops-transport-01.exit=0.
 
-Pendiente: build y arranque desde copia limpia con proyecto aislado, provisión real repetida, demo por APIs/Saga, login/navegación, reinicio/persistencia/recuperación, métricas, README final y revisión integral. Los recursos antiguos permanecen intactos.
+Aceptación posterior sobre fuente `21bbcd8e67765782bef033b098a5bbaac560acde`: copia pública sin `.git`, dependencias, builds ni secretos host; proyecto `autonexus-clean-verified`, puerto 4282, volúmenes nuevos. Una única orden `docker compose --env-file .env.example --profile demo up --build -d` dejó web saludable y demo terminada con código 0 en 320,363 s, con caché normal habilitada (no build en frío). Evidencia ignorada: `output/stack/t25-fresh-verified-01.json`, log y `.exit=0`. RabbitMQ sin reinicios en esta corrida. El proyecto parcial `autonexus-local` también reanudó sin reset ni regeneración (`t25-resumed-default-01.json`, `.exit=0`).
+
+Verificador Chromium real sobre el proyecto nuevo: `t25-browser-fresh-01.exit=0`; diagnóstico saneado con consola/página/red/HTTP/transporte todos en 0. Agendas y detalle A/B/jefe, filtros/fechas La Paz bajo Pacific/Auckland, ataques REST/GraphQL, recargas y navegación Angular→React→Angular. Capturas enmascaradas generadas en escritorio/móvil; **G2 visual CU05 sigue bloqueado** porque los canales disponibles solo devuelven texto/enlaces, sin píxeles inspeccionables. Ni la corrida funcional ni el mensaje «Image viewed successfully» acreditan revisión visual.
+
+Repetición conservadora (`t25-repeat-verify-01.exit=0`): credenciales, comandos, IDs y edición posterior de cliente preservados. Reinicio de diez contenedores propios (`t25-full-restart-01.exit=0` y `t25-full-restart-result.json`): cinco credenciales/subjects y fingerprint canónico conservados. Caídas E/F deliberadas, etiquetadas INYECTADO, probaron error explícito sin falso vacío y recuperación de la misma Saga tras reiniciar O (`t25-recovery-01.exit=0`). Lecturas SQL readonly por propietario comprobaron referencias O/E/F, efectos únicos y entrega Outbox/Inbox/notificación; no son una transacción distribuida ni lectura humana.
+
+Regresión focalizada `t25-regression-01.exit=0`, incluidos 34 HTTP BFF y 5 HTTP financieros/46 aserciones. Nueva ejecución Node22 de los seis `infra/local/*.test.mjs`: 45 PASS, 0 FAIL, 2 omitidas en Windows; la ejecución Linux previa de bootstrap/transporte/política verificó permisos POSIX. `docker compose ... config --quiet` PASS. Historial fallido conservado: plataforma PHP/extensiones, COPY Angular, permisos F, temporales Nginx, timeout inicial IdP y cookie RabbitMQ; no se reinterpretan como éxitos.
+
+Medición aproximada en Linux x86-64 (12 CPU, 15,4 GiB para Docker): muestra de diez contenedores tras calentamiento, 1457 MiB RAM y 24,76 % CPU acumulada. Corrección C2: 26 muestras durante 89,366 s y reinicio controlado de O del proyecto aislado registraron máximos observados de 1836 MiB y 522,95 % CPU agregada, con salud final de nueve aplicaciones y publisher financiero activo (`t25-peak-01.json`, `.exit=0`). Se excluyen daemon/build/host/entornos ajenos. No son promedios, requisitos mínimos ni máximos absolutos: el muestreo omite posibles transitorios y no mide el pico de compilación. Tamaños lógicos y alcance en `t25-resources-01.json` y guía local; no se purgó caché para producir cifras.
+
+Revisión independiente general-50: inicialmente no aprobatoria por C1 (exclusiones privadas incompletas del contexto Docker) y C2 (pico no medido), más N1 (bloque vacío en Finance). C1 tiene regresión BuildKit real con archivos sintéticos: rojo antes del fix, verde después, sin secretos reales ni exposición observada; preserva fuentes, contratos y lockfiles. Exclusiones y N1 corregidos, C2 medido como arriba. Re-revisión pendiente; no se sustituye por el dictamen inicial.
+
+README público y guías contienen comandos observados, datos académicos confirmados, cuentas exportadas solo en privado y propuesta cloud sin desplegar. Revisión independiente T25 en curso; no se acredita entrega final ni publicación hasta su cierre. Los recursos antiguos permanecen intactos; CU05 conserva su bloqueo visual separado.
 
 ## Revisión CU05 — F1/G1 resueltos; G2 visual bloqueado (2026-10-29)
 

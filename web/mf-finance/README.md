@@ -28,10 +28,7 @@ El cliente se provisiona de forma idempotente con infra/keycloak/scripts/provisi
 
 Para el conjunto implementado se usa el Compose de la raíz y su [guía de despliegue local](../../docs/deployment/local-compose.md): Shell y los tres microfrontends se compilan dentro de Docker. No se necesitan Node/pnpm ni builds previos en el host para ese recorrido.
 
-El Dockerfile heredado de esta carpeta fue corregido para contexto de raíz, Node22.22.3, pnpm12.6.0 y pnpm-lock.yaml. Compila salidas standalone/integrated separadas; no usa npm ci ni package-lock. Build ejecutado desde raíz con salida0:
-
-```sh
-```
+El Dockerfile heredado de esta carpeta fue corregido para contexto de raíz, Node22.22.3, pnpm12.6.0 y pnpm-lock.yaml. Compila salidas standalone/integrated separadas; no usa npm ci ni package-lock. Su build se ejecutó desde la raíz con salida 0. Para el recorrido integral verificado se usan los comandos de la guía enlazada.
 
 Ese resultado acredita compilación/imagen, no un segundo despliegue SSO independiente. El Compose integral expone solo el Shell. Para ejecutar la imagen heredada por separado también hace falta configuración legible en /run/config/service.env y provisión del cliente OIDC independiente; ese modo no se acredita en la aceptación Docker integral. Los pasos nativos siguientes corresponden al modo de desarrollo ya documentado.
 
