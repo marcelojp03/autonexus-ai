@@ -66,6 +66,7 @@ services:
     restart: "unless-stopped"
   rabbitmq:
     image: "rabbitmq:4.2.9-management@sha256:d1fb8b38bd0805935907a22b2b7483fba38c9a8dd7e8a74bfba4a6e7a9e91707"
+    hostname: "rabbitmq"
     entrypoint: ["/bin/sh","/infra/service-entrypoint.sh","docker-entrypoint.sh"]
     command: ["rabbitmq-server"]
     volumes: ["config-rabbitmq:/run/config:ro","rabbitmq-data:/var/lib/rabbitmq","./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro"]
@@ -74,8 +75,8 @@ services:
         condition: "service_completed_successfully"
     healthcheck:
       test: ["CMD","rabbitmq-diagnostics","-q","ping"]
-      interval: "5s"
-      timeout: "4s"
+      interval: "10s"
+      timeout: "30s"
       retries: 50
       start_period: "15s"
     restart: "unless-stopped"

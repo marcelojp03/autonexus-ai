@@ -21,6 +21,8 @@ test('runtime consumers do not mount bootstrap state or another owner configurat
   }
 });
 test('migrations and genuine workers participate in ordered startup', () => {
+  assert.equal(config.services.rabbitmq.hostname, 'rabbitmq');
+  assert.equal(config.services.rabbitmq.healthcheck.timeout, '30s');
   assert.equal(config.services.employees.depends_on['employees-migrate'].condition, 'service_completed_successfully');
   assert.equal(config.services.finance.depends_on['finance-migrate'].condition, 'service_completed_successfully');
   assert.ok(config.services['finance-publisher'].command.includes('cu15:publish-outbox'));
