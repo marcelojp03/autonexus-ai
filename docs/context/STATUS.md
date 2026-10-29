@@ -1,5 +1,35 @@
 # Estado comprobado
 
+## CU05 web online — verificado; revisión y cierre en curso (2026-10-29)
+
+Diseño/políticas aprobados, primero CU05 y después infraestructura T25. Implementado en work/marcelo desde df91374: agenda propia/equipo/detalle, APIs propietarias, BFF/SDL y mf-employees/Shell, sin rama/worktree nuevos. Dos permisos cerrados (catálogo25), vínculo laboral activo/current subject obligatorio por petición, sin fallback de infraestructura para CU05 ni CRUD general como atajo. Contratos agenda REST/GraphQL y decisión017.
+
+| Verificación observada | Resultado |
+| --- | --- |
+| Empleados | 173 unidades y86/86HTTPsintéticas PASS; tipos/build/lint0 (14 advertencias previas). Se completaron fakes del autorizador en harness antiguos sin modificar la política productiva; la comparación baseline fue lectura de código |
+| Operaciones | 34 CU05 +22 regresiones existentes verificadas focalmente, compilación/package0; sin cambios productivos de Saga |
+| BFF | 125 unidades,34HTTPsintéticas,tipo/lint/build PASS tras corregir autorización preexecute |
+| UI/Shell | 27focales agenda/habilitación (incluye reloj h23),2política sesión,28Shell,tipo/lint/build0; detectorUI[] |
+| Migraciones/runtime | E1793541600000aditiva aplicada yO V8índices; rollout0 E/O/BFF,Shelldistservido; brokerpropio recuperado exit137/OOMfalse sinrotarcredenciales/volumen |
+| API real | real-api-01.exit0,run b4a86176-612c-4372-9f93-ada0ecf95372:3subjects vinculadosdistintos,CU15real,own/team/details/filtros/LaPaz/IDOR/sinatajosCRUD PASS4stages |
+| BFF real | t246-bff-03.exit0,073ebc80-d380-4ef9-b672-af9ae4cf7ded:2stages campos,aliases/PII/IDOR/atajosdenegadossinData |
+| Browser final | t246-ui-final-h23-01.exit0,36918efc-d4cb-47c7-9458-d77a03032f12: A/B+jefe,detalle/recarga/logout/cambioA→B,empleado/prioridad/vacío/offline/recuperación;10capturas1440/390,0errores,noJWTpersistido |
+| Zona horaria | DOM/IntlNode/IntlbrowserAucklandcoincidenenLaPaz2026-11-05 23:00–23:30,UTCinicio2026-11-06T03:00:00Z |
+| Estados/consistencia | t246-consistency-01.exit0,9344e9fd-c41e-4642-a6b1-d3f84a79dec7:4stagesreserved/confirmedlocal/releasedexcluidos,releasepropioidempotente |
+| Subject/vínculo | 7e22da7f-3acb-4c55-805f-e0404eb0e02e:2stageslinkedpairPASS+CASrestoreexacto;runcompletoFAILporhookbrowseranteslocks,NOreinterpretarPASSglobal |
+| Globalpending/Inbox | t246-globalpending-02.exit0,e47a8bb1-eca2-44b5-81da-442408b3f3c6:4stagesOconfirmation_pendingexcluido,globalreal+avisopending→publicación/Inboxobservedreal;triggerpropioquitado |
+| Dependencia | t246-dependency-01.exit0,0b561f21-0c0f-4289-9a23-fa05408f113f:REST/BFF/browser503noFalseEmpty,sameworkrecuperado,DIRECTantesydespuéscerrarproxy |
+| Identidad final | identity-green-main-01.exit0,07ed63da-69fe-417e-a877-16d57bb72d38:3stages2controlesnuevosINACTIVE/REVOKED,0jobsnuevos;old/freshJWTsdenegadossinData,inactivoyrevocadoconFORBIDDEN403 |
+| Regresión API/BFF | CU02 14etapas,CU03BFF6,CU04 11,flujoCU11–14 6:exits0enregression-main-01.log. Wrapperexit1porpostcheckEEXIST (archivo protegido);sólopostcheckrerunconnombreúnico |
+| Postcheck final | postcheck-main-02.exit0,postcheck-main-02.json:8/8,ownershipCIM/JAR/listener,DIRECT ylecturaposterioraproxy,0trigger/barrierpropio,eventoobservado,participantereleased,DRIFTrestaurado |
+
+Todos los artefactos citados están bajo output/cu05 ignorado, incluidas cuentas sintéticas privadas nuevas; no versionar private.json, credenciales ni JWT. Los datos/identidades/credenciales existentes se conservaron. Las inyecciones de transporte, bloqueo/retraso Outbox y vínculo TEST se identificaron como tales y se restauraron; no se insertaron estados de negocio confirmados entre bases. No se repitió la matriz completa de Saga al no cambiar su lógica.
+
+Defectos y fallos preservados: selectores del harness colisionaban con Shell y recargas provocabanabortos;seacotaronysinignorarfallosgenerales. Formato mixto12/24h/NBSP no era desplazamiento de instante; seunificó24hconregresiónrojo→verde ybuild. La inactividad expuso un bugproductivo: errorE403antesdeexecuteGraphQLera503genérico. Reprorealt246-identity-red-02/28645ba7-b147-4936-abed-ec466a9d73bdcapturó503sinData;9nuevasregresionesHTTP(6fail3pass→34totalPASS),controllerpreservaBusinessErrorpúblico,reinicioBFF35212yrealgreen403sinData. No se reactivaron controles ni se persistieron JWT para repetir pruebas.
+
+Pendiente: revisión independiente y resolución de hallazgos, informe/traspaso y publicación normal exacta main/work/marcelo. CU05 todavía no marcado entregado. T25 aprobado y secuenciado después de esta verificación/revisión; Docker/bootstrap/demo/README público aún no implementados. Sin offline, Flutter ni lectura humana de notificaciones.
+
+
 ## CU15 — entregado, integrado y publicado (2026-10-28)
 
 Revisión independiente inicial de 69de9bd: no aprobatoria (C1–C4/G1). Correcciones en bdf75fa5c5beb5be5116a52a0179f719d9b6bfc7: re-revisión independiente aprobatoria, objeciones retiradas y sin críticos residuales. Verificación posterior completa y código publicado por FF/push normal de main y work/marcelo; ls-remote confirmó ambas en 0350a46dab2a7dbedb209e42f704e00f2343cae0. El cierre posterior es exclusivamente documental. Se conserva la evidencia fallida histórica.

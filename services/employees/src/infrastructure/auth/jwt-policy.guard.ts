@@ -36,6 +36,10 @@ export class JwtPolicyGuard implements CanActivate {
       return true;
     }
     if (verified.clientId === 'autonexus-cu15-coordinator' || verified.scopes?.some(scope => scope.startsWith('cu15.'))) throw new ForbiddenException();
+    if (policy && 'agenda' in policy) {
+      request.identity = verified;
+      return true;
+    }
     let effective;
     try {
       effective = await this.authorize.resolve(verified.subject, verified.roles);

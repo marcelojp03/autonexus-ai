@@ -1,7 +1,7 @@
 import { Controller, Get, Headers, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { BadRequest, BusinessGraphql, type GraphqlRequest } from '../../application/business-graphql.js';
-import { publicMessage } from '../../application/business-error.js';
+import { BusinessError, isPublicBusinessCode, publicMessage } from '../../application/business-error.js';
 import type { EmployeesGateway } from '../../application/employees-gateway.js';
 import { HttpEmployeesGateway } from '../../application/employees-gateway.js';
 import type { AuthenticatedRequest } from '../auth/token-verifier.js';
@@ -47,6 +47,12 @@ export class GraphqlController {
     } catch (error) {
       if (error instanceof BadRequest) {
         return { errors: [{ message: publicMessage('BAD_REQUEST'), extensions: { code: 'BAD_REQUEST', statusCode: 400 } }] };
+      }
+      if (error instanceof BusinessError) {
+        const code = error.statusCode === 401 ? 'UNAUTHENTICATED' : error.statusCode === 403 ? 'FORBIDDEN' : error.code;
+        if (isPublicBusinessCode(code)) {
+          return { errors: [{ message: publicMessage(code), extensions: { code, statusCode: error.statusCode } }] };
+        }
       }
       return { errors: [{ message: publicMessage('SERVICE_UNAVAILABLE'), extensions: { code: 'SERVICE_UNAVAILABLE', statusCode: 503 } }] };
     }

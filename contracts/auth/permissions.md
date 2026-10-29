@@ -29,17 +29,19 @@ Contrato aprobado en `docs/compose/spec/cu02-security.md` y ampliado en `docs/co
 | quotes:decide | Cotizaciones | decide | Registrar la decisión del cliente (CU14) |
 | confirmations:read | Confirmaciones | read | Progreso, resultados y proyección de mecánicos (CU15) |
 | confirmations:write | Confirmaciones | write | Iniciar y solicitar recuperación de la Saga (CU15) |
+| agenda:read:self | Agenda propia | read:self | Consultar listado/detalle del empleado vigente autenticado (CU05 online) |
+| agenda:read:team | Agenda del equipo | read:team | Consulta explícita de equipo y selector laboral mínimo (CU05 online) |
 
-Reglas: identificador `modulo:operacion` en minúsculas ASCII; conjunto cerrado; un permiso desconocido produce `VALIDATION_ERROR`; el catálogo se publica por `GET /security/permissions` y por `securityCatalog` en GraphQL, de modo que Empleados, Operaciones y el BFF lo consumen en vez de duplicarlo. CU05 añadirá su permiso de agenda cuando existan órdenes reales; no se crean permisos para módulos sin caso de uso entregado.
+Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, en minúsculas ASCII; conjunto cerrado, sin herencia por prefijo. Un permiso desconocido produce VALIDATION_ERROR. El catálogo se publica por GET /security/permissions y securityCatalog. CU05 añade solo dos permisos de lectura acotada, no acceso general a órdenes, clientes, documentos o cotizaciones.
 
 ## Roles iniciales
 
 | Rol | Permisos | Motivo |
 | --- | --- | --- |
-| `administrador` | los veintitrés vigentes | Autoridad completa de la plataforma |
-| `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write | Planificación, catálogo, órdenes, decisión financiera y confirmación CU15 |
+| `administrador` | los veinticinco del catálogo CU05 | Autoridad completa, con vínculo laboral activo adicional obligatorio para CU05 |
+| `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team | Planificación, catálogo, órdenes, decisión financiera y confirmación CU15 |
 | `recepcionista` | customers:read/write, vehicles:read/write, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes y decisión del cliente; no elabora cotizaciones |
-| `mecanico` | receptions:read/write | Recepción textual CU11; no confirma servicios por tener este rol |
+| `mecanico` | receptions:read/write, agenda:read:self | Recepción CU11 y agenda propia CU05; sin CRUD general ni agenda del equipo |
 | `responsable_financiero` | orders:read, quotes:read/write/decide | Cotizaciones y decisiones CU13/CU14; aprobar no confirma el servicio |
 
 Los roles iniciales son `system=true`: no se renombran y no se borran. Sus permisos sí pueden editarse, con las restricciones de último administrador. Un rol nuevo requiere nombre `^[a-z][a-z0-9_]{2,63}$`, distinto de cualquier otro, y al menos un permiso del catálogo.
@@ -88,3 +90,11 @@ El campo aprobado mechanicEnabled describe habilitación laboral en Empleados, n
 - Cambio de permisos o retiro de asignación: efecto en la siguiente petición a Empleados; en Operaciones y en el BFF hasta 30 s por su caché. Ese caché también recuerda un vacío: si Empleados no responde, la denegación se mantiene hasta 30 s aunque el servicio vuelva antes.
 - Un JWT ya emitido conserva su lista de roles hasta `exp+5 s` (60 s + 5 s). Como los permisos se resuelven contra el catálogo y las asignaciones persistidas, un rol retirado deja de otorgar permisos en la siguiente petición, pero **no** se revocan tokens ni sesiones abiertas.
 - Un empleado con identidad creada y sin credencial habilitada no puede iniciar sesión: CU02 asigna roles, no habilita acceso.
+
+## CU05 online — vínculo obligatorio y alcance por registro
+
+Contrato aprobado: [agenda REST](../rest/agenda.md) y [agenda GraphQL](../graphql/agenda.graphql). La ampliación ejecutable/roles requiere migración propietaria CU05; su publicación documental no acredita despliegue.
+
+El subject debe resolver un empleado activo y su vínculo actual; las asignaciones de seguridad CU05 se contrastan bajo esa identidad. No se usa la excepción CU02 de cuentas no vinculadas, ni siquiera para administrador/jefe. Empleados revalida por petición; caches de BFF/guard general nunca autorizan por encima de ese contexto. Sin vínculo/permiso/actividad devuelve403 seguro, no vacío.
+
+Propia no admite employeeId del navegador. Equipo exige su permiso y trata employeeId solo como filtro. Lista/detalle se autorizan independientemente; ID ajeno/inexistente404 indistinguible. DTO mínimo, sin datos administrativos/financieros; solo Oconfirmed+Sagaconfirmed y asignación Eactualcorrespondiente. Roles personalizados funcionan por estos permisos cerrados. No se cambian las políticas de otros CU.

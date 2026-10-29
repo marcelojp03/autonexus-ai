@@ -1,0 +1,23 @@
+{
+  "confirmedByMain": false,
+  "selfPath": "/employees/agenda",
+  "teamPath": "/employees/agenda/team",
+  "detailPath": "/employees/agenda/:assignmentId",
+  "from": "input[name=from]",
+  "to": "input[name=to]",
+  "priority": "select[name=priority]",
+  "staffSummary": "details summary",
+  "staffSearch": "input[name=search]",
+  "staffConsult": "form.toolbar:has(input[name=search]) button[type=submit]",
+  "employeeId": "select[name=employeeId]",
+  "consult": "form.toolbar:has(input[name=from]) button[type=submit]",
+  "rows": "nz-table tbody tr",
+  "clock": ".clock",
+  "empty": "p[role=status]:not([aria-live])",
+  "error": ".ant-alert-error",
+  "detailNotes": ".observations",
+  "dateSummary": "anx-agenda > p",
+  "login": "#session-login",
+  "logout": "#session-logout",
+  "identity": "#session-identity"
+}

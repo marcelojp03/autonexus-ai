@@ -1,4 +1,6 @@
 # contracts/rest
+
+CU05: [agenda.md](agenda.md) define las lecturas propias/equipo autorizadas, identidad laboral vigente, DTO mínimo y prueba de confirmación global por propietarios. Contrato aprobado; implementación/aceptación se registra en STATUS, no se acredita por este índice.
 OpenAPI, esquemas de entrada/respuesta, errores y ejemplos por servicio.
 
 CU15: [Saga y comandos aprobados de los participantes](saga.md), con vínculo financiero durable (GET de cotización no basta) y compensación conservadora. Los OpenAPI documentan las rutas y DTO del código existente y el contrato aprobado; su publicación y validación estática no acreditan pruebas HTTP ni aceptación distribuida. Evidencia de implementación/verificación: docs/context/STATUS.md y docs/compose/spec/cu15-confirmation-saga.md desde la raíz.

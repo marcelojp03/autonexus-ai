@@ -2,10 +2,11 @@ import { Routes } from '@angular/router';
 import { startPageGuard } from '@core';
 import { authSimpleCanActivate, authSimpleCanActivateChild } from '@delon/auth';
 
-import { LayoutBasic, LayoutBlank } from '../layout';
 import { businessSessionGuard } from '../auth/session';
+import { agendaRoutes } from '../features/agenda/routes';
 import { employeesRoutes } from '../features/employees/routes';
 import { scheduleRoutes } from '../features/schedules/routes';
+import { LayoutBasic, LayoutBlank } from '../layout';
 
 export const routes: Routes = [
   {
@@ -24,6 +25,7 @@ export const routes: Routes = [
         path: 'widgets',
         loadChildren: () => import('./widgets/routes').then(m => m.routes)
       },
+      ...agendaRoutes.map(route => ({ ...route, canActivate: [businessSessionGuard] })),
       ...employeesRoutes.map(route => ({ ...route, canActivate: [businessSessionGuard] })),
       ...scheduleRoutes.map(route => ({ ...route, canActivate: [businessSessionGuard] })),
       { path: 'style', loadChildren: () => import('./style/routes').then(m => m.routes) },

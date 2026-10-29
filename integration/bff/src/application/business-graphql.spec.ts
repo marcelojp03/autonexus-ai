@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BusinessGraphql, BadRequest } from './business-graphql.js';
 import { BusinessError } from './business-error.js';
+import { bffEnvironment } from '../infrastructure/config/environment.js';
 
 const schemaPath = resolve(process.cwd(), '../../contracts/graphql/employees.graphql');
-const schedulePath = resolve(process.cwd(), '../../contracts/graphql/schedules.graphql');
 const securityPath = resolve(process.cwd(), '../../contracts/graphql/security.graphql');
 const operationsPath = resolve(process.cwd(), '../../contracts/graphql/operations.graphql');
 const financePath = resolve(process.cwd(), '../../contracts/graphql/finance.graphql');
@@ -98,7 +98,8 @@ function build(rejected?: Error) {
     reviseQuote: vi.fn(),
     decideQuote: vi.fn(async () => ({ quote: { id: EMPLOYEE_ID }, orderStatusHint: 'quote_approved', replayed: false })),
   };
-  return { gateway, operations, finance, graphql: new BusinessGraphql(gateway, operations, finance, [schemaPath, schedulePath, securityPath, operationsPath, financePath, resolve(process.cwd(), '../../contracts/graphql/confirmations.graphql')]) };
+  const agenda = { list: vi.fn(), work: vi.fn(), employees: vi.fn() };
+  return { gateway, operations, finance, graphql: new BusinessGraphql(gateway, operations, finance, bffEnvironment({}).schemaPaths, agenda) };
 }
 
 describe('CU15 explicit fake upstream contract', () => {

@@ -25,17 +25,21 @@ const logoutButton = document.querySelector<HTMLButtonElement>('#session-logout'
 const technicalOutput = document.querySelector<HTMLElement>('#technical-result')!;
 let diagnosticEpoch = 0;
 let permissionSubject: string | undefined;
+let navigationPermissions: readonly string[] = [];
+let permissionEpoch = 0;
 let financeAccess: 'loading' | 'allowed' | 'forbidden' | 'unavailable' = 'loading';
 const canAccess = (module: ModuleId) => canMount() && (module !== 'finance' || financeAccess === 'allowed');
 async function loadModuleAccess(subject: string): Promise<void> {
+  const epoch = ++permissionEpoch;
   try {
     const result = await session.requestBusiness('query ModuleAccess { securityCatalog { effective } }');
-    if (permissionSubject !== subject) return;
+    if (permissionSubject !== subject || epoch !== permissionEpoch) return;
     const data = result.data as { securityCatalog?: { effective?: string[] } } | undefined;
+    navigationPermissions = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective) ? data.securityCatalog.effective : [];
     financeAccess = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective)
       ? data.securityCatalog.effective.includes('quotes:read') ? 'allowed' : 'forbidden'
       : 'unavailable';
-  } catch { if (permissionSubject === subject) financeAccess = 'unavailable'; }
+  } catch { if (permissionSubject !== subject || epoch !== permissionEpoch) return; financeAccess = 'unavailable'; }
   renderNavigation();
   await triggerAppChange();
 }
@@ -60,7 +64,7 @@ function renderNavigation(): void {
     else link.removeAttribute('aria-current');
   });
   document.querySelectorAll<HTMLElement>('[data-employee-link]').forEach((link) => {
-    link.hidden = !allowed || module !== 'employees';
+    link.hidden = !allowed || module !== 'employees' || (!!link.dataset.permission && !navigationPermissions.includes(link.dataset.permission));
   });
   document.querySelectorAll<HTMLElement>('[data-operations-link]').forEach((link) => {
     link.hidden = !allowed || module !== 'operations';
@@ -158,8 +162,10 @@ document.querySelectorAll<HTMLButtonElement>('[data-technical-service]').forEach
 session.subscribe(() => {
   const subject = session.snapshot().identity?.subject;
   if (subject !== permissionSubject) {
+    permissionEpoch++;
     permissionSubject = subject;
     financeAccess = 'loading';
+    navigationPermissions = [];
     if (subject) void loadModuleAccess(subject);
   }
   if (!session.snapshot().authenticated) { diagnosticEpoch++; technicalOutput.textContent = ''; }

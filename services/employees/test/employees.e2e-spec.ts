@@ -4,6 +4,8 @@ import { Test } from '@nestjs/testing';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
+import { AuthorizeActor } from '../src/application/authorize-actor.js';
+import { INITIAL_ROLES } from '../src/domain/permissions.js';
 import { AccessTokenVerifier } from '../src/infrastructure/auth/access-token-verifier.js';
 import { authEnvironment } from '../src/infrastructure/config/auth-environment.js';
 import { configureHttp } from '../src/infrastructure/http/configure-http.js';
@@ -53,6 +55,12 @@ describe('CU03 HTTP authorization (synthetic RSA; explicit fake repository)', ()
       )
       .overrideProvider(PostgresReadinessProbe)
       .useValue({ check: async () => undefined })
+      .overrideProvider(AuthorizeActor).useValue({
+        resolve: async (subject: string, roles: readonly string[]) => {
+          const recognized = INITIAL_ROLES.filter(role => subject === 'synthetic-admin' && roles.includes(role.name));
+          return { roles, recognized: recognized.map(role => role.name), permissions: [...new Set(recognized.flatMap(role => role.permissions))] };
+        },
+      } satisfies Pick<AuthorizeActor, 'resolve'>)
       .overrideProvider(PostgresEmployeeRepository)
       .useValue({ list })
       .compile();

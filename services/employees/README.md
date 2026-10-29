@@ -1,5 +1,21 @@
 # MS02 Empleados
 
+## CU05 — backend de agenda online (implementación local)
+
+Contrato: `contracts/rest/agenda.md` desde la raíz. Lecturas humanas dedicadas:
+
+- `GET /agenda/context?scope=self|team` devuelve `{actor,observedAt}`.
+- `GET /agenda/team/employees` devuelve selector paginado `{id,fullName,status}`; estado omitido incluye activos e inactivos.
+- `POST /agenda/assignments/check` es lectura HTTP200 con `{scope,assignmentIds}` (hasta100 UUID distintos), respuesta `{actor,items,observedAt}`. Una referencia ajena/inexistente/legacy rechaza todo con404, nunca una respuesta parcial.
+
+CU05 valida JWT y reconsulta por petición el empleado activo, la coincidencia del subject en columna/vínculo JSON/asignación de seguridad no revocada y los roles actuales intersectados con el JWT. No utiliza el fallback CU02 de cuentas sin empleado ni su resolución general de permisos. Permisos exactos `agenda:read:self` y `agenda:read:team`, sin herencia ni CRUD adicional. El actor contiene solo `employeeId,fullName,status,scopes`; AssignmentCheck contiene exclusivamente las referencias, nombre/estado laboral, intervalo, estado/versión local y observación definidos por el contrato. Un estado local no acredita confirmación global.
+
+Migración aditiva registrada `1793541600000-add-agenda-permissions.ts`: unión de permisos para administrador/jefe/mecánico, versión, historial y sincronización pendiente; conserva personalizaciones. **No aplicada en esta delegación.**
+
+Verificación local con Node22.22.3 y pnpm12.6.0, scripts de esta aplicación, Vitest con máximo un worker. Evidencia ignorada en `output/cu05/employees-*.log` y `.exit`: rojo del catálogo21PASS/1FAIL antes de ampliarlo; suite unitaria173/173; focal CU05 dominio/aplicación/repositorio29/29; HTTP sintético CU0533/33; tipos y build exit0. Los repositorios/IdP son dobles explícitos (JWT RSA firmado localmente); no acreditan SQL, Keycloak, integración distribuida ni aceptación UI real.
+
+La ampliación a todos los HTTP registró69PASS/17FAIL: harness previos CU01/CU03 sin sustitución de AuthorizeActor devuelven503 por falta de DB_PASSWORD; no se cargaron privados ni se cambió la política para sortearlos. Se conserva el fallo en `employees-http-final-01`. El primer HTTP CU05 falló solo por un escape incorrecto de la expresión regular del test de observedAt, corregido sin cambiar comportamiento productivo. Lint final:0 errores/14 advertencias anteriores, sin advertencias nuevas CU05. STATUS, contratos, migración real y recorrido integrado quedan coordinados por el principal.
+
 ## Lectura del estado CU15
 
 La sección CU15 al final separa implementación inicial delegada de verificación principal posterior. La migración 1793455200000 ya fue aplicada por el principal; el recorrido real posterior incluye los tres propietarios. Los apartados de CU03, base y CU01 conservan su contexto histórico de ejecución y no implican que CU15 carezca hoy de BFF/UI o de APIs ejecutadas. La matriz real6 está acreditada; regresión, revisión y cierre continúan pendientes; evidencia final en [STATUS](../../docs/context/STATUS.md) y la [especificación CU15](../../docs/compose/spec/cu15-confirmation-saga.md).

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { loadEnvFile } from 'node:process';
 
@@ -43,6 +43,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const operationsSchema = env.BFF_OPERATIONS_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/operations.graphql');
   const financeSchema = env.BFF_FINANCE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/finance.graphql');
   const confirmationSchema = env.BFF_CONFIRMATIONS_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/confirmations.graphql');
+  const agendaSchema = env.BFF_AGENDA_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/agenda.graphql');
   if (issuer !== LOCAL_ISSUER) throw new Error('Invalid configuration: OIDC_ISSUER_URI');
   if (audience !== OWN_AUDIENCE) throw new Error('Invalid configuration: OIDC_AUDIENCE');
   if (!origins.length || origins.some((origin) => !LOCAL_ORIGINS.includes(origin))) {
@@ -81,6 +82,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   if (!isAbsolute(operationsSchema) || !existsSync(operationsSchema)) throw new Error('Invalid configuration: BFF_OPERATIONS_SCHEMA_PATH');
   if (!isAbsolute(financeSchema) || !existsSync(financeSchema)) throw new Error('Invalid configuration: BFF_FINANCE_SCHEMA_PATH');
   if (!isAbsolute(confirmationSchema) || !existsSync(confirmationSchema)) throw new Error('Invalid configuration: BFF_CONFIRMATIONS_SCHEMA_PATH');
+  if (!isAbsolute(agendaSchema) || !existsSync(agendaSchema) || !statSync(agendaSchema).isFile()) throw new Error('Invalid configuration: BFF_AGENDA_SCHEMA_PATH');
   return Object.freeze({
     port: port(env.PORT, 3004, 'PORT'),
     employeesUrl: target.origin,
@@ -89,6 +91,6 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
     origins: Object.freeze([...new Set(origins)]),
     operationsUrl: operationsTarget.origin,
     financeUrl: financeTarget.origin,
-    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema]),
+    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema, agendaSchema]),
   });
 }

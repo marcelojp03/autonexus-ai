@@ -1,0 +1,156 @@
+<h2>{{ assignmentId ? 'Detalle del trabajo' : scope === 'team' ? 'Agenda del equipo' : 'Mi agenda' }}</h2>
+<p>Trabajos confirmados · Solo consulta · Horario de America/La_Paz</p>
+@if (assignmentId) {
+  <a [routerLink]="base">Volver a la agenda</a>
+} @else {
+  <form class="toolbar" (ngSubmit)="load()">
+    <label class="field"
+      >Desde<input nz-input type="date" name="from" [(ngModel)]="from" (ngModelChange)="filtersChanged()" required
+    /></label>
+    <label class="field">Hasta<input nz-input type="date" name="to" [(ngModel)]="to" (ngModelChange)="filtersChanged()" required /></label>
+    <label class="field"
+      >Estado<select name="status"
+        ><option value="confirmed">Confirmado</option></select
+      ></label
+    >
+    <label class="field"
+      >Prioridad<select name="priority" [(ngModel)]="priority" (ngModelChange)="filtersChanged()"
+        ><option value="">Todas</option>
+        @for (p of ['baja', 'normal', 'alta', 'urgente']; track p) {
+          <option [value]="p">{{ p }}</option>
+        }
+      </select></label
+    >
+    @if (scope === 'team') {
+      <label class="field"
+        >Personal<select name="employeeId" [(ngModel)]="employeeId" (ngModelChange)="filtersChanged()"
+          ><option value="">Todo el equipo</option>
+          @for (employee of staff()?.items ?? []; track employee.id) {
+            <option [value]="employee.id"
+              >{{ employee.fullName }} · {{ employee.status === 'active' ? 'Activo' : 'Inactivo' }} · {{ employee.id }}</option
+            >
+          }
+        </select></label
+      >
+    }
+    <button nz-button nzType="primary" type="submit" [nzLoading]="loading()">Consultar</button>
+  </form>
+  @if (scope === 'team') {
+    <details
+      ><summary>Buscar personal del equipo</summary
+      ><form class="toolbar" (ngSubmit)="loadEmployees()">
+        <label class="field">Nombre<input nz-input name="search" [(ngModel)]="search" (ngModelChange)="staffChanged()" /></label>
+        <label class="field"
+          >Estado laboral<select name="employeeStatus" [(ngModel)]="employeeStatus" (ngModelChange)="staffChanged()"
+            ><option value="">Ambos</option
+            ><option value="active">Activo</option
+            ><option value="inactive">Inactivo</option></select
+          ></label
+        >
+        <button nz-button type="submit" [nzLoading]="staffLoading()">Buscar personal</button></form
+      >
+      @if (staffError()) {
+        <nz-alert nzType="error" [nzMessage]="staffError()!" />
+      }
+      @if (staff(); as employees) {
+        <div class="pager"
+          ><button nz-button (click)="loadEmployees(staffOffset - 20)" [disabled]="staffOffset === 0">Personal anterior</button
+          ><span>{{ employees.total }} personas</span
+          ><button nz-button (click)="loadEmployees(staffOffset + 20)" [disabled]="staffOffset + 20 >= employees.total"
+            >Más personal</button
+          ></div
+        >
+      }
+    </details>
+  }
+}
+@if (error()) {
+  <nz-alert nzType="error" nzShowIcon [nzMessage]="error()!" /><button nz-button (click)="load()">Reintentar consulta</button>
+}
+@if (loading()) {
+  <p role="status" aria-live="polite">Comprobando trabajos y autorización vigente…</p>
+}
+@if (page(); as result) {
+  <p>{{ result.actor.fullName }} · {{ result.from }} — {{ result.to }} · {{ result.total }} trabajos</p>
+  <p class="check">Última comprobación: {{ stamp(result.observedAt) }} · {{ result.timeZone }}. Lectura online, sin copia offline.</p>
+  @if (result.total === 0) {
+    <p role="status">No hay trabajos confirmados para estos filtros.</p>
+  } @else {
+    <nz-table
+      #table
+      [nzData]="result.items"
+      [nzFrontPagination]="false"
+      [nzShowPagination]="false"
+      [nzScroll]="{ x: '820px' }"
+      nzSize="middle"
+    >
+      <thead
+        ><tr
+          ><th>Horario · La Paz</th><th>Orden</th><th>Vehículo</th>
+          @if (scope === 'team') {
+            <th>Personal</th>
+          }
+          <th>Prioridad</th><th>Estado</th><th>Consulta</th></tr
+        ></thead
+      >
+      <tbody>
+        @for (item of table.data; track item.assignmentId) {
+          <tr
+            ><td class="clock">{{ stamp(item.startsAt) }}<br />hasta {{ time(item.endsAt) }}</td
+            ><td>{{ item.orderNumber }}</td
+            ><td>{{ item.vehicle.plate }}<br />{{ item.vehicle.make }} {{ item.vehicle.model }}</td>
+            @if (scope === 'team') {
+              <td
+                >{{ item.employee.fullName }}
+                @if (item.employee.status === 'inactive') {
+                  (Inactivo)
+                }
+              </td>
+            }
+            <td
+              ><nz-tag [nzColor]="item.priority === 'urgente' ? 'red' : item.priority === 'alta' ? 'orange' : 'default'">{{
+                item.priority
+              }}</nz-tag></td
+            ><td
+              >Confirmado
+              @if (item.confirmationObservation === 'pending') {
+                <p>Observación de notificación pendiente</p>
+              }</td
+            ><td><a [routerLink]="[base, item.assignmentId]" [attr.aria-label]="'Ver trabajo ' + item.orderNumber">Ver detalle</a></td></tr
+          >
+        }
+      </tbody></nz-table
+    >
+    <div class="pager"
+      ><button nz-button (click)="load(offset - 20)" [disabled]="offset === 0">Anterior</button
+      ><span>Desde {{ offset + 1 }} de {{ result.total }}</span
+      ><button nz-button (click)="load(offset + 20)" [disabled]="offset + 20 >= result.total">Siguiente</button></div
+    >
+  }
+}
+@if (work(); as item) {
+  <h3>{{ item.orderNumber }} · {{ item.vehicle.plate }}</h3>
+  <p class="clock">{{ stamp(item.startsAt) }} — {{ stamp(item.endsAt) }} · La Paz</p>
+  <p
+    >{{ item.vehicle.make }} {{ item.vehicle.model }} · {{ item.employee.fullName }} ({{
+      item.employee.status === 'active' ? 'Activo' : 'Inactivo'
+    }})</p
+  >
+  <p>Prioridad {{ item.priority }} · Confirmado</p>
+  <p class="check">Última comprobación: {{ stamp(item.observedAt) }} · America/La_Paz</p>
+  @if (item.confirmationObservation === 'pending') {
+    <nz-alert nzType="warning" nzMessage="Trabajo confirmado; observación de evento/notificación pendiente. No indica lectura humana." />
+  }
+  <h3>Observaciones</h3><p class="observations">{{ item.description }}</p
+  ><p class="observations">{{ item.notes || 'Sin notas adicionales.' }}</p> <h3>Servicios</h3
+  ><ul>
+    @for (service of item.services; track service.serviceId) {
+      <li>{{ service.serviceName }} · Cantidad {{ service.quantity }} · {{ service.estimatedMinutes }} min estimados</li>
+    }
+  </ul>
+  <p class="check"
+    >Versión de orden {{ item.orderVersion }} · Asignación {{ item.assignmentVersion }}. Lecturas verificadas entre propietarios, no un
+    snapshot atómico.</p
+  >
+  <button nz-button (click)="load()">Volver a comprobar</button>
+}

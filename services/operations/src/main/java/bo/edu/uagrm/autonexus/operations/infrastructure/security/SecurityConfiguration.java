@@ -22,7 +22,7 @@ import org.springframework.web.cors.*;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
     private static final List<String> BUSINESS_PATHS = List.of(
-            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/receptions/**", "/orders/**", "/confirmations/**");
+            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/receptions/**", "/orders/**", "/confirmations/**", "/agenda/**");
 
     @Bean
     JwtDecoder jwtDecoder(@Value("${OIDC_ISSUER_URI:http://127.0.0.1:8180/realms/autonexus}") String issuer,
@@ -73,6 +73,8 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                 .requestMatchers(HttpMethod.GET, "/technical/session").hasAnyAuthority(WorkshopAuthorities.ROLES.toArray(String[]::new))
                 .requestMatchers(HttpMethod.GET, "/technical/admin").hasAuthority("administrador")
+                .requestMatchers(HttpMethod.GET, "/agenda/me", "/agenda/me/*").hasAuthority("agenda:read:self")
+                .requestMatchers(HttpMethod.GET, "/agenda/team", "/agenda/team/*").hasAuthority("agenda:read:team")
                 // CU06 customers
                 .requestMatchers(HttpMethod.GET, "/customers", "/customers/*").hasAuthority("customers:read")
                 .requestMatchers(HttpMethod.POST, "/customers").hasAuthority("customers:write")
@@ -104,12 +106,20 @@ public class SecurityConfiguration {
                 .anyRequest().denyAll())
             .exceptionHandling(config -> config
                 .authenticationEntryPoint((request, response, error) -> unauthorized(response))
-                .accessDeniedHandler((request, response, error) -> genericError(response, 403, "forbidden")))
+                .accessDeniedHandler((request, response, error) -> forbidden(request, response)))
             .oauth2ResourceServer(config -> config.bearerTokenResolver(resolver)
                 .authenticationEntryPoint((request, response, error) -> unauthorized(response))
-                .accessDeniedHandler((request, response, error) -> genericError(response, 403, "forbidden"))
+                .accessDeniedHandler((request, response, error) -> forbidden(request, response))
                 .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)));
         return http.build();
+    }
+
+    private static void forbidden(jakarta.servlet.http.HttpServletRequest request, HttpServletResponse response) throws IOException {
+        if (request.getRequestURI().startsWith(request.getContextPath() + "/agenda/")) {
+            response.setStatus(403);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"statusCode\":403,\"message\":\"Access denied\",\"code\":\"AGENDA_ACCESS_DENIED\"}");
+        } else genericError(response, 403, "forbidden");
     }
 
     private static void unauthorized(HttpServletResponse response) throws IOException {

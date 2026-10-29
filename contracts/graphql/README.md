@@ -1,4 +1,6 @@
 # contracts/graphql
+
+CU05: [agenda.graphql](agenda.graphql) extiende el SDL con myAgenda/myAgendaWork y teamAgenda/teamAgendaWork/agendaTeamEmployees; permisos dedicados self/team, sin employeeId en variables propias ni reutilizar tipos administrativos. REST y semántica de consistencia: [agenda.md](../rest/agenda.md).
 Esquema y operaciones de la gestión web.
 
 ## CU15 — contrato ejecutable del BFF

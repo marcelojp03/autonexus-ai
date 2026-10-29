@@ -15,6 +15,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class OperationsExceptionHandler {
     private static final Map<Integer, String> MESSAGES = Map.of(
             400, "Invalid request",
+            403, "Access denied",
             404, "Record not found",
             409, "Operation conflict",
             503, "Service unavailable");

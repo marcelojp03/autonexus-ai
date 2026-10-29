@@ -15,6 +15,7 @@ import { BusinessError, publicMessage } from './business-error.js';
 import type { CommandInput, EmployeePageQuery, EmployeeQuery, EmployeesGateway, SecurityHistoryQuery, StaffingCommand } from './employees-gateway.js';
 import type { OperationsCommand, OperationsGateway, OperationsPageQuery } from './operations-gateway.js';
 import type { FinanceGateway, QuoteCommand, QuoteQuery } from './finance-gateway.js';
+import type { AgendaGateway, AgendaQuery, AgendaEmployeesQuery } from './agenda-gateway.js';
 
 /** Closed permission catalog published by the Employees owner. */
 type Permission =
@@ -28,12 +29,18 @@ type Permission =
   | 'receptions:read' | 'receptions:write'
   | 'orders:read' | 'orders:write'
   | 'quotes:read' | 'quotes:write' | 'quotes:decide'
-  | 'confirmations:read' | 'confirmations:write';
+  | 'confirmations:read' | 'confirmations:write'
+  | 'agenda:read:self' | 'agenda:read:team';
 
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
 /** Root-field permission policy: CU03 stays employees:write (administrator only). */
 const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.freeze({
+  myAgenda: 'agenda:read:self',
+  myAgendaWork: 'agenda:read:self',
+  teamAgenda: 'agenda:read:team',
+  teamAgendaWork: 'agenda:read:team',
+  agendaTeamEmployees: 'agenda:read:team',
   confirmationSaga: 'confirmations:read',
   confirmationByOperation: 'confirmations:read',
   orderConfirmations: 'confirmations:read',
@@ -131,6 +138,7 @@ export class BusinessGraphql {
     private readonly operations: OperationsGateway,
     private readonly finance: FinanceGateway,
     schemaPaths: readonly string[],
+    private readonly agenda: AgendaGateway,
   ) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
   }
@@ -237,6 +245,11 @@ export class BusinessGraphql {
 
   private rootValue(token: string) {
     return {
+      myAgenda: (args: AgendaQuery) => this.agenda.list('self', args, token),
+      myAgendaWork: (args: { assignmentId: string }) => this.agenda.work('self', args.assignmentId, token),
+      teamAgenda: (args: AgendaQuery) => this.agenda.list('team', args, token),
+      teamAgendaWork: (args: { assignmentId: string }) => this.agenda.work('team', args.assignmentId, token),
+      agendaTeamEmployees: (args: AgendaEmployeesQuery) => this.agenda.employees(args, token),
       confirmationSaga: (args: { id: string }) => this.operations.confirmationSaga(args.id, token),
       confirmationByOperation: (args: { operationId: string }) => this.operations.confirmationByOperation(args.operationId, token),
       orderConfirmations: (args: { orderId: string }) => this.operations.orderConfirmations(args.orderId, token),

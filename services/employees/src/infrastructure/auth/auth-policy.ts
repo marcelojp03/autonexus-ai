@@ -15,12 +15,14 @@ export interface VerifiedIdentity {
 export interface AuthenticatedRequest extends Request { identity: VerifiedIdentity; }
 export const AUTH_POLICY = Symbol('AUTH_POLICY');
 export type AuthPolicy =
+  | { agenda: true }
   | { technicalScope: string }
   | { public: true }
   | { roles: readonly WorkshopRole[] }
   | { permissions: readonly Permission[] }
   | { authenticated: true };
 export const RequireCu15 = (technicalScope: string) => SetMetadata(AUTH_POLICY, { technicalScope } satisfies AuthPolicy);
+export const RequireAgenda = () => SetMetadata(AUTH_POLICY, { agenda: true } satisfies AuthPolicy);
 export const Public = () => SetMetadata(AUTH_POLICY, { public: true } satisfies AuthPolicy);
 export const RequireRoles = (...roles: WorkshopRole[]) => SetMetadata(AUTH_POLICY, { roles } satisfies AuthPolicy);
 /** CU02 policy: the permission catalog replaces role names for every business operation. */

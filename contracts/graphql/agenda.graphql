@@ -1,0 +1,37 @@
+"""CU05 web online. Every root has a dedicated permission; owners revalidate identity."""
+enum AgendaScope { self team }
+enum AgendaStatus { confirmed }
+enum AgendaPriority { baja normal alta urgente }
+enum AgendaEmployeeStatus { active inactive }
+enum AgendaConfirmationObservation { observed pending }
+type AgendaActor { employeeId: UUID!, fullName: String!, status: AgendaEmployeeStatus!, scopes: [AgendaScope!]! }
+type AgendaEmployee { id: UUID!, fullName: String!, status: AgendaEmployeeStatus! }
+type AgendaVehicle { id: UUID!, plate: String!, make: String!, model: String! }
+type AgendaService { serviceId: UUID!, serviceName: String!, quantity: Int!, estimatedMinutes: Int! }
+type AgendaWork {
+  assignmentId: UUID!
+  orderId: UUID!
+  orderNumber: String!
+  employee: AgendaEmployee!
+  vehicle: AgendaVehicle!
+  startsAt: DateTime!
+  endsAt: DateTime!
+  priority: AgendaPriority!
+  status: AgendaStatus!
+  description: String!
+  notes: String
+  services: [AgendaService!]!
+  orderVersion: Int!
+  assignmentVersion: Int!
+  observedAt: DateTime!
+  confirmationObservation: AgendaConfirmationObservation!
+}
+type AgendaPage { actor: AgendaActor!, items: [AgendaWork!]!, total: Int!, limit: Int!, offset: Int!, from: Date!, to: Date!, timeZone: String!, observedAt: DateTime! }
+type AgendaEmployeesPage { items: [AgendaEmployee!]!, total: Int!, limit: Int!, offset: Int!, observedAt: DateTime! }
+extend type Query {
+  myAgenda(from: Date, to: Date, status: AgendaStatus, priority: AgendaPriority, limit: Int, offset: Int): AgendaPage!
+  myAgendaWork(assignmentId: UUID!): AgendaWork!
+  teamAgenda(from: Date, to: Date, status: AgendaStatus, priority: AgendaPriority, employeeId: UUID, limit: Int, offset: Int): AgendaPage!
+  teamAgendaWork(assignmentId: UUID!): AgendaWork!
+  agendaTeamEmployees(search: String, status: AgendaEmployeeStatus, limit: Int, offset: Int): AgendaEmployeesPage!
+}

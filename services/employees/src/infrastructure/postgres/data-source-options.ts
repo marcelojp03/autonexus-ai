@@ -1,4 +1,5 @@
 import type { DataSourceOptions } from 'typeorm';
+import { AddAgendaPermissions1793541600000 } from './migrations/1793541600000-add-agenda-permissions.js';
 import { CreateCu151793455200000 } from './migrations/1793455200000-create-cu15.js';
 import { databaseEnvironment } from '../config/environment.js';
 import { CreateEmployeesSchema1792886400000 } from './migrations/1792886400000-create-employees-schema.js';
@@ -23,6 +24,7 @@ export function dataSourceOptions(): DataSourceOptions {
       ExtendPermissionsCatalog1793282400000,
       ExtendFlowPermissions1793368800000,
       CreateCu151793455200000,
+      AddAgendaPermissions1793541600000,
     ],
     migrationsTableName: 'employees_migrations',
     logging: false,

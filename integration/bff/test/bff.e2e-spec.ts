@@ -9,6 +9,8 @@ import { HttpEmployeesGateway } from '../src/application/employees-gateway.js';
 import { HttpOperationsGateway } from '../src/application/operations-gateway.js';
 import { configureHttp } from '../src/infrastructure/http/configure-http.js';
 import { bffEnvironment } from '../src/infrastructure/config/environment.js';
+import { HttpAgendaGateway } from '../src/application/agenda-gateway.js';
+import { PAGE as AGENDA_PAGE, WORK as AGENDA_WORK, EMPLOYEES_PAGE as AGENDA_EMPLOYEES, ID as ASSIGNMENT_ID, WORK_FIELDS } from './agenda-fixtures.js';
 
 const PAGE = { items: [], total: 0, limit: 20, offset: 0 };
 const ALL = [
@@ -18,6 +20,7 @@ const ALL = [
   'receptions:read', 'receptions:write', 'orders:read', 'orders:write',
   'quotes:read', 'quotes:write', 'quotes:decide',
   'confirmations:read', 'confirmations:write',
+  'agenda:read:self', 'agenda:read:team',
 ];
 /** Mirrors the owner resolution: realm roles plus persisted assignments. */
 const effectiveFor = (bearer: string): string[] => {
@@ -97,6 +100,10 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     cancelAppointment: vi.fn(),
   };
   const config = bffEnvironment({}, process.cwd());
+  const agendaTransport = vi.fn<typeof fetch>().mockImplementation(async url => {
+    const path = new URL(url instanceof Request ? url.url : url).pathname;
+    return Response.json(path === '/agenda/team/employees' ? AGENDA_EMPLOYEES : path.endsWith(ASSIGNMENT_ID) ? AGENDA_WORK : AGENDA_PAGE);
+  });
 
   beforeAll(async () => {
     const keys = await generateKeyPair('RS256');
@@ -115,6 +122,8 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
       .useValue(gateway)
       .overrideProvider(HttpOperationsGateway)
       .useValue(operations)
+      .overrideProvider(HttpAgendaGateway)
+      .useValue(new HttpAgendaGateway(config.operationsUrl, config.employeesUrl, agendaTransport))
       .compile();
     app = module.createNestApplication<NestExpressApplication>();
     configureHttp(app, config);
@@ -254,5 +263,81 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     gateway.permissions.mockRejectedValueOnce(new BusinessError(503, 'SERVICE_UNAVAILABLE'));
     const response = await post({ query: '{ employees { total } }' }, uncachedAdmin).expect(200);
     expect(response.body.errors[0].extensions).toEqual({ code: 'SERVICE_UNAVAILABLE', statusCode: 503 });
+  });
+
+  it.each([
+    [403, 'FORBIDDEN', 'FORBIDDEN'],
+    [403, 'AGENDA_ACCESS_DENIED', 'FORBIDDEN'],
+    [401, 'UNAUTHENTICATED', 'UNAUTHENTICATED'],
+    [503, 'PERSISTENCE_UNAVAILABLE', 'PERSISTENCE_UNAVAILABLE'],
+    [503, 'AGENDA_DEPENDENCY_UNAVAILABLE', 'AGENDA_DEPENDENCY_UNAVAILABLE'],
+    [400, 'VALIDATION_ERROR', 'VALIDATION_ERROR'],
+  ] as const)('preexecute permission owner %s/%s retains the safe GraphQL envelope', async (status, code, expected) => {
+    agendaTransport.mockClear();
+    const ownerError = new BusinessError(status, code);
+    ownerError.message = 'private owner body SQL token details';
+    gateway.permissions.mockRejectedValueOnce(ownerError);
+    const response = await post({ query: '{myAgenda{total}}' }, uncachedAdmin).expect(200);
+    expect(response.body.errors[0].extensions).toEqual({ code: expected, statusCode: status });
+    expect(response.body.data).toBeUndefined();
+    expect(JSON.stringify(response.body)).not.toContain('private');
+    expect(JSON.stringify(response.body)).not.toContain('SQL');
+    expect(agendaTransport).not.toHaveBeenCalled();
+  });
+
+  it.each([new Error('private SQL token'), new BusinessError(503, 'PRIVATE_SQL_EXCEPTION'), new BusinessError(503, 'constructor')])(
+    'preexecute unknown owner failures remain sanitized SERVICE_UNAVAILABLE', async error => {
+      gateway.permissions.mockRejectedValueOnce(error);
+      const response = await post({ query: '{myAgenda{total}}' }, uncachedAdmin).expect(200);
+      expect(response.body.errors[0].extensions).toEqual({ code: 'SERVICE_UNAVAILABLE', statusCode: 503 });
+      expect(response.body.data).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toMatch(/private|SQL|constructor/);
+    },
+  );
+
+  it('CU05 exposes all five roots through the exact SDL with synthetic owners and human forwarding', async () => {
+    agendaTransport.mockClear();
+    const result = await post({ query: `{
+      mine: myAgenda { actor {employeeId fullName status scopes} items {${WORK_FIELDS}} total limit offset from to timeZone observedAt }
+      myAgendaWork(assignmentId:"${ASSIGNMENT_ID}") {${WORK_FIELDS}}
+      teamAgenda(employeeId:"${AGENDA_WORK.employee.id}",limit:1,offset:2) {total}
+      teamAgendaWork(assignmentId:"${ASSIGNMENT_ID}") {${WORK_FIELDS}}
+      agendaTeamEmployees(search:"synthetic & name",status:inactive) {items{id fullName status} total limit offset observedAt}
+    }` }, admin).expect(200);
+    expect(result.body.errors).toBeUndefined();
+    expect(result.body.data).toEqual({ mine: AGENDA_PAGE, myAgendaWork: AGENDA_WORK, teamAgenda: { total: 1 }, teamAgendaWork: AGENDA_WORK, agendaTeamEmployees: AGENDA_EMPLOYEES });
+    expect(agendaTransport).toHaveBeenCalledTimes(5);
+    for (const call of agendaTransport.mock.calls) expect(call[1]?.headers).toEqual({ Authorization: 'Bearer ' + admin });
+  });
+
+  it('CU05 does not treat a mechanic role as an effective agenda permission or employee id', async () => {
+    agendaTransport.mockClear();
+    const denied = await post({ query: '{alias:myAgenda{total} second:teamAgenda{total}}' }, mechanic).expect(200);
+    expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(denied.body.data).toBeUndefined();
+    expect(agendaTransport).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    '{myAgenda(employeeId:"' + ASSIGNMENT_ID + '"){total}}',
+    '{myAgenda{items{employee{email}}}}', '{myAgenda{items{customerId}}}',
+  ])('CU05 rejects unapproved inputs/PII through HTTP: %s', async query => {
+    agendaTransport.mockClear();
+    const result = await post({ query }, admin).expect(200);
+    expect(result.body.errors[0].extensions).toEqual({ code: 'BAD_REQUEST', statusCode: 400 });
+    expect(agendaTransport).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [403, 'AGENDA_ACCESS_DENIED', 'FORBIDDEN'], [404, 'AGENDA_WORK_NOT_FOUND', 'AGENDA_WORK_NOT_FOUND'],
+    [503, 'AGENDA_STATE_UNAVAILABLE', 'AGENDA_STATE_UNAVAILABLE'],
+    [503, 'AGENDA_DEPENDENCY_UNAVAILABLE', 'AGENDA_DEPENDENCY_UNAVAILABLE'],
+    [503, 'PERSISTENCE_UNAVAILABLE', 'PERSISTENCE_UNAVAILABLE'],
+  ] as const)('CU05 maps owner %s/%s despite cached general permissions', async (status, code, expected) => {
+    agendaTransport.mockResolvedValueOnce(Response.json({ code, message: 'private owner SQL detail' }, { status }));
+    const result = await post({ query: '{myAgendaWork(assignmentId:"' + ASSIGNMENT_ID + '"){assignmentId}}' }, admin).expect(200);
+    expect(result.body.errors[0].extensions).toEqual({ code: expected, statusCode: status });
+    expect(result.body.data).toBeUndefined();
+    expect(JSON.stringify(result.body)).not.toContain('private');
   });
 });

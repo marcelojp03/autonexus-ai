@@ -10,6 +10,10 @@ export class BusinessError extends Error {
 }
 
 const MESSAGES: Readonly<Record<string, string>> = Object.freeze({
+  AGENDA_ACCESS_DENIED: 'La cuenta no tiene acceso a esta agenda.',
+  AGENDA_WORK_NOT_FOUND: 'El trabajo no está disponible en esta agenda.',
+  AGENDA_DEPENDENCY_UNAVAILABLE: 'No se puede consultar la agenda en este momento.',
+  AGENDA_STATE_UNAVAILABLE: 'No se pudo verificar el estado actual de la agenda.',
   CU15_DISABLED: 'La confirmación de servicios no está habilitada.',
   CONFIRMATION_NOT_FOUND: 'La confirmación no existe.',
   OPERATION_NOT_FOUND: 'La operación aún no tiene un resultado registrado.',
@@ -43,4 +47,8 @@ const MESSAGES: Readonly<Record<string, string>> = Object.freeze({
 
 export function publicMessage(code: string): string {
   return MESSAGES[code] ?? 'No se pudo completar la operación.';
+}
+
+export function isPublicBusinessCode(code: string): boolean {
+  return Object.hasOwn(MESSAGES, code);
 }

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { bffEnvironment } from './environment.js';
+import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { buildSchema } from 'graphql';
 
 describe('finance standalone origin', () => {
   it('registers the CU15 schema and fails closed on an invalid override', () => {
-    expect(bffEnvironment({}).schemaPaths.at(-1)).toMatch(/confirmations.graphql$/);
+    expect(bffEnvironment({}).schemaPaths[5]).toMatch(/confirmations.graphql$/);
     expect(() => bffEnvironment({ BFF_CONFIRMATIONS_SCHEMA_PATH: 'missing.graphql' })).toThrow('BFF_CONFIRMATIONS_SCHEMA_PATH');
   });
   it('includes 4204 by default and permits an explicit finance-only origin', () => {
@@ -14,5 +17,32 @@ describe('finance standalone origin', () => {
     for (const origin of ['http://127.0.0.1:5173', '*', 'http://localhost:4204', 'https://outside.invalid']) {
       expect(() => bffEnvironment({ WEB_ALLOWED_ORIGINS: origin })).toThrow('WEB_ALLOWED_ORIGINS');
     }
+  });
+});
+
+describe('CU05 seventh schema without transport-policy changes', () => {
+  it('loads seven schemas and the five exact agenda roots', () => {
+    const paths = bffEnvironment({}).schemaPaths;
+    expect(paths).toHaveLength(7);
+    expect(paths[6]).toBe(resolve('../../contracts/graphql/agenda.graphql'));
+    const schema = buildSchema(paths.map(path => readFileSync(path, 'utf8')).join('\n'));
+    expect(Object.keys(schema.getQueryType()!.getFields()).filter(name => /agenda/i.test(name)).sort()).toEqual(
+      ['myAgenda', 'myAgendaWork', 'teamAgenda', 'teamAgendaWork', 'agendaTeamEmployees'].sort());
+    expect(Object.isFrozen(paths)).toBe(true);
+  });
+  it('accepts an existing absolute agenda override and rejects relative, missing and directory paths', () => {
+    const path = resolve('../../contracts/graphql/agenda.graphql');
+    expect(bffEnvironment({ BFF_AGENDA_SCHEMA_PATH: path }).schemaPaths[6]).toBe(path);
+    for (const path of ['agenda.graphql', resolve('missing-agenda.graphql'), resolve('../../contracts/graphql'), '']) {
+      expect(() => bffEnvironment({ BFF_AGENDA_SCHEMA_PATH: path })).toThrow('BFF_AGENDA_SCHEMA_PATH');
+    }
+  });
+  it('still rejects non-loopback owners, foreign issuer/audience and invalid port', () => {
+    for (const key of ['EMPLOYEES_API_URL', 'OPERATIONS_API_URL', 'FINANCE_API_URL']) {
+      expect(() => bffEnvironment({ [key]: 'http://localhost:3002' })).toThrow(key);
+    }
+    expect(() => bffEnvironment({ OIDC_ISSUER_URI: 'invalid' })).toThrow('OIDC_ISSUER_URI');
+    expect(() => bffEnvironment({ OIDC_AUDIENCE: 'invalid' })).toThrow('OIDC_AUDIENCE');
+    expect(() => bffEnvironment({ PORT: '0' })).toThrow('PORT');
   });
 });
