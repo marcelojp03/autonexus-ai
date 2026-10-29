@@ -240,6 +240,7 @@ services:
     build:
       context: "."
       dockerfile: "infra/local/docker/web.Dockerfile"
+      target: "runtime"
     init: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
@@ -259,7 +260,39 @@ services:
       retries: 20
       start_period: "10s"
     restart: "unless-stopped"
+  demo:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bootstrap:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/bootstrap.Dockerfile"
+    profiles: ["demo"]
+    entrypoint: ["/bin/sh","/app/infra/local/service-entrypoint.sh"]
+    command: ["flock","--nonblock","--conflict-exit-code","75","/demo-state/seed.lock","node","/app/infra/local/demo.mjs","--run"]
+    environment:
+      DEMO_ENABLED: "true"
+    volumes: ["config-demo:/run/config:ro","demo-state:/demo-state"]
+    init: true
+    depends_on:
+      provision: { condition: "service_completed_successfully" }
+      employees: { condition: "service_healthy" }
+      operations: { condition: "service_healthy" }
+      finance: { condition: "service_healthy" }
+  acceptance:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-acceptance:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/web.Dockerfile"
+      target: "acceptance"
+    profiles: ["acceptance"]
+    entrypoint: ["/bin/sh","/app/infra/local/service-entrypoint.sh"]
+    command: ["node","/app/infra/local/acceptance.mjs","--run"]
+    volumes: ["config-demo:/run/config:ro","demo-state:/demo-state:ro","acceptance-evidence:/evidence"]
+    init: true
+    depends_on:
+      web: { condition: "service_healthy" }
 volumes:
+  demo-state: {}
+  acceptance-evidence: {}
   bootstrap-state: {}
   config-postgres: {}
   config-idp-postgres: {}

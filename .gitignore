@@ -50,6 +50,9 @@ postgres-data/
 /backups/
 /infra/compose/.local/
 /infra/compose/secrets/
+/infra/local/.local/
+/demo-accounts.private.json
+/admin-account.private.json
 *.dump
 *.backup
 .pgpass

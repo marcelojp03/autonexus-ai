@@ -1,12 +1,12 @@
 FROM php:8.2-cli-bookworm@sha256:8bfff0e5249f2073504c335b9f7ae54bbe84c3bc9338bfc8d2a04e77d112360b AS extensions
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends libpq-dev libonig-dev libxml2-dev libzip-dev libcurl4-openssl-dev \
-    && docker-php-ext-install -j2 pdo_pgsql bcmath mbstring sockets dom xml xmlreader xmlwriter zip curl pcntl opcache \
+    && apt-get install --yes --no-install-recommends libpq-dev libzip-dev \
+    && docker-php-ext-install -j2 pdo_pgsql bcmath sockets zip pcntl \
     && rm -rf /var/lib/apt/lists/*
 
 FROM php:8.2-cli-bookworm@sha256:8bfff0e5249f2073504c335b9f7ae54bbe84c3bc9338bfc8d2a04e77d112360b AS runtime-base
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends libpq5 libonig5 libxml2 libzip4 libcurl4 ca-certificates \
+    && apt-get install --yes --no-install-recommends libpq5 libzip4 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=extensions /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
 COPY --from=extensions /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/

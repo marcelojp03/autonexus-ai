@@ -17,10 +17,14 @@ test('repeat init preserves state, credentials and every consumer byte', t => {
   const statePath = join(options.stateDir, 'bootstrap.json'), before = bytes(statePath);
   const envs = consumers.map(owner => bytes(join(options.configDir, owner, 'service.env')));
   const account = bytes(join(options.configDir, 'demo/admin-account.json'));
+  const demoClient = bytes(join(options.configDir, 'demo/employees-client.json'));
+  assert.deepEqual(JSON.parse(demoClient), { clientId: 'autonexus-employees-admin', clientSecret: state.secrets.employeesClient });
   assert.deepEqual(init(options), state);
   assert.equal(bytes(statePath), before);
   assert.deepEqual(consumers.map(owner => bytes(join(options.configDir, owner, 'service.env'))), envs);
   assert.equal(bytes(join(options.configDir, 'demo/admin-account.json')), account);
+  assert.equal(bytes(join(options.configDir, 'demo/employees-client.json')), demoClient);
+  for (const owner of ['public', 'bff', 'operations', 'finance']) assert.equal(existsSync(join(options.configDir, owner, 'employees-client.json')), false);
   for (const [key, value] of Object.entries(state.secrets)) if (key !== 'appKey') assert.match(value, /^[a-f0-9]{64}$/);
   assert.equal(Buffer.from(state.secrets.appKey.slice(7), 'base64').length, 32);
 });

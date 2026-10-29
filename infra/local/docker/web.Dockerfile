@@ -49,3 +49,13 @@ USER app
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/service-entrypoint"]
 CMD ["nginx", "-g", "daemon off;"]
+
+# Optional acceptance image only; never the web runtime or a business service.
+FROM build AS acceptance
+RUN pnpm --dir /app/web/mf-employees exec playwright install --with-deps chromium
+WORKDIR /app
+COPY infra/local /app/infra/local
+COPY infra/keycloak/realm.json /app/infra/keycloak/realm.json
+COPY infra/keycloak/scripts/cu15-identity.mjs /app/infra/keycloak/scripts/cu15-identity.mjs
+COPY infra/rabbitmq/scripts/topology.mjs /app/infra/rabbitmq/scripts/topology.mjs
+CMD ["node", "/app/infra/local/acceptance.mjs", "--run"]

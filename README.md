@@ -1,53 +1,62 @@
+<div align="center">
+
 # AutoNexus AI
 
-Segundo parcial de Ingeniería de Software II · UAGRM · Entrega: 10 de noviembre de 2026.
+### Del ingreso del vehículo al trabajo confirmado
 
-## Estado
+Gestión de un taller automotriz con identidad compartida, servicios propietarios y confirmación distribuida.
 
-Monorepositorio de AutoNexus AI. La base backend quedó integrada localmente en main1963ce3 por fast-forward y conserva PostgreSQL/credenciales. La entrega CU01 web está en feat/cu01-keycloak, worktree .worktrees/cu01-keycloak: Keycloak persistente propio, sesión OIDC/PKCE única en el Shell, Angular integrado/standalone explícito y APIs técnicas con JWT/RBAC reales. Su verificación y revisión se registran en [STATUS](docs/context/STATUS.md); no confundir esta rama con la base de main ni con una plataforma de negocio completa. Flutter/offline, CU02, CRUD, BFF y Saga siguen pendientes.
+![Angular](https://img.shields.io/badge/Angular-22-DD0031?logo=angular&logoColor=white) ![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white) ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1-6DB33F?logo=springboot&logoColor=white) ![NestJS](https://img.shields.io/badge/NestJS-12-E0234E?logo=nestjs&logoColor=white) ![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel&logoColor=white)
 
-Ejecución del conjunto, puertos y pruebas: [guía CU01](scripts/cu01/README.md). Diseño y límites: [decisión005](docs/decisions/005-cu01-keycloak.md) y [especificación](docs/compose/spec/cu01-keycloak.md). No regenerar secretos ni volúmenes existentes. No se hizo push ni merge automático de CU01.
+**UAGRM · Ingeniería de Software II · Grupo 26**
 
-## Primeros pasos
+</div>
 
-1. Extraer en una carpeta nueva. La carpeta principal es `autonexus-ai`.
-2. Abrir esta raíz en el editor y en la terminal del asistente.
-3. Leer `AGENTS.md`, `docs/context/PROJECT.md` y `docs/context/STATUS.md`.
-4. Copiar el mensaje de `docs/ai/START-HERE.md`; indicar el bloque del integrante.
-5. Usar el repositorio Git de esta raíz; no inicializar repositorios separados dentro de las aplicaciones. Trabajar en ramas por tarea/CU y conservar los lockfiles y `.env.example`.
-6. Acordar los contratos de CU15 y crear gradualmente los proyectos con sus generadores oficiales, preservando estos archivos.
+## Un taller, un recorrido conectado
 
-## Aplicaciones previstas
+AutoNexus AI organiza el trabajo del personal de un taller: clientes, vehículos, citas, recepción, órdenes, cotizaciones, horarios y asignación de mecánicos. Una sesión común conecta los módulos Angular y React. El alcance es un solo taller, sin inventario ni venta de productos.
 
-- `services/operations`: MS01 Operaciones (Spring Boot).
-- `services/employees`: MS02 Empleados (NestJS).
-- `services/finance`: MS03 Finanzas (PHP/Laravel).
-- `services/intelligence`: MS04 Inteligencia (Python/FastAPI).
-- `services/sync`: MS05 Sincronización (NestJS).
-- `integration/bff`: BFF (NestJS).
-- `integration/mcp-server`: MCP independiente (TypeScript + SDK MCP).
-- `web/shell`: Shell y PWA (single-spa + TypeScript).
-- `web/mf-employees`: MF01 Empleados (Angular).
-- `web/mf-operations`: MF02 Operaciones (Angular).
-- `web/mf-finance`: MF03 Finanzas (React).
-- `web/mf-intelligence`: MF04 Inteligencia (React).
-- `mobile/autonexus_app`: Aplicación Android (Flutter).
-  Son cinco microservicios y dos aplicaciones backend de integración; cuatro microfrontends y un Shell; una aplicación móvil.
+```text
+Cliente y vehículo → Recepción → Orden → Cotización y aprobación
+                                              ↓
+                    Agenda del mecánico ← Confirmación del servicio
+```
 
-## Contexto
+## Qué podés hacer
 
-- `AGENTS.md`: instrucciones comunes para la IA.
-- `AGENTS.md` dentro de cada aplicación: alcance local.
-- `docs/context/PROJECT.md`: decisiones vigentes.
-- `docs/context/CONTEXT-MAP.md`: qué leer según la tarea.
-- `docs/use-cases/CU01.md` a `CU31.md`: especificaciones completas.
-- `docs/reference/`: copias fechadas de Notion.
-- `docs/context/STATUS.md`: estado comprobado y siguiente paso.
-- `docs/ai/`: instrucciones de arranque, tarea y cierre de sesión.
+- Administrar empleados, roles y permisos; preparar jornadas y disponibilidad.
+- Registrar clientes y vehículos, mantener el catálogo de servicios y organizar citas.
+- Recepcionar un vehículo y crear una orden con servicios y prioridad.
+- Elaborar cotizaciones versionadas y registrar aprobación o rechazo con evidencia.
+- Confirmar el servicio mediante una Saga que coordina Operaciones, Empleados y Finanzas.
+- Consultar la agenda propia o del equipo y el detalle autorizado de trabajos globalmente confirmados, en línea.
 
-## Trabajo en equipo
+Una cotización aprobada no es todavía un servicio confirmado. La coordinación conserva sus pasos y se recupera ante interrupciones; las asignaciones provisionales no se muestran como trabajos confirmados.
 
-La raíz Git única es `autonexus-ai`. Remoto: https://github.com/marcelojp03/autonexus-ai.git. Las carpetas `.git` de NG-ALAIN copiadas en ambos Angular fueron retiradas con autorización de Marcelo y enviadas a la Papelera; los archivos y cambios de las aplicaciones permanecen intactos. Ver `docs/decisions/003-monorepositorio-git.md`. No se ha hecho push desde esta preparación. Backend-foundation está integrado en main y el runtime usa esta raíz; el worktree anterior se conserva.
+## Tecnología
 
-Usar ramas breves por tarea/CU y revisar cambios antes de integrar en main. Los archivos de contexto se versionan con el código. Las decisiones funcionales se registran en Notion; mantener sus copias locales sincronizadas y reportar discrepancias.
-Notion: https://app.notion.com/p/4032585d73c181a4acc5f95647d44de4?pvs=204
+| Área | Implementación |
+| --- | --- |
+| Web | Shell single-spa, microfrontends Angular y React, GraphQL mediante BFF |
+| Operaciones | Java 21, Spring Boot y JDBC/Flyway |
+| Empleados y BFF | Node.js 22, NestJS y TypeScript |
+| Finanzas | PHP, Laravel y Query Builder |
+| Datos y eventos | PostgreSQL por propietario, RabbitMQ, Outbox/Inbox |
+| Identidad | Keycloak, OpenID Connect y Code + PKCE |
+| Entorno reproducible | Docker Compose y builds multietapa desde fuentes |
+
+## Uso local
+
+La preparación y las comprobaciones del entorno integral están en la [guía de Docker Compose](docs/deployment/local-compose.md). La configuración pública se separa de las credenciales privadas; las cuentas de preparación/demo no se publican como contraseñas en el repositorio.
+
+La propuesta para llevar el sistema a proveedores administrados está en [preparación remota y portabilidad](docs/deployment/cloud-portability.md). No representa un despliegue cloud realizado.
+
+## Alcance y próximos módulos
+
+La agenda de esta entrega es web y online. La consulta offline, Flutter, el registro de ejecución/finalización, la lectura humana de notificaciones y los módulos de IA y sincronización no se presentan como capacidades terminadas. El nombre del proyecto expresa esa dirección, no una precisión de IA ni un modelo entrenado acreditados.
+
+## Documentación
+
+[Arquitectura y alcance](docs/context/PROJECT.md) · [Casos de uso](docs/use-cases) · [Contratos](contracts) · [Decisiones técnicas](docs/decisions) · [Evidencia técnica](docs/context/STATUS.md)
+
+La documentación técnica conserva las verificaciones y antecedentes fuera de esta presentación.

@@ -12,6 +12,7 @@
 **/.env.*
 !**/.env.example
 **/.local
+**/*.private.json
 output
 output-*
 graphify-out

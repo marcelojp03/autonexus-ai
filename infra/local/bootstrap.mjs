@@ -75,6 +75,7 @@ export function init({ stateDir = '/state', configDir = '/config', publicOrigin 
   }
   for (const owner of ['employees', 'operations', 'finance']) preserve(resolve(configDir, owner, 'broker-client.json'), json({ host: 'rabbitmq', port: 5672, vhost: 'autonexus', username: 'autonexus_' + owner, password: state.secrets[owner + 'Rabbit'] }), 0o444);
   preserve(resolve(configDir, 'demo/admin-account.json'), json(state.admin), 0o444);
+  preserve(resolve(configDir, 'demo/employees-client.json'), json({ clientId: 'autonexus-employees-admin', clientSecret: state.secrets.employeesClient }), 0o444);
   const publicConfig = { version: 1, oidcUrl: state.publicOrigin + '/identity', graphqlUrl: state.publicOrigin + '/graphql', technicalUrls: { employees: state.publicOrigin + '/technical/employees', operations: state.publicOrigin + '/technical/operations' } };
   preserve(resolve(configDir, 'public/runtime-config.js'), 'globalThis.__AUTONEXUS_CONFIG__ = ' + JSON.stringify(publicConfig) + ';\n', 0o444);
   return state;
@@ -140,9 +141,19 @@ export async function provisionRabbit(state) {
 }
 export async function provision(options = {}) {
   const state = init(options);
-  await provisionDatabases(state);
-  await provisionIdentity(state, options.configDir ?? '/config');
-  await provisionRabbit(state);
+  for (const [stage, action] of [
+    ['DATABASES', () => provisionDatabases(state)],
+    ['IDENTITY', () => provisionIdentity(state, options.configDir ?? '/config')],
+    ['BROKER', () => provisionRabbit(state)],
+  ]) {
+    try { await action(); console.log('PASS bootstrap stage ' + stage); }
+    catch (error) {
+      // Constrained diagnostics only, never raw upstream messages or private values.
+      const code = /^[A-Z0-9_]+$/.test(error.message ?? '') ? error.message : /^[A-Z0-9_]+$/.test(error.code ?? '') ? error.code : /^[A-Za-z]+$/.test(error.name ?? '') ? error.name.toUpperCase() : 'UNKNOWN';
+      const location = String(error.stack ?? '').match(/(?:identity|bootstrap)[.]mjs:[0-9]+:[0-9]+/)?.[0]?.replaceAll(':', '_').replaceAll('.', '_').toUpperCase();
+      throw new Error(stage + '_' + code + (location ? '_' + location : ''), { cause: error });
+    }
+  }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
