@@ -1,5 +1,15 @@
 # Estado comprobado
 
+## Revisión CU05 — F1/G1 resueltos; G2 visual bloqueado (2026-10-29)
+
+La revisión inicial de 478b9bf no fue aprobatoria: F1 descartaba roles personalizados en sesión/guard web; el control real focalizado descubrió además el mismo filtro en el verificador JWT del BFF. Se conservan slugs válidos únicos como metadatos de presentación, sin modificar firma/issuer/audiencia/vigencia, permisos por campo ni vínculo vigente en propietarios. SessionIdentity.roles admite string[]; el DTO técnico CU01 conserva su tipo anterior.
+
+Verificación de esta corrección: 32 pruebas de sesión/rutas PASS; tipos Shell/Empleados/Operaciones PASS; build integrado Empleados y Shell PASS (review-custom-web-build-01.exit=0); BFF 128 unidades y 34 HTTP PASS, tipos/build PASS, lint sin errores ni advertencias. Pruebas nuevas reprodujeron el fallo antes del fix.
+
+Evidencia real focalizada: review-custom-real-04.exit=0 y a03d36aa-f29c-4ece-8b54-15c5a2fed7bf/result.json, cuatro etapas PASS. Empleado activo vinculado con rol exclusivamente personalizado: APIs/BFF y login/montaje/recarga web. Retiro solo de agenda:read:team manteniendo self, employees:read, schedules:read y orders:read; tokens anterior/nuevo denegados en contexto/selector/check/lista/detalle de equipo y tres campos GraphQL, sin datos; agenda propia sigue accesible. No se crearon trabajos ni se repitió la matriz Saga. Control sintético inactivado con historial conservado. Intentos01–03 siguen FAIL: 01 filtro real BFF; 02/03 asunciones del harness sobre foco de fecha/ShadowRoot. 04 registra cuatro Tabs para pasar del control date Desde a Hasta.
+
+Re-revisión independiente general-44: F1 cerrado, G1 cerrado, delta conforme/correcto y sin bloqueantes de código. Aclaración no bloqueante del README Empleados aplicada. **G2 no aprobado**: principal y revisor recibieron solo texto de éxito al abrir PNG, sin píxeles inspeccionables. Teclado funcional no acredita foco visible, contraste ni recortes móviles. No se declara CU05 delivered ni se integra/publica todavía este cierre; T25 conserva diseño aprobado y queda pendiente de resolver la secuencia con esta limitación explícita.
+
 ## CU05 web online — verificado; revisión y cierre en curso (2026-10-29)
 
 Diseño/políticas aprobados, primero CU05 y después infraestructura T25. Implementado en work/marcelo desde df91374: agenda propia/equipo/detalle, APIs propietarias, BFF/SDL y mf-employees/Shell, sin rama/worktree nuevos. Dos permisos cerrados (catálogo25), vínculo laboral activo/current subject obligatorio por petición, sin fallback de infraestructura para CU05 ni CRUD general como atajo. Contratos agenda REST/GraphQL y decisión017.

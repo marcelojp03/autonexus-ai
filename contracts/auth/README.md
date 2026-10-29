@@ -1,5 +1,11 @@
 # Contrato local CU01
 
+## CU05 — Roles personalizados en la presentación web
+
+SessionIdentity.roles contiene slugs de rol del token (string[]), incluidos los roles personalizados de CU02, únicos y con formato `^[a-z][a-z0-9_]{2,63}$`. No es un catálogo de permisos ni acredita autoridad empresarial. El Shell y el contenedor Empleados permiten presentar la sesión con esos metadatos; cada consulta sigue autorizándose por permiso y vínculo vigente en BFF y propietarios. Un slug desconocido no concede permisos. El verificador JWT del BFF conserva los mismos slugs tras validar firma, issuer, audiencia y vigencia; no filtra exclusivamente por los cinco nombres iniciales.
+
+WorkshopRole y el DTO de diagnóstico técnico CU01 conservan sus tipos iniciales; esta ampliación afecta la identidad de presentación, no amplía endpoints técnicos ni políticas de otros CU.
+
 ## Extensión T21 — Finanzas React
 
 IntegratedProps ya admite /finance y /mfs/finance/. El Shell comparte su SessionPort con React igual que con Angular; requestBusiness es el único transporte empresarial. No se entregan tokens ni credenciales como props, ni se crea SDK/login en el integrado. Desmontar no termina la sesión padre.

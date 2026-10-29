@@ -17,6 +17,20 @@ function fake(authenticated = true) {
 }
 function owner(sdk) { return createBrowserSession(sdk, { origin: location.origin, application: 'shell' }); }
 
+test('CU05 custom-only role survives session presentation without granting business authority', async () => {
+  browser('/employees/agenda'); const sdk = fake();
+  sdk.tokenParsed.realm_access.roles = ['agenda_custom', 'agenda_custom', 'Bad!', '', 42, 'default-roles-autonexus'];
+  const o = owner(sdk);
+  try {
+    await o.start();
+    const state = o.session.snapshot();
+    assert.equal(state.authenticated, true);
+    assert.deepEqual(state.identity.roles, ['agenda_custom']);
+    assert.ok(Object.isFrozen(state.identity.roles));
+    assert.equal('permissions' in state.identity, false);
+  } finally { o.dispose(); }
+});
+
 test('CU15 logout cleans owned recovery even without a mounted consumer, never other subjects or tokens', async () => {
   const stored = browser(); const sdk = fake(); const o = owner(sdk); await o.start();
   stored.set('cu15:pending:synthetic', 'synthetic-command'); stored.set('cu15:pending:other', 'other-command');
@@ -87,7 +101,7 @@ test('callback is cleaned and restored before immutable identity notification', 
   const o = owner(sdk); await o.start();
   assert.equal(location.pathname, '/operations/widgets'); assert.equal(location.hash, ''); assert.equal(stored.size, 0);
   assert.equal(init.flow, 'standard'); assert.equal(init.pkceMethod, 'S256'); assert.equal(init.responseMode, 'fragment'); assert.equal('onLoad' in init, false);
-  assert.deepEqual(o.session.snapshot().identity.roles, ['mecanico']);
+  assert.deepEqual(o.session.snapshot().identity.roles, ['mecanico', 'unrecognized']);
   assert.ok(Object.isFrozen(o.session.snapshot().identity.roles)); o.dispose();
 });
 test('allowlist, safe DTO mapping, 403 preserves session and 401 invalidates it', async () => {

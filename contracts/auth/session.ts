@@ -2,7 +2,8 @@
 export type WorkshopRole = 'administrador' | 'recepcionista' | 'mecanico' | 'jefe_taller' | 'responsable_financiero';
 export type TechnicalService = 'operations' | 'employees';
 export type TechnicalResource = 'session' | 'admin';
-export interface SessionIdentity { readonly subject: string; readonly username: string; readonly roles: readonly WorkshopRole[]; }
+/** Token role slugs are presentation metadata, never proof of a business permission. */
+export interface SessionIdentity { readonly subject: string; readonly username: string; readonly roles: readonly string[]; }
 export interface SessionSnapshot {
   readonly mode: 'oidc' | 'demo';
   readonly phase: 'initializing' | 'authenticated' | 'anonymous' | 'error' | 'demo';

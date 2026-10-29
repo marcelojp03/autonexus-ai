@@ -64,7 +64,9 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
   const requests = new Set<AbortController>();
   function publish(phase: SessionSnapshot['phase'], notice?: string) {
     const claims = sdk.tokenParsed;
-    const identity = phase === 'authenticated' && typeof claims?.sub === 'string' && claims.sub.length > 0 ? Object.freeze({ subject: claims.sub, username: typeof claims.preferred_username === 'string' ? claims.preferred_username : claims.sub, roles: Object.freeze(workshopRoles.filter(role => Array.isArray(claims.realm_access?.roles) && claims.realm_access.roles.includes(role))) }) : null;
+    // CU02 custom roles must reach the permission checks; presentation is not authorization.
+    const roles = Array.isArray(claims?.realm_access?.roles) ? [...new Set(claims.realm_access.roles.filter(role => typeof role === 'string' && /^[a-z][a-z0-9_]{2,63}$/.test(role)))] : [];
+    const identity = phase === 'authenticated' && typeof claims?.sub === 'string' && claims.sub.length > 0 ? Object.freeze({ subject: claims.sub, username: typeof claims.preferred_username === 'string' ? claims.preferred_username : claims.sub, roles: Object.freeze(roles) }) : null;
     current = Object.freeze({ mode: 'oidc', phase, authenticated: !!identity, identity, ...(notice ? { notice } : {}) });
     for (const listener of listeners) listener(current);
   }

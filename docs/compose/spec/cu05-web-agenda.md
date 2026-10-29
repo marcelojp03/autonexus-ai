@@ -118,6 +118,9 @@ Offline/Flutter, lectura humana de notificaciones, CU16/CU17, cancelación/reasi
 
 ## Journey log
 
+- Revisión inicial no aprobatoria: F1 bloqueaba roles personalizados antes de autorización; G1 no aislaba retiro de team; G2 sin canal de píxeles. Corrección de sesión/guard y, tras fallo real, del verificador JWT del BFF; roles son metadatos, permisos siguen en propietarios. Regresiones rojo→verde, 32 sesión/rutas, 128 BFF unidades y 34 HTTP, tipos/build/lint verificados.
+- Control real a03d36aa-f29c-4ece-8b54-15c5a2fed7bf (review-custom-real-04.exit=0): rol personalizado sin nombres iniciales, navegador/montaje/recarga/teclado, retiro solo de team conservando self/general, denegaciones propietarios/BFF con tokens anterior/nuevo; cero trabajos nuevos y control inactivado. Fallos01–03 conservados. Re-revisión independiente general-44 cierra F1/G1; **G2 permanece bloqueante** porque la apertura de PNG solo devuelve texto, no píxeles. No acreditar foco visible ni conformidad visual desde logs.
+
 - Integración real confirmó los límites de privacidad con dos mecánicos y un jefe distintos/vinculados, trabajos por CU15 y pruebas REST/BFF/UI; no se ejecutó matriz completa de Saga porque su lógica no cambió.
 - El harness necesitó acotar selectores al microfrontend y evitar recargas documentales entre filtros; diferencias ICU/NBSP no eran fechas erróneas. Se unificó el reloj a h23 con regresión y una confirmación visual del batch.
 - Inactividad descubrió un defecto real anterior a execute GraphQL: BusinessError403 se convertía en503. Repro real rojo sin datos, nueve regresiones sintéticas, saneamiento tipado y dos controles nuevos green; sin reactivar usuarios ni persistir JWT.

@@ -1,5 +1,7 @@
 # Cierre y continuidad de sesión
 
+Traspaso vigente: [CU05 — F1/G1 corregidos, revisión visual pendiente](../handoffs/2026-10-29-cu05-review.md). CU05 no se declara cerrado; infraestructura conserva diseño aprobado pendiente de resolver la secuencia.
+
 Traspaso más reciente: [CU15 — Saga de confirmación entregada y publicada](../handoffs/2026-10-28-cu15-confirmation-saga.md).
 Traspaso anterior: [T21 — React, recepción, órdenes y cotizaciones](../handoffs/2026-10-28-t21-react-finance.md).
 Traspaso operativo anterior: [CU06/CU07/CU09/CU10](../handoffs/2026-10-28-operations-base.md).

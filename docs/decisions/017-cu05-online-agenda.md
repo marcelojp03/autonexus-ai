@@ -20,6 +20,8 @@ UI integrada en mf-employees/Shell con sesión compartida, estados claros, recar
 
 ## Consecuencias y aceptación
 
+La presentación de sesión y la extracción de roles del BFF deben conservar slugs personalizados válidos de CU02. El filtrado por los cinco nombres iniciales bloqueaba al actor antes de consultar permisos; se elimina ese filtro de metadatos sin alterar la verificación JWT ni los permisos por campo/registro. El contrato SessionIdentity.roles pasa a string[]; los recursos técnicos CU01 mantienen su forma anterior.
+
 Dos mecánicos de subjects distintos y jefe realmente vinculados, trabajos por Saga real, pruebas REST/GraphQL/UI contra manipulación de IDs/filtros y vínculo/permisos/actividad. Fechas La Paz bajo timezone distinto, vacíos, desconexión, propietario indisponible y notificación pendiente explícitos. No mocks como integración ni matriz completa de Saga sin cambios de lógica. Verificar CU05 primero, después implementar el Compose reproducible aprobado por separado.
 
 Revisión independiente después de verificaciones, STATUS/contratos/traspaso y publicación normal de main/work/marcelo; conservar entornos, credenciales y volúmenes. La aprobación del diseño no equivale a despliegue ni entrega terminada.

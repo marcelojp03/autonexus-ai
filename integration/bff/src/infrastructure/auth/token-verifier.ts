@@ -6,7 +6,7 @@ export const WORKSHOP_ROLES = ['administrador', 'recepcionista', 'mecanico', 'je
 export type WorkshopRole = (typeof WORKSHOP_ROLES)[number];
 export interface VerifiedIdentity {
   readonly subject: string;
-  readonly roles: readonly WorkshopRole[];
+  readonly roles: readonly string[];
 }
 export interface AuthenticatedRequest extends Record<string, unknown> {
   headers: Record<string, string | string[] | undefined>;
@@ -42,7 +42,10 @@ export class AccessTokenVerifier {
       if (payload.typ !== 'Bearer' || !payload.sub?.trim()) throw new Error('Invalid access token');
       const access = payload.realm_access;
       const realmRoles = typeof access === 'object' && access !== null && 'roles' in access ? access.roles : undefined;
-      const roles = WORKSHOP_ROLES.filter((role) => Array.isArray(realmRoles) && realmRoles.includes(role));
+      // Preserve CU02 custom roles; business authority comes from the owner catalog.
+      const roles = Array.isArray(realmRoles)
+        ? [...new Set(realmRoles.filter((role): role is string => typeof role === 'string' && /^[a-z][a-z0-9_]{2,63}$/.test(role)))]
+        : [];
       return Object.freeze({ subject: payload.sub, roles: Object.freeze(roles) });
     } catch {
       throw new UnauthorizedException();
