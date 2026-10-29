@@ -1,8 +1,8 @@
 # Estado comprobado
 
-## CU15 — implementación y verificación distribuida en curso (2026-10-28)
+## CU15 — verificado y revisado; cierre Git en curso (2026-10-28)
 
-Revisión independiente inicial de 69de9bd: **no aprobatoria**. Identificó C1 normalización interoperable, C2 replay tras recarga de inicio no registrado, C3 limpieza terminal/logout, C4 diagnóstico de protocolo y G1 carreras reales adicionales. Las correcciones quedaron implementadas y verificadas: Operaciones 120 pruebas; Angular 45; sesión 19 dentro de 28 pruebas Shell; tipos/lint/builds PASS. Unicode O/E real, C2/C3 navegador real 6/6 y G1 real 10/10 PASS. La matriz completa se repitió sobre el código corregido: review-distributed-real-07, 7/7 + ambos navegadores y exit0, con restauración DIRECT comprobada. Falta re-revisión y cierre Git; no se declara aprobada ni publicada todavía. Se conservan todas las evidencias fallidas históricas.
+Revisión independiente inicial de 69de9bd: no aprobatoria (C1–C4/G1). Correcciones en bdf75fa5c5beb5be5116a52a0179f719d9b6bfc7: re-revisión independiente **aprobatoria**, objeciones retiradas y sin críticos residuales. Se contrastaron los 18 archivos afectados, contratos y artefactos sin repetir suites ni mutar runtime. Verificación posterior completa: Operaciones120, Angular45, Shell28 (incluye19sesión), tipos/lint/builds; Unicode real, C2/C3 navegador6/6, G1 real10/10 y matriz7/7+2navegadores, todos PASS. Cierre técnico listo; integración y publicación normal autorizadas todavía por ejecutar y comprobar. Las evidencias fallidas históricas se conservan.
 
 T23 en work/marcelo desde 0fc8f7f. Diseño aprobado mediante compose-next, sin otra rama ni worktree. Operaciones orquesta; Empleados reserva/confirma/libera; Finanzas registra y cancela un vínculo durable/versionado de la cotización aprobada. Aprobar una cotización por sí solo no confirma el servicio. CU05, offline y Flutter no se acreditan.
 
@@ -40,7 +40,7 @@ Correcciones de revisión verificadas (artefactos ignorados en output/cu15):
 - g1-boundaries-real-02.exit=0 y boundaries-b0924291-9da3-4031-9b15-2b09c2b89493/{result,postcheck}.json: 10/10 cruces reales (dos financieros y ocho de Empleados), esperas SQL observadas, nueve limpiezas idempotentes y estado final íntegro. Son fronteras E/F, no confirmación global. El intento01 no acreditó los dos waiters en plazo y permanece FAIL.
 - review-distributed-real-07.exit=0 y distributed-2026-10-29T01-43-46-062Z-295b0153.json: matriz 7/7 y ambos navegadores PASS tras los fixes. review-distributed-final07.json verifica DIRECT, readiness200, flag sintético restaurado y un Inbox/una notificación tras retransmisión idéntica. No hubo caídas inesperadas.
 
-Pendientes de cierre: re-revisión de C1–C4/G1 y áreas afectadas; documentación final, integración y push normal verificado de main/work/marcelo. No se declara CU15 completo ni publicado.
+Pendientes administrativos: integrar por fast-forward y publicar main/work/marcelo mediante push normal; verificar los dos SHA remotos y asentar el estado publicado. No quedan críticos técnicos abiertos. CU05 será la siguiente entrega y aún no se acredita offline ni Flutter.
 
 
 ## T21 — React y pantallas de recepción, órdenes y cotizaciones (2026-10-28)

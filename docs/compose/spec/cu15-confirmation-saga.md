@@ -2,12 +2,38 @@
 feature: cu15-confirmation-saga
 status: in-progress
 updated: 2026-10-28
-source: work/marcelo
+source: main
 ---
 
 # CU15 — Confirmar servicio y asignar mecánico mediante Saga
 
 ## Report
+
+**Qué se construyó** — CU15 online de punta a punta: Operaciones orquesta una Saga durable con pasos/IDs/cuerpos congelados, lease/fencing, recuperación y compensaciones; Empleados reserva/confirma/libera revalidando habilitación y calendario en transacción local; Finanzas autoriza un vínculo durable/versionado y lo cancela sin borrar aprobación. Outbox por propietario y publicación RabbitMQ con confirms/mandatory, Inbox con deduplicación. REST, GraphQL y wizard existente con progreso por URL, replay manual seguro y metadata temporal sin tokens. Aprobar una cotización no confirma el servicio.
+
+**Verificación observada** — Node22.22.3/pnpm12.6.0, JDK21 y propietarios/bases locales reales; comandos desde cada aplicación o la raíz según README.
+
+| Comando o frontera | Resultado |
+| --- | --- |
+| Empleados pnpm test / HTTP / tipos / build | PASS 144 unidades + 11 HTTP sintéticas; migración real aplicada |
+| Finanzas PHPUnit / lint | PASS 24 pruebas/113 aserciones, 29 archivos PHP; migración real aplicada |
+| Operaciones mvnw test / package | PASS 120 pruebas y package; rojo22/6fallos→verde28focalizadas para correcciones, runtime desplegado |
+| BFF pnpm test / test:e2e / tipos / build | PASS 54 + 15; integración real separada |
+| Angular confirmación / sesión / Shell / tipos y builds | PASS 45 Angular, 19 sesión dentro de 28 Shell; ESLint focalizado sin errores, builds integrados/staging PASS |
+| scripts/cu15/verify-finance-real.mjs | PASS 6 etapas, ledger/vínculo/cancelación/carrera SQL/publicación real medida |
+| scripts/cu15/verify-confirmation-web.mjs | PASS 6 etapas de habilitación explícita e inicio/confirmed/reload con tres propietarios |
+| scripts/cu15/verify-unicode-real.mjs --run | PASS normalización NBSP/FEFF/U3000 antes de freeze, huellas O/E idénticas, una reserva y Saga confirmed |
+| scripts/cu15/verify-recovery-web-real.mjs --run | PASS 6/6: petición perdida antes de registro, reload404, replay manual idéntico, efecto único, limpieza terminal/logout; 2 abortos INYECTADOS, 0 fallos inesperados |
+| scripts/cu15/verify-boundaries-real.mjs --run | PASS 10/10 cruces F revisión/aprobación/vínculo y E reserva/confirmación contra CU03/CU04; waiters reales y 9 limpiezas idempotentes + SQL postcheck |
+| scripts/cu15/distributed-real.mjs --run --browser-proof --max-minutes=20 | PASS 7/7 + ambos navegadores después de los fixes; respuesta perdida, reinicio, compensación pendiente/recuperada y duplicado Outbox con un Inbox/notificación |
+| Regresión CU01 / CU02 / CU03 BFF / CU04 / CU11–14 BFF | PASS 10 / 14 / 6 / 11 / 6 comprobaciones/etapas, todos exit0 |
+| OpenAPI con SnakeYAML2.6/JDK21 | PASS 9/31/7 operaciones, 74/147/53 refs, sin duplicados ni pérdida de contratos previos |
+
+Artefactos locales ignorados y comandos detallados en STATUS y scripts/cu15/README.md. Matriz corregida: review-distributed-real-07.exit=0 y distributed-2026-10-29T01-43-46-062Z-295b0153.json; review-distributed-final07.json confirma runtime DIRECT/readiness200 y flag sintético restaurado. C2/C3: recovery-web-real-2026-10-29T01-39-51-287Z-b671961b.json; G1: boundaries-b0924291-9da3-4031-9b15-2b09c2b89493/{result,postcheck}.json; Unicode: unicode-real-1793237617193.json. No se reinterpreta ningún intento fallido como PASS.
+
+**Revisión** — Revisión independiente inicial de 69de9bd no aprobatoria: C1–C4 y brecha G1. Correcciones en bdf75fa5c5beb5be5116a52a0179f719d9b6bfc7, con re-revisión independiente aprobatoria del rango 69de9bd..bdf75fa: objeciones retiradas y sin críticos residuales. El revisor contrastó código/evidencia sin repetir suites ni mutar runtime. Auditoría de publicación de los dos commits de código: 163 rutas/174 blobs, findings vacío; se renueva contra cada HEAD de cierre.
+
+**Límites** — Evidencia de los intercalados observados, no prueba de todos los schedules posibles. C4 tiene regresión focalizada y revisión, no una inyección real de protocolo incompatible. HTTP loopback/infra local, sin acreditación de producción distribuida/HA. No CU05, offline, Flutter, ejecución física, cobros, fotos/S3 ni lectura humana de la notificación. Pendiente únicamente el cierre Git autorizado y su comprobación remota; no marcar T8 hasta observarla.
 
 ## [S1] Problem
 
