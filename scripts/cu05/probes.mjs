@@ -32,7 +32,7 @@ function graphError(response, code, statusCode) {
   assert.ok(response.body.data == null || Object.values(response.body.data).every(v => v == null), 'Denied GraphQL operation must not return data');
   assert.ok(response.body.errors.some(e => e.extensions?.code === code && (statusCode === undefined || e.extensions?.statusCode === statusCode)), 'Exact GraphQL error missing');
 }
-function graphAccessDenied(response) {
+export function graphAccessDenied(response) {
   if (response.status === 403) {
     assert.equal(response.body?.statusCode, 403);
     assert.equal(response.body?.message, 'Forbidden');

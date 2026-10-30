@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { config, createSession, privateStore, expect } from './runtime.mjs';
 import { createIdentityFixture } from './identity-fixtures.mjs';
-import { graphql, identityMutations } from './probes.mjs';
+import { graphql, graphAccessDenied, identityMutations } from './probes.mjs';
 
 export async function main(args = process.argv.slice(2)) {
   assert.ok(args.includes('--run'), 'Explicit execution authorization required');
@@ -18,13 +18,18 @@ export async function main(args = process.argv.slice(2)) {
   const stage = async (name, action) => {
     const entry = { name, status: 'RUNNING' }; report.stages.push(entry); save();
     try { await action(); entry.status = 'PASS'; }
-    catch (error) { entry.status = 'FAIL'; entry.category = error?.name; if (typeof error?.actual === 'number') entry.actual = error.actual; if (typeof error?.expected === 'number') entry.expected = error.expected; entry.locations = String(error?.stack ?? '').match(/[a-zA-Z0-9-]+\.mjs:\d+:\d+/g) ?? []; throw error; }
+    catch (error) { entry.status = 'FAIL'; entry.category = error?.name; if (/^[A-Z0-9_]+$/.test(error?.cause?.code ?? '')) entry.networkCode = error.cause.code; if (typeof error?.actual === 'number') entry.actual = error.actual; if (typeof error?.expected === 'number') entry.expected = error.expected; entry.locations = String(error?.stack ?? '').match(/[a-zA-Z0-9-]+\.mjs:\d+:\d+/g) ?? []; throw error; }
     finally { save(); appendFileSync(resolve(store.dir, 'run.log'), JSON.stringify({ name, status: entry.status }) + '\n'); }
   };
   try {
     const original = JSON.parse(readFileSync(fixtureFile, 'utf8')); assert.equal(original.synthetic, true); assert.ok(original.fixture?.a && original.fixture?.b && original.fixture?.chief);
     store.state.sourceRunId = original.runId;
     const session = createSession(c); session.observeGraphql = value => { report.graphql.push(value); save(); };
+    const api = session.api;
+    session.api = async (...input) => {
+      const result = await api(...input);
+      (report.ownerRequests ??= []).push({ owner: input[0], path: input[1].split('?')[0], method: input[2] ?? 'GET', status: result.status, code: /^[A-Z_]+$/.test(result.body?.code ?? '') ? result.body.code : undefined }); save(); return result;
+    };
     if (mode === 'red') {
       let control;
       await stage('one-new-linked-active-mechanic-control-no-jobs', async () => { control = await createIdentityFixture(session, store, { key: 'REDINACTIVE', roleName: 'mecanico' }); });
@@ -51,6 +56,19 @@ export async function main(args = process.argv.slice(2)) {
         controls.inactive = await createIdentityFixture(session, store, { key: 'INACTIVE', roleName: 'mecanico' });
         controls.revoked = await createIdentityFixture(session, store, { key: 'REVOKED', roleName: 'jefe_taller' });
         store.state.controls = { inactive: controls.inactive, revoked: controls.revoked }; store.save();
+      });
+      await stage('original-noperm-unlinked-and-self-token-without-team-scope-denied', async () => {
+        const gql = graphql(c, session);
+        for (const account of [controls.noPermission.account, session.unlinked]) {
+          const token = await session.token(account, true);
+          expect(await session.api('employees', '/agenda/context?scope=self', 'GET', undefined, token), 403, 'AGENDA_ACCESS_DENIED');
+          expect(await session.api('operations', '/agenda/me', 'GET', undefined, token), 403, 'AGENDA_ACCESS_DENIED');
+          graphAccessDenied(await gql(token, '{myAgenda{total}}'));
+        }
+        const selfToken = await session.token(controls.a.account, true);
+        expect(await session.api('employees', '/agenda/context?scope=team', 'GET', undefined, selfToken), 403, 'AGENDA_ACCESS_DENIED');
+        expect(await session.api('operations', '/agenda/team', 'GET', undefined, selfToken), 403, 'AGENDA_ACCESS_DENIED');
+        graphAccessDenied(await gql(selfToken, '{teamAgenda{total}}'));
       });
       await identityMutations(c, session, controls, stage); report.pass = true;
     }

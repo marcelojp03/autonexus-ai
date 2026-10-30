@@ -79,7 +79,7 @@ Rojo autorizado y reproducido: t246-identity-red-02.exit=1, run28645ba7-b147-493
 
     node output/cu05/run-supervised.mjs t246-identity-red-02 output/cu05/t246-run-identity-resume.mjs --run --mode=red --fixture-file=output/cu05/b4a86176-612c-4372-9f93-ada0ecf95372/private.json
 
-Runner verde listo pero **NO autorizado/NO ejecutado aún**, hasta que main confirme despliegue BFF corregido:
+Runner verde autorizado tras BFF PID35212: primer intento t246-identity-green-01 terminó exit1 antes de crear recursos porque IdP rechazó conexión (ECONNREFUSED, diagnóstico t246-oidc-check-01.json; cero cuentas/IDs). No acredita fallo del BFF corregido ni aceptación verde. Esperar recuperación IdP por main y nueva orden; no reintentar automáticamente. Comando usado, conservar su evidencia y usar label nuevo al reanudar:
 
     node output/cu05/run-supervised.mjs t246-identity-green-01 output/cu05/t246-run-identity-resume.mjs --run --mode=green --fixture-file=output/cu05/b4a86176-612c-4372-9f93-ada0ecf95372/private.json
 
