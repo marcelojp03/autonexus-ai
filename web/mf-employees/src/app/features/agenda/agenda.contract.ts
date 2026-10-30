@@ -22,6 +22,8 @@ export interface AgendaWork {
   assignmentVersion: number;
   observedAt: string;
   confirmationObservation: 'observed' | 'pending';
+  executionStatus: 'not_started' | 'in_progress';
+  executionProgress: { advances: number; lastAdvanceAt: string | null; availableEvidence: number };
 }
 export interface AgendaPage {
   actor: { employeeId: string; fullName: string; status: 'active'; scopes: AgendaScope[] };
@@ -50,7 +52,7 @@ export interface AgendaFilters {
   offset: number;
 }
 export const WORK_FIELDS =
-  'assignmentId orderId orderNumber employee { id fullName status } vehicle { id plate make model } startsAt endsAt priority status description notes services { serviceId serviceName quantity estimatedMinutes } orderVersion assignmentVersion observedAt confirmationObservation';
+  'assignmentId orderId orderNumber employee { id fullName status } vehicle { id plate make model } startsAt endsAt priority status description notes services { serviceId serviceName quantity estimatedMinutes } orderVersion assignmentVersion observedAt confirmationObservation executionStatus executionProgress { advances lastAdvanceAt availableEvidence }';
 export function civilToday(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/La_Paz',

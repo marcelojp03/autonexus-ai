@@ -24,6 +24,13 @@ public class ExecutionController {
         }
     }
 
+    public record AdvanceResult(Execution execution, Execution.Advance advance, boolean replayed) {
+        static AdvanceResult from(Mutation<Execution> mutation) {
+            Execution execution = mutation.value();
+            return new AdvanceResult(execution, execution.advances().getLast(), mutation.replayed());
+        }
+    }
+
     public record EvidenceResult(Execution.Evidence evidence, boolean replayed) {
         static EvidenceResult from(Mutation<Execution.Evidence> mutation) {
             return new EvidenceResult(mutation.value(), mutation.replayed());
@@ -32,17 +39,19 @@ public class ExecutionController {
 
     public record EvidenceRequestResult(Execution.Evidence evidence, EvidenceUploadResult upload, boolean replayed) {}
 
-    public record EvidenceUploadResult(String url, String method, Map<String, String> headers, String expiresAt) {
-        static EvidenceUploadResult from(EvidenceUpload upload) {
+    public record EvidenceUploadResult(String url, String method, String headersJson, String expiresAt) {
+        static EvidenceUploadResult from(EvidenceUpload upload, tools.jackson.databind.ObjectMapper json) {
             return new EvidenceUploadResult(upload.upload().url(), upload.upload().method(),
-                    upload.upload().headers(), upload.upload().expiresAt().toString());
+                    json.writeValueAsString(upload.upload().headers()), upload.upload().expiresAt().toString());
         }
     }
 
     private final ManageExecutions executions;
+    private final tools.jackson.databind.ObjectMapper json;
 
-    public ExecutionController(ManageExecutions executions) {
+    public ExecutionController(ManageExecutions executions, tools.jackson.databind.ObjectMapper json) {
         this.executions = executions;
+        this.json = json;
     }
 
     @GetMapping("/{kind:me|team}/{assignmentId}")
@@ -61,9 +70,9 @@ public class ExecutionController {
 
     @PostMapping("/{assignmentId}/advances")
     @ResponseStatus(HttpStatus.CREATED)
-    public ExecutionResult advance(JwtAuthenticationToken authentication, @PathVariable String assignmentId,
+    public AdvanceResult advance(JwtAuthenticationToken authentication, @PathVariable String assignmentId,
                                    @RequestBody Map<String, Object> body) {
-        return ExecutionResult.from(executions.advance(token(authentication), Validation.uuid(assignmentId), body));
+        return AdvanceResult.from(executions.advance(token(authentication), Validation.uuid(assignmentId), body));
     }
 
     @PostMapping("/{assignmentId}/advances/{advanceId}/evidences")
@@ -72,7 +81,7 @@ public class ExecutionController {
                                                  @PathVariable String advanceId, @RequestBody Map<String, Object> body) {
         EvidenceUpload upload = executions.requestEvidence(token(authentication), Validation.uuid(assignmentId),
                 Validation.uuid(advanceId), body);
-        return new EvidenceRequestResult(upload.evidence(), EvidenceUploadResult.from(upload), false);
+        return new EvidenceRequestResult(upload.evidence(), EvidenceUploadResult.from(upload, json), upload.replayed());
     }
 
     @PostMapping("/{assignmentId}/evidences/{evidenceId}/confirm")
@@ -87,7 +96,7 @@ public class ExecutionController {
                                        @PathVariable String evidenceId, @RequestBody Map<String, Object> body) {
         EvidenceUpload upload = executions.retryEvidence(token(authentication), Validation.uuid(assignmentId),
                 Validation.uuid(evidenceId), body);
-        return new EvidenceRequestResult(upload.evidence(), EvidenceUploadResult.from(upload), false);
+        return new EvidenceRequestResult(upload.evidence(), EvidenceUploadResult.from(upload, json), upload.replayed());
     }
 
     @GetMapping("/{kind:me|team}/{assignmentId}/evidences/{evidenceId}/download")

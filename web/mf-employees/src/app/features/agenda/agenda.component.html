@@ -90,7 +90,7 @@
           @if (scope === 'team') {
             <th>Personal</th>
           }
-          <th>Prioridad</th><th>Estado</th><th>Consulta</th></tr
+          <th>Prioridad</th><th>Estado</th><th>Ejecución</th><th>Consulta</th></tr
         ></thead
       >
       <tbody>
@@ -116,7 +116,11 @@
               @if (item.confirmationObservation === 'pending') {
                 <p>Observación de notificación pendiente</p>
               }</td
-            ><td><a [routerLink]="[base, item.assignmentId]" [attr.aria-label]="'Ver trabajo ' + item.orderNumber">Ver detalle</a></td></tr
+            ><td>
+              <nz-tag [nzColor]="item.executionStatus === 'in_progress' ? 'blue' : 'default'">{{ item.executionStatus === 'in_progress' ? 'En ejecución' : 'Sin iniciar' }}</nz-tag>
+              <p>{{ item.executionProgress.advances }} avances · {{ item.executionProgress.availableEvidence }} evidencias confirmadas</p>
+              @if (item.executionProgress.lastAdvanceAt) { <p>Último avance {{ time(item.executionProgress.lastAdvanceAt) }}</p> }
+            </td><td><a [routerLink]="[base, item.assignmentId]" [attr.aria-label]="'Ver trabajo ' + item.orderNumber">Ver detalle</a></td></tr
           >
         }
       </tbody></nz-table
@@ -136,7 +140,9 @@
       item.employee.status === 'active' ? 'Activo' : 'Inactivo'
     }})</p
   >
-  <p>Prioridad {{ item.priority }} · Confirmado</p>
+  <p>Prioridad {{ item.priority }} · Confirmado · {{ item.executionStatus === 'in_progress' ? 'En ejecución' : 'Sin iniciar' }}</p>
+  <p>{{ item.executionProgress.advances }} avances · {{ item.executionProgress.availableEvidence }} evidencias confirmadas</p>
+  @if (item.executionProgress.lastAdvanceAt) { <p>Último avance: {{ time(item.executionProgress.lastAdvanceAt) }}</p> }
   <p class="check">Última comprobación: {{ stamp(item.observedAt) }} · America/La_Paz</p>
   @if (item.confirmationObservation === 'pending') {
     <nz-alert nzType="warning" nzMessage="Trabajo confirmado; observación de evento/notificación pendiente. No indica lectura humana." />
@@ -153,4 +159,5 @@
     snapshot atómico.</p
   >
   <button nz-button (click)="load()">Volver a comprobar</button>
+  <a nz-button nzType="primary" [routerLink]="['/execution']" [queryParams]="{ assignmentId: item.assignmentId }">Abrir ejecución</a>
 }

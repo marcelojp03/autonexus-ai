@@ -55,7 +55,7 @@ public final class ExecutionPorts {
     public record EvidenceRecord(
             Execution.Evidence evidence, UUID orderId, String objectKey, String checksumSha256, String versionId) {}
 
-    public record EvidenceUpload(Execution.Evidence evidence, Upload upload) {}
+    public record EvidenceUpload(Execution.Evidence evidence, Upload upload, boolean replayed) {}
 
     public record Download(String url, Instant expiresAt) {}
 
@@ -66,39 +66,45 @@ public final class ExecutionPorts {
 
         Optional<Execution> executionById(UUID executionId);
 
-        Execution insertExecution(Confirmed work, Instant now, String actor);
+        Execution insertExecution(Confirmed work, Instant now, String actor, UUID operationId, String fingerprint);
 
         Execution appendAdvance(
-                Execution current, int expectedVersion, AdvanceDraft draft, Instant now, String actor);
+                Execution current, int expectedVersion, AdvanceDraft draft, Instant now, String actor,
+                UUID operationId, String fingerprint);
 
         EvidenceRecord insertEvidence(
                 Execution execution,
+                UUID evidenceId,
                 UUID advanceId,
                 EvidenceDraft draft,
                 String objectKey,
                 String actor,
-                Instant now);
+                Instant now,
+                UUID operationId,
+                String fingerprint);
 
         Optional<EvidenceRecord> evidence(UUID orderId, UUID evidenceId);
 
         boolean markVerified(
-                Execution.Evidence evidence, int expectedVersion, StoredObject stored, Instant now);
+                Execution.Evidence evidence, int expectedVersion, StoredObject stored, Instant now,
+                UUID operationId, String fingerprint, String actor);
 
         boolean markFailed(
-                Execution.Evidence evidence, int expectedVersion, String failureCode, Instant now);
+                Execution.Evidence evidence, int expectedVersion, String failureCode, Instant now,
+                UUID operationId, String fingerprint, String actor);
 
         boolean markPending(
                 Execution.Evidence evidence,
                 int expectedVersion,
+                EvidenceDraft draft,
                 String objectKey,
-                String checksum,
                 String actor,
-                Instant now);
+                Instant now,
+                UUID operationId,
+                String fingerprint);
 
-        /** Operation replay bookkeeping: entity id already produced by this operation, if any. */
+        /** Operation replay lookup: entity id already produced by this operation, if any. */
         Optional<UUID> replayed(UUID operationId, String fingerprint);
-
-        void remember(UUID operationId, String fingerprint, UUID entityId, String actor, String action);
     }
 
     public interface IdentityGateway {

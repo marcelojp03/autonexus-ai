@@ -19,7 +19,10 @@ const formPost = (url, values, extra = {}) =>
     body: new URLSearchParams(values),
   });
 
-export async function authorize(fixture, wrongPassword = false) {
+export async function authorize(fixture, wrongPassword = false, config = {}) {
+  const issuer = config.issuer ?? 'http://127.0.0.1:8180/realms/autonexus';
+  const client = config.client ?? 'autonexus-shell';
+  const redirect = config.redirect ?? 'http://127.0.0.1:4200/auth/callback';
   const verifier = randomBytes(48).toString('base64url');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
   const state = randomBytes(24).toString('base64url');
@@ -42,8 +45,8 @@ export async function authorize(fixture, wrongPassword = false) {
   const match = html.match(/<form\b[^>]*\baction="([^"]+)"/i);
   assert.ok(match, 'Authorization form not found.');
   const action = new URL(match[1].replaceAll('&amp;', '&'));
-  assert.equal(action.origin, 'http://127.0.0.1:8180');
-  assert.ok(action.pathname.startsWith('/realms/autonexus/login-actions/'));
+  assert.equal(action.origin, new URL(issuer).origin);
+  assert.ok(action.pathname.startsWith(new URL(issuer).pathname + '/login-actions/'));
   const cookies = response.headers
     .getSetCookie()
     .map((value) => value.split(';')[0])

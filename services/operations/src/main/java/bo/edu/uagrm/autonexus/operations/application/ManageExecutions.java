@@ -49,9 +49,12 @@ public class ManageExecutions {
         if (token == null || token.isBlank() || !ExecutionPorts.SCOPES.contains(scope)) throw denied();
         Authorized authorized = employees.authorize(token, scope, List.of(assignmentId));
         if (authorized == null || authorized.actor() == null || authorized.observedAt() == null) throw dependency();
+        if (!"active".equals(authorized.actor().status()) || authorized.actor().employeeId() == null) throw denied();
         if (authorized.items() == null || authorized.items().size() != 1) throw missing();
         Assignment assignment = authorized.items().get(0);
         if (assignment == null || !assignmentId.equals(assignment.assignmentId())) throw missing();
+        if (!List.of("active", "inactive").contains(assignment.employeeStatus())) throw state();
+        if (!"read-team".equals(scope) && !authorized.actor().employeeId().equals(assignment.employeeId())) throw missing();
         return authorized;
     }
 
@@ -60,15 +63,15 @@ public class ManageExecutions {
      * identity owner reported. A mismatch is a state problem, never an empty result.
      */
     private Confirmed confirmed(UUID assignmentId, Assignment assignment, boolean ownRecord) {
+        if (!"confirmed".equals(assignment.status())) throw missing();
         Confirmed work = repository.confirmed(assignmentId).orElseThrow(ManageExecutions::missing);
         if (!Objects.equals(work.orderId(), assignment.orderId())
                 || !Objects.equals(work.employeeId(), assignment.employeeId())
                 || !Objects.equals(work.sagaId(), assignment.sagaId())
                 || !Objects.equals(work.startsAt(), assignment.startsAt())
                 || !Objects.equals(work.endsAt(), assignment.endsAt())
-                || !"confirmed".equals(assignment.status())
                 || assignment.version() < 1
-                || !Boolean.TRUE.equals(assignment.orderConfirmedObserved())) throw state();
+                || assignment.orderConfirmedObserved() == null) throw state();
         if (ownRecord && !"active".equals(assignment.employeeStatus())) throw denied();
         return work;
     }
@@ -86,7 +89,6 @@ public class ManageExecutions {
     public Mutation<Execution> start(String token, UUID assignmentId, Map<String, Object> body) {
         Validation.onlyKeys(body, Execution.START_KEYS);
         UUID operationId = Validation.uuid(body.get("operationId"));
-        if (body.get("expectedVersion") != null) Validation.expectedVersion(body.get("expectedVersion"));
         Authorized authorized = authorize(token, "write", assignmentId);
         Confirmed work = confirmed(assignmentId, authorized.items().get(0), true);
         String fingerprint = fingerprint("execution-start", operationId, work, "none");
@@ -94,8 +96,17 @@ public class ManageExecutions {
         if (replay.isPresent()) {
             return new Mutation<>(repository.executionById(replay.get()).orElseThrow(ManageExecutions::state), true);
         }
-        Execution created = repository.insertExecution(work, clock.instant(), authorized.actor().employeeId().toString());
-        repository.remember(operationId, fingerprint, created.id(), authorized.actor().employeeId().toString(), "execution-started");
+        Execution created;
+        try {
+            created = repository.insertExecution(work, clock.instant(), authorized.actor().employeeId().toString(), operationId, fingerprint);
+        } catch (OperationsError conflict) {
+            if (!"EXECUTION_ALREADY_STARTED".equals(conflict.code())) throw conflict;
+            Optional<UUID> concurrentReplay = repository.replayed(operationId, fingerprint);
+            if (concurrentReplay.isPresent()) {
+                return new Mutation<>(repository.executionById(concurrentReplay.get()).orElseThrow(ManageExecutions::state), true);
+            }
+            throw conflict;
+        }
         return new Mutation<>(created, false);
     }
 
@@ -113,14 +124,14 @@ public class ManageExecutions {
         Instant occurredAt = requested == null ? now : requested;
         if (occurredAt.isAfter(now) || occurredAt.isBefore(current.startedAt())) throw OperationsError.invalid();
         String fingerprint = fingerprint("execution-advance", operationId, work,
-                expectedVersion + "\u001F" + description + "\u001F" + minutes + "\u001F" + occurredAt);
+                expectedVersion + "\u001F" + description + "\u001F" + minutes + "\u001F"
+                        + (requested == null ? "server-time" : requested.toString()));
         if (repository.replayed(operationId, fingerprint).isPresent()) {
             return new Mutation<>(repository.executionById(current.id()).orElseThrow(ManageExecutions::state), true);
         }
         Execution updated = repository.appendAdvance(current, expectedVersion,
                 new AdvanceDraft(description, minutes, occurredAt), now,
-                authorized.actor().employeeId().toString());
-        repository.remember(operationId, fingerprint, current.id(), authorized.actor().employeeId().toString(), "advance-recorded");
+                authorized.actor().employeeId().toString(), operationId, fingerprint);
         return new Mutation<>(updated, false);
     }
 
@@ -144,15 +155,13 @@ public class ManageExecutions {
         Optional<UUID> replay = repository.replayed(operationId, fingerprint);
         if (replay.isPresent()) {
             EvidenceRecord stored = repository.evidence(work.orderId(), replay.get()).orElseThrow(ManageExecutions::state);
-            return new EvidenceUpload(stored.evidence(), authorise(stored));
+            return new EvidenceUpload(stored.evidence(), authorise(stored), true);
         }
         UUID evidenceId = UUID.randomUUID();
         String objectKey = objectKey(work.orderId(), evidenceId, 1, contentType);
-        EvidenceRecord created = repository.insertEvidence(execution, advanceId, draft, objectKey,
-                authorized.actor().employeeId().toString(), clock.instant());
-        repository.remember(operationId, fingerprint, created.evidence().id(),
-                authorized.actor().employeeId().toString(), "evidence-requested");
-        return new EvidenceUpload(created.evidence(), authorise(created));
+        EvidenceRecord created = repository.insertEvidence(execution, evidenceId, advanceId, draft, objectKey,
+                authorized.actor().employeeId().toString(), clock.instant(), operationId, fingerprint);
+        return new EvidenceUpload(created.evidence(), authorise(created), false);
     }
 
     public Mutation<Execution.Evidence> confirmEvidence(String token, UUID assignmentId, UUID evidenceId,
@@ -177,19 +186,20 @@ public class ManageExecutions {
         Instant now = clock.instant();
         StoredObject stored = storage.stat(record.objectKey()).orElse(null);
         if (stored == null) {
-            repository.markFailed(evidence, expectedVersion, "EVIDENCE_OBJECT_MISSING", now);
-            throw evidenceState();
+            if (!repository.markFailed(evidence, expectedVersion, "EVIDENCE_OBJECT_MISSING", now,
+                    operationId, fingerprint, authorized.actor().employeeId().toString())) throw OperationsError.conflict("VERSION_CONFLICT");
+            return new Mutation<>(repository.evidence(work.orderId(), evidence.id()).orElseThrow(ManageExecutions::state).evidence(), false);
         }
         String failure = EvidenceRules.verify(evidence.contentType(), evidence.sizeBytes(),
                 record.checksumSha256(), stored, storage.prefix(record.objectKey(), 32));
         if (failure != null) {
-            repository.markFailed(evidence, expectedVersion, failure, now);
+            if (!repository.markFailed(evidence, expectedVersion, failure, now,
+                    operationId, fingerprint, authorized.actor().employeeId().toString())) throw OperationsError.conflict("VERSION_CONFLICT");
             storage.delete(record.objectKey());
-            throw evidenceState();
+            return new Mutation<>(repository.evidence(work.orderId(), evidence.id()).orElseThrow(ManageExecutions::state).evidence(), false);
         }
-        if (!repository.markVerified(evidence, expectedVersion, stored, now)) throw evidenceState();
-        repository.remember(operationId, fingerprint, evidence.id(),
-                authorized.actor().employeeId().toString(), "evidence-confirmed");
+        if (!repository.markVerified(evidence, expectedVersion, stored, now, operationId, fingerprint,
+                authorized.actor().employeeId().toString())) throw OperationsError.conflict("VERSION_CONFLICT");
         return new Mutation<>(repository.evidence(work.orderId(), evidence.id())
                 .orElseThrow(ManageExecutions::state).evidence(), false);
     }
@@ -198,33 +208,34 @@ public class ManageExecutions {
         Validation.onlyKeys(body, Execution.RETRY_KEYS);
         UUID operationId = Validation.uuid(body.get("operationId"));
         int expectedVersion = Validation.expectedVersion(body.get("expectedVersion"));
-        String checksum = EvidenceRules.checksum(body.get("checksumSha256"));
+        String contentType = EvidenceRules.contentType(body.get("contentType"));
+        EvidenceDraft draft = new EvidenceDraft(EvidenceRules.fileName(body.get("fileName")), contentType,
+                EvidenceRules.size(body.get("sizeBytes"), contentType), EvidenceRules.checksum(body.get("checksumSha256")));
         Authorized authorized = authorize(token, "write", assignmentId);
         Confirmed work = confirmed(assignmentId, authorized.items().get(0), true);
         Execution execution = readExecution(work);
         EvidenceRecord record = repository.evidence(work.orderId(), evidenceId).orElseThrow(ManageExecutions::missing);
         requireOwned(execution, record.evidence());
         requireStorage();
+        String fingerprint = fingerprint("evidence-retry", operationId, work, evidenceId + "\u001F"
+                + draft.fileName() + "\u001F" + draft.contentType() + "\u001F" + draft.sizeBytes() + "\u001F" + draft.checksumSha256());
+        Optional<UUID> replay = repository.replayed(operationId, fingerprint);
+        if (replay.isPresent()) {
+            EvidenceRecord stored = repository.evidence(work.orderId(), replay.get()).orElseThrow(ManageExecutions::state);
+            return new EvidenceUpload(stored.evidence(), authorise(stored), true);
+        }
         if ("available".equals(record.evidence().state())) throw evidenceState();
         if (record.evidence().attempt() >= Execution.MAX_ATTEMPTS) {
             throw OperationsError.conflict("EVIDENCE_ATTEMPTS_EXHAUSTED");
         }
-        String fingerprint = fingerprint("evidence-retry", operationId, work, evidenceId + "\u001F" + checksum);
-        Optional<UUID> replay = repository.replayed(operationId, fingerprint);
-        if (replay.isPresent()) {
-            EvidenceRecord stored = repository.evidence(work.orderId(), replay.get()).orElseThrow(ManageExecutions::state);
-            return new EvidenceUpload(stored.evidence(), authorise(stored));
-        }
         int attempt = record.evidence().attempt() + 1;
-        String objectKey = objectKey(work.orderId(), evidenceId, attempt, record.evidence().contentType());
-        if (!repository.markPending(record.evidence(), expectedVersion, objectKey, checksum,
-                authorized.actor().employeeId().toString(), clock.instant())) {
+        String objectKey = objectKey(work.orderId(), evidenceId, attempt, draft.contentType());
+        if (!repository.markPending(record.evidence(), expectedVersion, draft, objectKey,
+                authorized.actor().employeeId().toString(), clock.instant(), operationId, fingerprint)) {
             throw OperationsError.conflict("VERSION_CONFLICT");
         }
         EvidenceRecord updated = repository.evidence(work.orderId(), evidenceId).orElseThrow(ManageExecutions::state);
-        repository.remember(operationId, fingerprint, evidenceId,
-                authorized.actor().employeeId().toString(), "evidence-retried");
-        return new EvidenceUpload(updated.evidence(), authorise(updated));
+        return new EvidenceUpload(updated.evidence(), authorise(updated), false);
     }
 
     public Download download(String token, String scope, UUID assignmentId, UUID evidenceId) {

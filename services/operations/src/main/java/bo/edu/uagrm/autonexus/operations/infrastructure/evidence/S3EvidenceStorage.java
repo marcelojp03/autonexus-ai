@@ -56,11 +56,19 @@ public final class S3EvidenceStorage implements EvidenceStorage {
                     .bucket(bucket)
                     .key(objectKey)
                     .contentType(contentType)
+                    .contentLength(sizeBytes)
                     .checksumSHA256(checksumSha256)
+                    // The conditional write must be part of the request being signed. Returning
+                    // this header separately would let a holder omit it and overwrite the key.
+                    .overrideConfiguration(override -> override.putHeader("If-None-Match", "*"))
                     .build();
             var presigned = presigner.presignPutObject(builder -> builder
                     .signatureDuration(uploadTtl)
                     .putObjectRequest(request));
+            var length = presigned.signedHeaders().get("content-length");
+            if (length == null || !length.contains(Long.toString(sizeBytes))) throw unavailable();
+            var condition = presigned.signedHeaders().get("if-none-match");
+            if (condition == null || !condition.contains("*")) throw unavailable();
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put("Content-Type", contentType);
             headers.put("x-amz-checksum-sha256", checksumSha256);

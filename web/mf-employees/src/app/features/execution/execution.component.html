@@ -1,0 +1,103 @@
+<nz-page-header nzTitle="Ejecución de mis trabajos" nzSubtitle="CU16 · avances y evidencias">
+  <nz-page-header-extra>
+    <button nz-button nzType="default" type="button" id="execution-reload" (click)="load()">Actualizar</button>
+  </nz-page-header-extra>
+</nz-page-header>
+
+@if (error()) {
+  <nz-alert id="execution-error" nzType="error" nzShowIcon [nzMessage]="error()!" nzDescription="La ejecución no cambia el estado de la orden; verificar y finalizar es CU17."></nz-alert>
+}
+@if (notice()) {
+  <nz-alert id="execution-notice" nzType="success" nzShowIcon [nzMessage]="notice()!"></nz-alert>
+}
+
+<nz-card nzTitle="Trabajo confirmado">
+  <label class="field" for="execution-work">Trabajo asignado</label>
+  <nz-select
+    id="execution-work"
+    class="wide"
+    nzPlaceHolder="Elegí un trabajo asignado"
+    [ngModel]="selected()"
+    (ngModelChange)="select($event)"
+    [nzLoading]="loading()">
+    <nz-option [nzValue]="null" nzLabel="—"></nz-option>
+    @for (work of works(); track work.assignmentId) {
+      <nz-option
+        [nzValue]="work.assignmentId"
+        [nzLabel]="work.orderNumber + ' · ' + work.vehicle.plate + ' · ' + (work.executionStatus === 'in_progress' ? 'en ejecución' : 'sin iniciar')"></nz-option>
+    }
+  </nz-select>
+  @if (!works().length && !loading()) {
+    <nz-empty nzNotFoundImage="simple" nzNotFoundContent="No hay trabajos confirmados asignados en el rango consultado."></nz-empty>
+  }
+  @if (selectedWork() && !canWriteSelected()) {
+    <p role="note" class="hint">La ejecución es de lectura. Solo el mecánico asignado y activo puede iniciar o registrar avances y evidencias.</p>
+  }
+</nz-card>
+
+@if (canStart()) {
+  <nz-card nzTitle="Iniciar la actividad">
+    <p>El inicio se registra una sola vez y queda auditado. La orden sigue confirmada por CU15.</p>
+    @if (canWriteSelected()) {
+      <button nz-button nzType="primary" type="button" id="execution-start" [nzLoading]="busy()" (click)="start()">Iniciar ejecución</button>
+    }
+  </nz-card>
+}
+
+@if (execution(); as current) {
+  <nz-card nzTitle="Registrar avance">
+    @if (canWriteSelected()) {
+    <div class="toolbar">
+      <label class="field" for="execution-description">Tareas realizadas</label>
+      <input nz-input id="execution-description" [ngModel]="description()" (ngModelChange)="description.set($event)" placeholder="Cambio de aceite y revisión de frenos" />
+      <label class="field" for="execution-minutes">Minutos empleados</label>
+      <nz-input-number id="execution-minutes" [nzMin]="1" [nzMax]="1440" [ngModel]="minutes()" (ngModelChange)="minutes.set($event)"></nz-input-number>
+      <button nz-button nzType="primary" type="button" id="execution-advance" [disabled]="!canRegister() || description().trim().length < 3" (click)="registerAdvance()">Registrar avance</button>
+    </div>
+    }
+    <p class="hint">Versión de la ejecución: {{ current.version }}. Un avance no finaliza el trabajo.</p>
+  </nz-card>
+
+  <nz-card nzTitle="Avances registrados">
+    @if (!current.advances.length) {
+      <nz-empty nzNotFoundImage="simple" nzNotFoundContent="Todavía no hay avances registrados."></nz-empty>
+    }
+    @for (advance of current.advances; track advance.id) {
+      <div class="advance">
+        <strong>#{{ advance.sequence }} · {{ advance.minutesWorked }} min</strong>
+        <span class="when">{{ time(advance.recordedAt) }}</span>
+        <p>{{ advance.description }}</p>
+        @for (evidence of advance.evidences; track evidence.id) {
+          <nz-tag [nzColor]="evidenceTag(evidence)">{{ evidenceLabel(evidence) }}</nz-tag>
+          <span class="file">{{ evidence.fileName }} · intento {{ evidence.attempt }}</span>
+          @if (evidence.state === 'available') {
+            <button nz-button nzType="link" type="button" (click)="downloadEvidence(evidence)">Descargar evidencia</button>
+          }
+          @if (evidence.state === 'pending' && canWriteSelected()) {
+            <button nz-button nzType="default" type="button" [disabled]="busy()" (click)="verifyEvidence(evidence)">Verificar carga</button>
+          }
+          @if (evidence.state === 'failed' && canWriteSelected()) {
+            <button nz-button nzType="default" type="button" [disabled]="!file() || busy()" (click)="retryEvidence(evidence)">Reintentar con el archivo seleccionado</button>
+          }
+          @if (evidence.failureCode) {
+            <span class="failure">{{ evidence.failureCode }}</span>
+          }
+        }
+        @if (canWriteSelected()) {
+        <div class="attach">
+          <label class="field" [attr.for]="'evidence-' + advance.id">Evidencia (JPEG/PNG/WEBP ≤ 5 MiB, MP4 ≤ 20 MiB)</label>
+          <input type="file" [id]="'evidence-' + advance.id" accept="image/jpeg,image/png,image/webp,video/mp4" (change)="chooseFile($event)" />
+          <button nz-button type="button" [attr.id]="'evidence-upload-' + advance.id" [disabled]="!file() || busy()" (click)="attachEvidence(advance)">Adjuntar</button>
+          @if (stateOf(advance.id); as step) {
+            <span class="step" role="status">{{ step }}</span>
+          }
+        </div>
+        }
+      </div>
+    }
+    <p class="hint">
+      Pendiente: {{ current.evidenceSummary.pending }} · Confirmadas: {{ current.evidenceSummary.available }} · Fallidas: {{ current.evidenceSummary.failed }}.
+      Una carga en el almacenamiento no es evidencia confirmada hasta que el servidor la verifica.
+    </p>
+  </nz-card>
+}

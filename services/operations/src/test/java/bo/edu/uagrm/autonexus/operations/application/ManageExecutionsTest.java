@@ -116,8 +116,8 @@ class ManageExecutionsTest {
         identity.own = assignment("reserved", "active", employee);
         OperationsError failure = assertThrows(OperationsError.class,
                 () -> useCase.start("human", assignment, startBody(UUID.randomUUID())));
-        assertEquals(503, failure.statusCode());
-        assertEquals("EXECUTION_STATE_UNAVAILABLE", failure.code());
+        assertEquals(404, failure.statusCode());
+        assertEquals("EXECUTION_WORK_NOT_FOUND", failure.code());
     }
 
     @Test
@@ -130,6 +130,20 @@ class ManageExecutionsTest {
         OperationsError conflict = assertThrows(OperationsError.class,
                 () -> useCase.advance("human", assignment, advanceBody(UUID.randomUUID(), 1, "Otra cosa")));
         assertEquals("VERSION_CONFLICT", conflict.code());
+    }
+
+    @Test
+    void replaysAnAdvanceWithoutChangingItsServerAssignedTimestampOrSequence() {
+        authorizedOwn();
+        useCase.start("human", assignment, startBody(UUID.randomUUID()));
+        UUID operationId = UUID.randomUUID();
+        Map<String, Object> body = advanceBody(operationId, 1, "Cambio de aceite");
+        Mutation<Execution> first = useCase.advance("human", assignment, body);
+        Mutation<Execution> replay = useCase.advance("human", assignment, body);
+        assertFalse(first.replayed());
+        assertTrue(replay.replayed());
+        assertEquals(1, replay.value().advances().size());
+        assertEquals(first.value().advances().getFirst().occurredAt(), replay.value().advances().getFirst().occurredAt());
     }
 
     @Test
@@ -173,6 +187,22 @@ class ManageExecutionsTest {
     }
 
     @Test
+    void evidenceRequestReplayKeepsTheSameEvidenceAndKey() {
+        authorizedOwn();
+        Execution execution = startedWithAdvance();
+        UUID advanceId = execution.advances().getFirst().id();
+        UUID operationId = UUID.randomUUID();
+        Map<String, Object> body = evidenceBody(operationId);
+        EvidenceUpload first = useCase.requestEvidence("human", assignment, advanceId, body);
+        EvidenceUpload replay = useCase.requestEvidence("human", assignment, advanceId, body);
+        assertFalse(first.replayed());
+        assertTrue(replay.replayed());
+        assertEquals(first.evidence().id(), replay.evidence().id());
+        assertEquals(key(first), key(replay));
+        assertEquals(1, repository.evidenceRecords.size());
+    }
+
+    @Test
     void aConfirmedEvidenceCannotBeConfirmedAgainWithANewOperation() {
         authorizedOwn();
         Execution execution = startedWithAdvance();
@@ -192,9 +222,9 @@ class ManageExecutionsTest {
         UUID advanceId = execution.advances().getFirst().id();
         EvidenceUpload request = useCase.requestEvidence("human", assignment, advanceId, evidenceBody(UUID.randomUUID()));
         storage.put(key(request), "%PDF-1.7".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-        OperationsError failure = assertThrows(OperationsError.class, () -> useCase.confirmEvidence("human",
-                assignment, request.evidence().id(), confirmBody(UUID.randomUUID(), 1)));
-        assertEquals("EVIDENCE_STATE_CONFLICT", failure.code());
+        Mutation<Execution.Evidence> failure = useCase.confirmEvidence("human",
+                assignment, request.evidence().id(), confirmBody(UUID.randomUUID(), 1));
+        assertEquals("failed", failure.value().state());
         assertEquals(1, storage.deleted.size());
         assertEquals("failed", repository.evidences.get(request.evidence().id()).state());
         assertEquals("EVIDENCE_CONTENT_MISMATCH", repository.evidences.get(request.evidence().id()).failureCode());
@@ -206,8 +236,9 @@ class ManageExecutionsTest {
         Execution execution = startedWithAdvance();
         EvidenceUpload request = useCase.requestEvidence("human", assignment,
                 execution.advances().getFirst().id(), evidenceBody(UUID.randomUUID()));
-        assertThrows(OperationsError.class, () -> useCase.confirmEvidence("human", assignment,
-                request.evidence().id(), confirmBody(UUID.randomUUID(), 1)));
+        Mutation<Execution.Evidence> failure = useCase.confirmEvidence("human", assignment,
+                request.evidence().id(), confirmBody(UUID.randomUUID(), 1));
+        assertEquals("failed", failure.value().state());
         assertEquals("failed", repository.evidences.get(request.evidence().id()).state());
         assertEquals("EVIDENCE_OBJECT_MISSING", repository.evidences.get(request.evidence().id()).failureCode());
     }
@@ -218,9 +249,13 @@ class ManageExecutionsTest {
         Execution execution = startedWithAdvance();
         EvidenceUpload request = useCase.requestEvidence("human", assignment,
                 execution.advances().getFirst().id(), evidenceBody(UUID.randomUUID()));
-        assertThrows(OperationsError.class, () -> useCase.confirmEvidence("human", assignment,
-                request.evidence().id(), confirmBody(UUID.randomUUID(), 1)));
+        Mutation<Execution.Evidence> failure = useCase.confirmEvidence("human", assignment,
+                request.evidence().id(), confirmBody(UUID.randomUUID(), 1));
+        assertEquals("failed", failure.value().state());
         Map<String, Object> body = confirmBody(UUID.randomUUID(), 2);
+        body.put("fileName", "foto.png");
+        body.put("contentType", "image/png");
+        body.put("sizeBytes", 1024);
         body.put("checksumSha256", SHA256);
         EvidenceUpload retry = useCase.retryEvidence("human", assignment, request.evidence().id(), body);
         assertEquals(2, retry.evidence().attempt());
@@ -234,7 +269,7 @@ class ManageExecutionsTest {
         Execution execution = startedWithAdvance();
         UUID foreignAdvance = UUID.randomUUID();
         Execution.Evidence stranger = new Execution.Evidence(UUID.randomUUID(), foreignAdvance, "ajena.png",
-                "image/png", 1024L, "pending", 1, null, now, null);
+                "image/png", 1024L, "pending", 1, null, now, null, 1);
         repository.evidences.put(stranger.id(), stranger);
         repository.evidenceRecords.put(stranger.id(), new EvidenceRecord(stranger, order,
                 "evidence/" + order + "/" + stranger.id() + "/a1-aaaa.png", SHA256, null));
@@ -298,34 +333,37 @@ class ManageExecutionsTest {
             return executions.values().stream().filter(execution -> execution.id().equals(executionId)).findFirst();
         }
 
-        @Override public Execution insertExecution(Confirmed work, Instant now, String actor) {
+        @Override public Execution insertExecution(Confirmed work, Instant now, String actor, UUID operationId, String fingerprint) {
             if (!executions.isEmpty()) throw OperationsError.conflict("EXECUTION_ALREADY_STARTED");
             Execution execution = new Execution(UUID.randomUUID(), work.orderId(), work.orderNumber(),
-                    work.assignmentId(), work.employeeId(), Execution.IN_PROGRESS, now, 1, List.of());
+                    work.assignmentId(), work.employeeId(), Execution.IN_PROGRESS, now, 1, List.of(), new Execution.Summary(0, 0, 0));
             executions.put(execution.id(), execution);
+            rememberOperation(operationId, fingerprint, execution.id());
             return execution;
         }
 
         @Override public Execution appendAdvance(Execution current, int expectedVersion, AdvanceDraft draft,
-                Instant now, String actor) {
+                Instant now, String actor, UUID operationId, String fingerprint) {
             if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
             List<Execution.Advance> advances = new ArrayList<>(current.advances());
             advances.add(new Execution.Advance(UUID.randomUUID(), ++sequence, draft.description(),
                     draft.minutesWorked(), draft.occurredAt(), now, 1, List.of()));
             Execution updated = new Execution(current.id(), current.orderId(), current.orderNumber(),
                     current.assignmentId(), current.employeeId(), current.status(), current.startedAt(),
-                    current.version() + 1, List.copyOf(advances));
+                    current.version() + 1, List.copyOf(advances), Execution.Summary.of(advances));
             executions.put(updated.id(), updated);
+            rememberOperation(operationId, fingerprint, current.id());
             return updated;
         }
 
-        @Override public EvidenceRecord insertEvidence(Execution execution, UUID advanceId, EvidenceDraft draft,
-                String objectKey, String actor, Instant now) {
-            Execution.Evidence evidence = new Execution.Evidence(UUID.randomUUID(), advanceId, draft.fileName(),
-                    draft.contentType(), draft.sizeBytes(), "pending", 1, null, now, null);
+        @Override public EvidenceRecord insertEvidence(Execution execution, UUID evidenceId, UUID advanceId, EvidenceDraft draft,
+                String objectKey, String actor, Instant now, UUID operationId, String fingerprint) {
+            Execution.Evidence evidence = new Execution.Evidence(evidenceId, advanceId, draft.fileName(),
+                    draft.contentType(), draft.sizeBytes(), "pending", 1, null, now, null, 1);
             evidences.put(evidence.id(), evidence);
             EvidenceRecord record = new EvidenceRecord(evidence, execution.orderId(), objectKey, draft.checksumSha256(), null);
             evidenceRecords.put(evidence.id(), record);
+            rememberOperation(operationId, fingerprint, evidence.id());
             return record;
         }
 
@@ -333,37 +371,40 @@ class ManageExecutionsTest {
             return Optional.ofNullable(evidenceRecords.get(evidenceId));
         }
 
-        @Override public boolean markVerified(Execution.Evidence evidence, int expectedVersion, StoredObject stored, Instant now) {
+        @Override public boolean markVerified(Execution.Evidence evidence, int expectedVersion, StoredObject stored, Instant now, UUID operationId, String fingerprint, String actor) {
             if (!"pending".equals(evidence.state())) return false;
             Execution.Evidence updated = new Execution.Evidence(evidence.id(), evidence.advanceId(), evidence.fileName(),
                     evidence.contentType(), evidence.sizeBytes(), "available", evidence.attempt(), null,
-                    evidence.createdAt(), now);
+                    evidence.createdAt(), now, evidence.version() + 1);
             evidences.put(updated.id(), updated);
             evidenceRecords.put(updated.id(), new EvidenceRecord(updated, orderIdOf(updated),
                     evidenceRecords.get(updated.id()).objectKey(), evidenceRecords.get(updated.id()).checksumSha256(),
                     stored.versionId()));
+            rememberOperation(operationId, fingerprint, evidence.id());
             return true;
         }
 
-        @Override public boolean markFailed(Execution.Evidence evidence, int expectedVersion, String failureCode, Instant now) {
+        @Override public boolean markFailed(Execution.Evidence evidence, int expectedVersion, String failureCode, Instant now, UUID operationId, String fingerprint, String actor) {
             if (!"pending".equals(evidence.state())) return false;
             Execution.Evidence updated = new Execution.Evidence(evidence.id(), evidence.advanceId(), evidence.fileName(),
                     evidence.contentType(), evidence.sizeBytes(), "failed", evidence.attempt(), failureCode,
-                    evidence.createdAt(), null);
+                    evidence.createdAt(), null, evidence.version() + 1);
             evidences.put(updated.id(), updated);
             EvidenceRecord previous = evidenceRecords.get(updated.id());
             evidenceRecords.put(updated.id(), new EvidenceRecord(updated, previous.orderId(), previous.objectKey(),
                     previous.checksumSha256(), null));
+            rememberOperation(operationId, fingerprint, evidence.id());
             return true;
         }
 
-        @Override public boolean markPending(Execution.Evidence evidence, int expectedVersion, String objectKey,
-                String checksum, String actor, Instant now) {
-            Execution.Evidence updated = new Execution.Evidence(evidence.id(), evidence.advanceId(), evidence.fileName(),
-                    evidence.contentType(), evidence.sizeBytes(), "pending", evidence.attempt() + 1, null,
-                    evidence.createdAt(), null);
+        @Override public boolean markPending(Execution.Evidence evidence, int expectedVersion, EvidenceDraft draft,
+                String objectKey, String actor, Instant now, UUID operationId, String fingerprint) {
+            Execution.Evidence updated = new Execution.Evidence(evidence.id(), evidence.advanceId(), draft.fileName(),
+                    draft.contentType(), draft.sizeBytes(), "pending", evidence.attempt() + 1, null,
+                    evidence.createdAt(), null, evidence.version() + 1);
             evidences.put(updated.id(), updated);
-            evidenceRecords.put(updated.id(), new EvidenceRecord(updated, orderIdOf(updated), objectKey, checksum, null));
+            evidenceRecords.put(updated.id(), new EvidenceRecord(updated, orderIdOf(updated), objectKey, draft.checksumSha256(), null));
+            rememberOperation(operationId, fingerprint, evidence.id());
             return true;
         }
 
@@ -378,7 +419,7 @@ class ManageExecutionsTest {
             return Optional.ofNullable(stored == null ? null : operations.get(stored));
         }
 
-        @Override public void remember(UUID operationId, String fingerprint, UUID entityId, String actor, String action) {
+        private void rememberOperation(UUID operationId, String fingerprint, UUID entityId) {
             operations.put(operationId, entityId);
             fingerprints.put(operationId + fingerprint, operationId);
         }

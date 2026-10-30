@@ -28,6 +28,19 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
               AND o.assignment_id IS NOT NULL AND o.employee_id IS NOT NULL
               AND o.confirmation_saga_id IS NOT NULL AND o.starts_at IS NOT NULL AND o.ends_at IS NOT NULL
               AND o.starts_at < o.ends_at
+              AND s.document->>'status'='confirmed'
+              AND s.document->>'orderId'=o.id::text
+              AND s.document->'input'->>'employeeId'=o.employee_id::text
+              AND (s.document->'input'->>'startsAt')::timestamptz=o.starts_at
+              AND (s.document->'input'->>'endsAt')::timestamptz=o.ends_at
+              AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.document->'steps') step
+                          WHERE step->>'command'='confirm_assignment' AND step->>'status'='applied'
+                            AND step->'result'->'resource'->>'id'=o.assignment_id::text
+                            AND step->'result'->'resource'->>'employeeId'=o.employee_id::text
+                            AND step->'result'->'resource'->>'orderId'=o.id::text
+                            AND step->'result'->'resource'->>'status'='confirmed')
+              AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.document->'steps') step
+                          WHERE step->>'command'='authorize_quote' AND step->>'status'='applied')
             """;
     private static final String EXECUTION = """
             SELECT e.id,e.order_id,e.assignment_id,e.employee_id,e.status,e.started_at,e.version,o.number AS order_number
@@ -39,7 +52,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
             """;
     private static final String EVIDENCE = """
             SELECT v.id,v.advance_id,v.order_id,v.file_name,v.content_type,v.size_bytes,v.checksum_sha256,
-                v.state,v.attempt,v.failure_code,v.created_at,v.confirmed_at,v.object_key,v.version_id
+                v.state,v.attempt,v.failure_code,v.created_at,v.confirmed_at,v.version_id,v.version,v.object_key
             FROM operations.work_evidence v
             """;
 
@@ -94,7 +107,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
 
     @Override
     @Transactional
-    public Execution insertExecution(Confirmed work, Instant now, String actor) {
+    public Execution insertExecution(Confirmed work, Instant now, String actor, UUID operationId, String fingerprint) {
         UUID id = UUID.randomUUID();
         try {
             jdbc.sql("""
@@ -114,12 +127,14 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         audit("work-execution", id, "started", actor, 1, Map.of(
                 "executionId", id.toString(), "orderId", work.orderId().toString(),
                 "assignmentId", work.assignmentId().toString(), "status", Execution.IN_PROGRESS));
+        super.remember(operationId, fingerprint, id);
         return executionById(id).orElseThrow(JdbcExecutionRepository::persistence);
     }
 
     @Override
     @Transactional
-    public Execution appendAdvance(Execution current, int expectedVersion, AdvanceDraft draft, Instant now, String actor) {
+    public Execution appendAdvance(Execution current, int expectedVersion, AdvanceDraft draft, Instant now, String actor,
+            UUID operationId, String fingerprint) {
         try {
             int advanced = jdbc.sql("""
                             UPDATE operations.work_executions SET version=version+1,updated_at=?
@@ -141,6 +156,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
             audit("work-advance", id, "recorded", actor, 1, Map.of(
                     "advanceId", id.toString(), "executionId", current.id().toString(),
                     "minutesWorked", draft.minutesWorked()));
+            super.remember(operationId, fingerprint, current.id());
         } catch (DataAccessException failure) {
             throw persistence();
         }
@@ -149,9 +165,9 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
 
     @Override
     @Transactional
-    public EvidenceRecord insertEvidence(Execution execution, UUID advanceId, EvidenceDraft draft,
-            String objectKey, String actor, Instant now) {
-        UUID id = UUID.randomUUID();
+    public EvidenceRecord insertEvidence(Execution execution, UUID evidenceId, UUID advanceId, EvidenceDraft draft,
+            String objectKey, String actor, Instant now, UUID operationId, String fingerprint) {
+        UUID id = evidenceId;
         try {
             int inserted = jdbc.sql("""
                             INSERT INTO operations.work_evidence(id,advance_id,order_id,file_name,content_type,
@@ -170,6 +186,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         }
         audit("work-evidence", id, "requested", actor, 1, Map.of(
                 "evidenceId", id.toString(), "advanceId", advanceId.toString(), "state", "pending", "attempt", 1));
+        super.remember(operationId, fingerprint, id);
         return evidence(execution.orderId(), id).orElseThrow(JdbcExecutionRepository::persistence);
     }
 
@@ -189,7 +206,8 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
 
     @Override
     @Transactional
-    public boolean markVerified(Execution.Evidence evidence, int expectedVersion, StoredObject stored, Instant now) {
+    public boolean markVerified(Execution.Evidence evidence, int expectedVersion, StoredObject stored, Instant now,
+            UUID operationId, String fingerprint, String actor) {
         try {
             int updated = jdbc.sql("""
                             UPDATE operations.work_evidence
@@ -205,14 +223,16 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         } catch (DataAccessException failure) {
             throw persistence();
         }
-        audit("work-evidence", evidence.id(), "confirmed", "system", expectedVersion + 1, Map.of(
+        audit("work-evidence", evidence.id(), "confirmed", actor, expectedVersion + 1, Map.of(
                 "evidenceId", evidence.id().toString(), "state", "available", "attempt", evidence.attempt()));
+        super.remember(operationId, fingerprint, evidence.id());
         return true;
     }
 
     @Override
     @Transactional
-    public boolean markFailed(Execution.Evidence evidence, int expectedVersion, String failureCode, Instant now) {
+    public boolean markFailed(Execution.Evidence evidence, int expectedVersion, String failureCode, Instant now,
+            UUID operationId, String fingerprint, String actor) {
         try {
             int updated = jdbc.sql("""
                             UPDATE operations.work_evidence
@@ -225,24 +245,26 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         } catch (DataAccessException failure) {
             throw persistence();
         }
-        audit("work-evidence", evidence.id(), "failed", "system", expectedVersion + 1, Map.of(
+        audit("work-evidence", evidence.id(), "failed", actor, expectedVersion + 1, Map.of(
                 "evidenceId", evidence.id().toString(), "state", "failed", "failureCode", failureCode));
+        super.remember(operationId, fingerprint, evidence.id());
         return true;
     }
 
     @Override
     @Transactional
-    public boolean markPending(Execution.Evidence evidence, int expectedVersion, String objectKey,
-            String checksum, String actor, Instant now) {
+    public boolean markPending(Execution.Evidence evidence, int expectedVersion, EvidenceDraft draft,
+            String objectKey, String actor, Instant now, UUID operationId, String fingerprint) {
         try {
             int updated = jdbc.sql("""
                             UPDATE operations.work_evidence
-                            SET state='pending',attempt=attempt+1,object_key=?,checksum_sha256=?,failure_code=NULL,
+                            SET state='pending',attempt=attempt+1,object_key=?,file_name=?,content_type=?,size_bytes=?,checksum_sha256=?,failure_code=NULL,
                                 etag=NULL,version_id=NULL,verified_size_bytes=NULL,verified_content_type=NULL,
                                 confirmed_at=NULL,requested_by=?,updated_at=?,version=version+1
                             WHERE id=? AND version=? AND state<>'available' AND attempt<5
                             """)
-                    .params(objectKey, checksum, actor, java.sql.Timestamp.from(now), evidence.id(), expectedVersion)
+                    .params(objectKey, draft.fileName(), draft.contentType(), draft.sizeBytes(), draft.checksumSha256(),
+                            actor, java.sql.Timestamp.from(now), evidence.id(), expectedVersion)
                     .update();
             if (updated != 1) return false;
         } catch (DataAccessException failure) {
@@ -250,6 +272,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         }
         audit("work-evidence", evidence.id(), "retried", actor, expectedVersion + 1, Map.of(
                 "evidenceId", evidence.id().toString(), "state", "pending", "attempt", evidence.attempt() + 1));
+        super.remember(operationId, fingerprint, evidence.id());
         return true;
     }
 
@@ -261,17 +284,6 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         } catch (DataAccessException failure) {
             throw persistence();
         }
-    }
-
-    @Override
-    @Transactional
-    public void remember(UUID operationId, String fingerprint, UUID entityId, String actor, String action) {
-        try {
-            super.remember(operationId, fingerprint, entityId);
-        } catch (DataAccessException failure) {
-            throw persistence();
-        }
-        audit("operation", entityId, action, actor, 1, Map.of("operationId", operationId.toString(), "entityId", entityId.toString()));
     }
 
     private Execution withAdvances(Execution execution) {
@@ -287,7 +299,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         }
         return new Execution(execution.id(), execution.orderId(), execution.orderNumber(), execution.assignmentId(),
                 execution.employeeId(), execution.status(), execution.startedAt(), execution.version(),
-                List.copyOf(complete));
+                List.copyOf(complete), Execution.Summary.of(complete));
     }
 
     private Execution map(ResultSet rs) throws SQLException {
@@ -296,7 +308,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         return new Execution(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
                 rs.getString("order_number"), rs.getObject("assignment_id", UUID.class),
                 rs.getObject("employee_id", UUID.class), status,
-                rs.getTimestamp("started_at").toInstant(), rs.getInt("version"), List.of());
+                rs.getTimestamp("started_at").toInstant(), rs.getInt("version"), List.of(), new Execution.Summary(0, 0, 0));
     }
 
     private Execution.Advance mapAdvance(ResultSet rs) throws SQLException {
@@ -310,6 +322,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
         return new Execution.Evidence(rs.getObject("id", UUID.class), rs.getObject("advance_id", UUID.class),
                 rs.getString("file_name"), rs.getString("content_type"), rs.getLong("size_bytes"),
                 rs.getString("state"), rs.getInt("attempt"), rs.getString("failure_code"),
-                rs.getTimestamp("created_at").toInstant(), confirmed == null ? null : confirmed.toInstant());
+                rs.getTimestamp("created_at").toInstant(), confirmed == null ? null : confirmed.toInstant(),
+                rs.getInt("version"));
     }
 }

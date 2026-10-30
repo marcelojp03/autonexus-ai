@@ -189,6 +189,18 @@ services:
     restart: "unless-stopped"
   operations:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-operations:local"
+    # CU16 evidence storage. Empty values keep the evidence flow explicitly unavailable; no
+    # credential is baked into an image and no bucket is created by this compose file.
+    environment:
+      S3_EVIDENCE_BUCKET: "${S3_EVIDENCE_BUCKET:-}"
+      S3_EVIDENCE_REGION: "${S3_EVIDENCE_REGION:-}"
+      S3_EVIDENCE_ENDPOINT: "${S3_EVIDENCE_ENDPOINT:-}"
+      S3_EVIDENCE_PATH_STYLE: "${S3_EVIDENCE_PATH_STYLE:-false}"
+      S3_EVIDENCE_UPLOAD_TTL_SECONDS: "${S3_EVIDENCE_UPLOAD_TTL_SECONDS:-300}"
+      S3_EVIDENCE_DOWNLOAD_TTL_SECONDS: "${S3_EVIDENCE_DOWNLOAD_TTL_SECONDS:-120}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN:-}"
     build:
       context: "."
       dockerfile: "infra/local/docker/operations.Dockerfile"

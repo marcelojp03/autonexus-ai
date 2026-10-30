@@ -5,6 +5,7 @@ import { sessionGuard } from '../auth/session';
 import { employeeEntryGuard } from '../features/agenda/entry.guard';
 import { agendaRoutes } from '../features/agenda/routes';
 import { employeesRoutes } from '../features/employees/routes';
+import { executionRoutes } from '../features/execution/routes';
 import { scheduleRoutes } from '../features/schedules/routes';
 import { securityRoutes } from '../features/security/routes';
 
@@ -20,6 +21,7 @@ class IntegratedNotFound {}
 export const integratedRoutes: Routes = [
   { path: '', pathMatch: 'full', canActivate: [employeeEntryGuard], component: IntegratedNotFound },
   ...agendaRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
+  ...executionRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...employeesRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...scheduleRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...securityRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),

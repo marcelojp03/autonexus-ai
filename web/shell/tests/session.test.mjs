@@ -45,6 +45,26 @@ test('CU05 custom-only role survives session presentation without granting busin
   } finally { o.dispose(); }
 });
 
+test('CU16 evidence bytes go to a presigned HTTPS URL without bearer credentials', async () => {
+  browser(); const sdk = fake(); const o = owner(sdk); const oldFetch = globalThis.fetch; await o.start();
+  const body = new Uint8Array([1, 2, 3]).buffer;
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, 'https://private-bucket.s3.us-east-1.amazonaws.com/evidence/object');
+      assert.equal(init.method, 'PUT');
+      assert.equal(init.credentials, 'omit');
+      assert.equal(init.redirect, 'error');
+      assert.equal(init.body, body);
+      assert.equal(init.headers['If-None-Match'], '*');
+      assert.equal(init.headers['x-amz-checksum-sha256'], 'checksum-only');
+      assert.equal(Object.keys(init.headers).some(key => ['authorization', 'cookie'].includes(key.toLowerCase())), false);
+      return new Response(null, { status: 200 });
+    };
+    const result = await o.session.uploadEvidence({ url: 'https://private-bucket.s3.us-east-1.amazonaws.com/evidence/object', method: 'PUT', headers: { 'If-None-Match': '*', 'x-amz-checksum-sha256': 'checksum-only' }, expiresAt: new Date(Date.now() + 60000).toISOString() }, body);
+    assert.deepEqual(result, { completed: true, status: 200 });
+  } finally { globalThis.fetch = oldFetch; o.dispose(); }
+});
+
 test('CU15 logout cleans owned recovery even without a mounted consumer, never other subjects or tokens', async () => {
   const stored = browser(); const sdk = fake(); const o = owner(sdk); await o.start();
   stored.set('cu15:pending:synthetic', 'synthetic-command'); stored.set('cu15:pending:other', 'other-command');

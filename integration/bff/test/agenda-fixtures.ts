@@ -11,6 +11,7 @@ export const WORK: AgendaWork = {
   description: 'Synthetic order', notes: null,
   services: [{ serviceId: ID, serviceName: 'Synthetic service', quantity: 1, estimatedMinutes: 120 }],
   orderVersion: 3, assignmentVersion: 2, observedAt: OBSERVED, confirmationObservation: 'pending',
+  executionStatus: 'not_started', executionProgress: { advances: 0, lastAdvanceAt: null, availableEvidence: 0 },
 };
 export const PAGE: AgendaPage = {
   actor: { employeeId: EMPLOYEE_ID, fullName: 'Synthetic mechanic', status: 'active', scopes: ['self', 'team'] },
@@ -20,4 +21,4 @@ export const PAGE: AgendaPage = {
 export const EMPLOYEES_PAGE = { items: [WORK.employee], total: 1, limit: 20, offset: 0, observedAt: OBSERVED };
 export const WORK_FIELDS = `assignmentId orderId orderNumber employee { id fullName status }
   vehicle { id plate make model } startsAt endsAt priority status description notes
-  services { serviceId serviceName quantity estimatedMinutes } orderVersion assignmentVersion observedAt confirmationObservation`;
+  services { serviceId serviceName quantity estimatedMinutes } orderVersion assignmentVersion observedAt confirmationObservation executionStatus executionProgress { advances lastAdvanceAt availableEvidence }`;

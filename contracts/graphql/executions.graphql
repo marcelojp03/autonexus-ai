@@ -12,6 +12,7 @@ type ExecutionEvidence {
   failureCode: String
   createdAt: DateTime!
   confirmedAt: DateTime
+  version: Int!
 }
 type ExecutionAdvance {
   id: UUID!
@@ -49,11 +50,11 @@ type EvidenceMutationResult { evidence: ExecutionEvidence!, replayed: Boolean! }
 type EvidenceUploadResult { evidence: ExecutionEvidence!, upload: EvidenceUpload!, replayed: Boolean! }
 """Temporary authorized download; the owner revalidated the actor and the record."""
 type EvidenceDownload { url: String!, expiresAt: DateTime! }
-input StartExecutionInput { operationId: UUID!, expectedVersion: Int }
+input StartExecutionInput { operationId: UUID! }
 input RecordAdvanceInput { operationId: UUID!, expectedVersion: Int!, description: String!, minutesWorked: Int!, occurredAt: DateTime }
 input RequestEvidenceInput { operationId: UUID!, fileName: String!, contentType: String!, sizeBytes: Int!, checksumSha256: String! }
 input ConfirmEvidenceInput { operationId: UUID!, expectedVersion: Int! }
-input RetryEvidenceInput { operationId: UUID!, expectedVersion: Int!, checksumSha256: String! }
+input RetryEvidenceInput { operationId: UUID!, expectedVersion: Int!, fileName: String!, contentType: String!, sizeBytes: Int!, checksumSha256: String! }
 extend type Query {
   myExecution(assignmentId: UUID!): Execution!
   teamExecution(assignmentId: UUID!): Execution!

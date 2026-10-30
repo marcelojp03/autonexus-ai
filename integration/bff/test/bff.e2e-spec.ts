@@ -21,6 +21,7 @@ const ALL = [
   'quotes:read', 'quotes:write', 'quotes:decide',
   'confirmations:read', 'confirmations:write',
   'agenda:read:self', 'agenda:read:team',
+  'executions:read:self', 'executions:read:team', 'executions:write',
 ];
 /** Mirrors the owner resolution: realm roles plus persisted assignments. */
 const effectiveFor = (bearer: string): string[] => {
@@ -28,7 +29,8 @@ const effectiveFor = (bearer: string): string[] => {
     const payload = JSON.parse(Buffer.from(bearer.split('.')[1], 'base64url').toString()) as { realm_access?: { roles?: string[] } };
     const roles = payload.realm_access?.roles ?? [];
     if (roles.includes('administrador')) return ALL;
-    if (roles.includes('jefe_taller')) return ['schedules:read', 'schedules:write', 'confirmations:read', 'confirmations:write'];
+    if (roles.includes('jefe_taller')) return ['schedules:read', 'schedules:write', 'confirmations:read', 'confirmations:write', 'executions:read:self', 'executions:read:team'];
+    if (roles.includes('mecanico')) return ['executions:read:self', 'executions:write'];
     return [];
   } catch {
     return [];
@@ -98,6 +100,13 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     createAppointment: vi.fn(),
     rescheduleAppointment: vi.fn(),
     cancelAppointment: vi.fn(),
+    execution: vi.fn(async () => ({ orderId: EMPLOYEE_ID, orderNumber: 'OT-HTTP', assignmentId: ASSIGNMENT_ID,
+      employeeId: EMPLOYEE_ID, status: 'in_progress', startedAt: '2026-10-30T12:00:00Z', version: 1,
+      advances: [], evidenceSummary: { pending: 0, available: 0, failed: 0 } })),
+    startExecution: vi.fn(async () => ({ execution: { orderId: EMPLOYEE_ID, assignmentId: ASSIGNMENT_ID, status: 'in_progress', version: 1, advances: [], evidenceSummary: { pending: 0, available: 0, failed: 0 } }, replayed: false })),
+    recordAdvance: vi.fn(async () => ({ execution: { orderId: EMPLOYEE_ID, assignmentId: ASSIGNMENT_ID, status: 'in_progress', version: 2, advances: [], evidenceSummary: { pending: 0, available: 0, failed: 0 } }, advance: { id: ASSIGNMENT_ID, sequence: 1 }, replayed: false })),
+    requestEvidence: vi.fn(), confirmEvidence: vi.fn(), retryEvidence: vi.fn(),
+    evidenceDownload: vi.fn(async () => ({ url: 'https://storage.invalid/signed', expiresAt: '2026-10-30T12:02:00Z' })),
   };
   const config = bffEnvironment({}, process.cwd());
   const agendaTransport = vi.fn<typeof fetch>().mockImplementation(async url => {
@@ -148,6 +157,21 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     expect(response.body.errors).toBeUndefined();
     expect(response.body.data.retryServiceConfirmation.status).toBe('compensation_pending');
     expect(operations.retryServiceConfirmation).toHaveBeenCalledWith(EMPLOYEE_ID, input, head);
+  });
+
+  it('CU16 exposes scoped reads and versioned writes through HTTP with field permissions', async () => {
+    const own = await post({ query: '{myExecution(assignmentId:"' + ASSIGNMENT_ID + '"){assignmentId status version evidenceSummary{pending available failed}}}' }, mechanic).expect(200);
+    expect(own.body.errors).toBeUndefined();
+    expect(operations.execution).toHaveBeenCalledWith('me', ASSIGNMENT_ID, mechanic);
+    const team = await post({ query: '{teamExecution(assignmentId:"' + ASSIGNMENT_ID + '"){assignmentId status}}' }, head).expect(200);
+    expect(team.body.errors).toBeUndefined();
+    expect(operations.execution).toHaveBeenCalledWith('team', ASSIGNMENT_ID, head);
+    const started = await post({ query: 'mutation($input:StartExecutionInput!){startExecution(assignmentId:"' + ASSIGNMENT_ID + '",input:$input){execution{assignmentId status version} replayed}}', variables: { input: { operationId: EMPLOYEE_ID } } }, mechanic).expect(200);
+    expect(started.body.errors).toBeUndefined();
+    expect(operations.startExecution).toHaveBeenCalledWith(ASSIGNMENT_ID, { operationId: EMPLOYEE_ID }, mechanic);
+    const denied = await post({ query: 'mutation($input:RecordAdvanceInput!){recordAdvance(assignmentId:"' + ASSIGNMENT_ID + '",input:$input){advance{id}}}', variables: { input: { operationId: EMPLOYEE_ID, expectedVersion: 1, description: 'No', minutesWorked: 1 } } }, head).expect(200);
+    expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(operations.recordAdvance).not.toHaveBeenCalled();
   });
 
   afterAll(async () => {
@@ -228,7 +252,7 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
   it('serves the CU02 catalog and enforces the security policy over HTTP', async () => {
     const own = await post({ query: '{ securityCatalog { catalog { id } effective } }' }, mechanic).expect(200);
     expect(own.body.errors).toBeUndefined();
-    expect(own.body.data.securityCatalog.effective).toEqual([]);
+    expect(own.body.data.securityCatalog.effective).toEqual(['executions:read:self', 'executions:write']);
 
     const denied = await post({ query: '{ securityRoles { name } }' }, head).expect(200);
     expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
@@ -297,15 +321,15 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
 
   it('CU05 exposes all five roots through the exact SDL with synthetic owners and human forwarding', async () => {
     agendaTransport.mockClear();
-    const result = await post({ query: `{
-      mine: myAgenda { actor {employeeId fullName status scopes} items {${WORK_FIELDS}} total limit offset from to timeZone observedAt }
-      myAgendaWork(assignmentId:"${ASSIGNMENT_ID}") {${WORK_FIELDS}}
-      teamAgenda(employeeId:"${AGENDA_WORK.employee.id}",limit:1,offset:2) {total}
-      teamAgendaWork(assignmentId:"${ASSIGNMENT_ID}") {${WORK_FIELDS}}
-      agendaTeamEmployees(search:"synthetic & name",status:inactive) {items{id fullName status} total limit offset observedAt}
-    }` }, admin).expect(200);
+    const fields = 'assignmentId executionStatus executionProgress { advances lastAdvanceAt availableEvidence }';
+    const result = await post({ query: '{ mine: myAgenda { actor {employeeId fullName status scopes} items {' + fields + '} total limit offset from to timeZone observedAt } myAgendaWork(assignmentId:"' + ASSIGNMENT_ID + '"){' + fields + '} teamAgenda(employeeId:"' + AGENDA_WORK.employee.id + '",limit:1,offset:2){total items{assignmentId}} teamAgendaWork(assignmentId:"' + ASSIGNMENT_ID + '"){' + fields + '} agendaTeamEmployees { items { id fullName status } total limit offset observedAt } }' }, admin).expect(200);
     expect(result.body.errors).toBeUndefined();
-    expect(result.body.data).toEqual({ mine: AGENDA_PAGE, myAgendaWork: AGENDA_WORK, teamAgenda: { total: 1 }, teamAgendaWork: AGENDA_WORK, agendaTeamEmployees: AGENDA_EMPLOYEES });
+    const summary = { assignmentId: ASSIGNMENT_ID, executionStatus: 'not_started', executionProgress: { advances: 0, lastAdvanceAt: null, availableEvidence: 0 } };
+    expect(result.body.data.mine.items).toEqual([summary]);
+    expect(result.body.data.myAgendaWork).toEqual(summary);
+    expect(result.body.data.teamAgenda.total).toBe(1);
+    expect(result.body.data.teamAgendaWork).toEqual(summary);
+    expect(result.body.data.agendaTeamEmployees.items).toEqual(AGENDA_EMPLOYEES.items);
     expect(agendaTransport).toHaveBeenCalledTimes(5);
     for (const call of agendaTransport.mock.calls) expect(call[1]?.headers).toEqual({ Authorization: 'Bearer ' + admin });
   });

@@ -30,6 +30,7 @@ Cliente y vehículo → Recepción → Orden → Cotización y aprobación
 - Elaborar cotizaciones versionadas y registrar aprobación o rechazo con evidencia.
 - Confirmar el servicio mediante una Saga que coordina Operaciones, Empleados y Finanzas.
 - Consultar la agenda propia o del equipo y el detalle autorizado de trabajos globalmente confirmados, en línea.
+- Iniciar y documentar la ejecución de un trabajo asignado, registrar avances y solicitar evidencias. La carga y descarga de archivos requiere configurar AWS S3 privado; sin esa configuración no se presentan como disponibles.
 
 Una cotización aprobada no es todavía un servicio confirmado. La coordinación conserva sus pasos y se recupera ante interrupciones; las asignaciones provisionales no se muestran como trabajos confirmados.
 

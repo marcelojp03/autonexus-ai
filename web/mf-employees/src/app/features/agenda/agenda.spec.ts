@@ -1,6 +1,10 @@
 import { expect, test } from 'vitest';
 
-import { civilToday, validRange, agendaError, employeeLanding } from './agenda.contract';
+import { civilToday, validRange, agendaError, employeeLanding, WORK_FIELDS } from './agenda.contract';
+test('CU16 execution progress is aditively published while CU15 confirmation remains visible', () => {
+  expect(WORK_FIELDS).toContain('status description notes');
+  expect(WORK_FIELDS).toContain('executionStatus executionProgress { advances lastAdvanceAt availableEvidence }');
+});
 test('La Paz civil date ignores browser timezone', () => {
   expect(civilToday(new Date('2026-11-01T02:00:00Z'))).toBe('2026-10-31');
 });

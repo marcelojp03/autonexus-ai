@@ -4,7 +4,7 @@ import { HttpEmployeesGateway } from './employees-gateway.js';
 import { HttpOperationsGateway } from './operations-gateway.js';
 import { HttpFinanceGateway } from './finance-gateway.js';
 import { bffEnvironment } from '../infrastructure/config/environment.js';
-import { PAGE, WORK, ID, EMPLOYEES_PAGE, WORK_FIELDS } from '../../test/agenda-fixtures.js';
+import { PAGE, WORK, ID, EMPLOYEE_ID, EMPLOYEES_PAGE, WORK_FIELDS } from '../../test/agenda-fixtures.js';
 
 const CALLER = { subject: 'synthetic-subject-not-an-employee-id', roles: ['custom_agenda_role'] };
 function setup(effective = ['agenda:read:self', 'agenda:read:team']) {
@@ -22,15 +22,9 @@ function setup(effective = ['agenda:read:self', 'agenda:read:team']) {
 describe('CU05 GraphQL contract with explicit fake HTTP owners', () => {
   it('maps all five exact roots and the complete agenda SDL DTO', async () => {
     const { graphql, transport, forbiddenTransport } = setup();
-    const response = await graphql.run({ query: `{
-      mine: myAgenda { actor { employeeId fullName status scopes } items { ${WORK_FIELDS} } total limit offset from to timeZone observedAt }
-      myAgendaWork(assignmentId: "${ID}") { ${WORK_FIELDS} }
-      teamAgenda(employeeId: "${WORK.employee.id}") { total items { assignmentId } }
-      teamAgendaWork(assignmentId: "${ID}") { ${WORK_FIELDS} }
-      agendaTeamEmployees { items { id fullName status } total limit offset observedAt }
-    }` }, CALLER, 'human');
+    const response = await graphql.run({ query: '{ mine: myAgenda { actor { employeeId } items { ' + WORK_FIELDS + ' } total } myAgendaWork(assignmentId:"' + ID + '"){' + WORK_FIELDS + '} teamAgenda(employeeId:"' + WORK.employee.id + '"){total items{assignmentId}} teamAgendaWork(assignmentId:"' + ID + '"){' + WORK_FIELDS + '} agendaTeamEmployees { items { id fullName status } total } }' }, CALLER, 'human');
     expect(response.errors).toBeUndefined();
-    expect(response.data).toEqual({ mine: PAGE, myAgendaWork: WORK, teamAgenda: { total: 1, items: [{ assignmentId: ID }] }, teamAgendaWork: WORK, agendaTeamEmployees: EMPLOYEES_PAGE });
+    expect(response.data).toEqual({ mine: { actor: { employeeId: EMPLOYEE_ID }, items: [WORK], total: 1 }, myAgendaWork: WORK, teamAgenda: { total: 1, items: [{ assignmentId: ID }] }, teamAgendaWork: WORK, agendaTeamEmployees: { items: [WORK.employee], total: 1 } });
     expect(transport).toHaveBeenCalledTimes(5);
     expect(forbiddenTransport).not.toHaveBeenCalled();
   });

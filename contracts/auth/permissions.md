@@ -41,7 +41,7 @@ Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, e
 
 | Rol | Permisos | Motivo |
 | --- | --- | --- |
-| `administrador` | los veinticinco del catálogo CU05 | Autoridad completa, con vínculo laboral activo adicional obligatorio para CU05 |
+| `administrador` | los veintiocho del catálogo CU16 | Autoridad completa; CU05/CU16 requieren vínculo laboral activo por registro |
 | `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team | Planificación, catálogo, órdenes, decisión financiera y confirmación CU15 |
 | `recepcionista` | customers:read/write, vehicles:read/write, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes y decisión del cliente; no elabora cotizaciones |
 | `mecanico` | receptions:read/write, agenda:read:self, executions:read:self/write | Recepción CU11, agenda propia CU05 y ejecución de sus trabajos CU16; sin CRUD general ni agenda del equipo |

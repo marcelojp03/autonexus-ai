@@ -20,7 +20,8 @@ public record Execution(
         String status,
         Instant startedAt,
         int version,
-        List<Advance> advances) {
+        List<Advance> advances,
+        Summary evidenceSummary) {
 
     public static final String IN_PROGRESS = "in_progress";
     /** CU17 owns any terminal state; CU16 must reject anything else instead of inventing it. */
@@ -46,7 +47,8 @@ public record Execution(
             int attempt,
             String failureCode,
             Instant createdAt,
-            Instant confirmedAt) {}
+            Instant confirmedAt,
+            int version) {}
 
     public record Summary(int pending, int available, int failed) {
         public static Summary of(List<Advance> advances) {
@@ -65,14 +67,14 @@ public record Execution(
         }
     }
 
-    public static final Set<String> START_KEYS = Set.of("operationId", "expectedVersion");
+    public static final Set<String> START_KEYS = Set.of("operationId");
     public static final Set<String> ADVANCE_KEYS =
             Set.of("operationId", "expectedVersion", "description", "minutesWorked", "occurredAt");
     public static final Set<String> EVIDENCE_KEYS =
             Set.of("operationId", "fileName", "contentType", "sizeBytes", "checksumSha256");
     public static final Set<String> CONFIRM_KEYS = Set.of("operationId", "expectedVersion");
     public static final Set<String> RETRY_KEYS =
-            Set.of("operationId", "expectedVersion", "checksumSha256");
+            Set.of("operationId", "expectedVersion", "fileName", "contentType", "sizeBytes", "checksumSha256");
 
     /** Closed content types with their hard ceiling. Anything else is not acceptable evidence. */
     public static final Map<String, Long> LIMITS = Map.of(

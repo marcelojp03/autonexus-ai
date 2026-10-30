@@ -30,7 +30,8 @@ type Permission =
   | 'orders:read' | 'orders:write'
   | 'quotes:read' | 'quotes:write' | 'quotes:decide'
   | 'confirmations:read' | 'confirmations:write'
-  | 'agenda:read:self' | 'agenda:read:team';
+  | 'agenda:read:self' | 'agenda:read:team'
+  | 'executions:read:self' | 'executions:read:team' | 'executions:write';
 
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
@@ -41,6 +42,15 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.fre
   teamAgenda: 'agenda:read:team',
   teamAgendaWork: 'agenda:read:team',
   agendaTeamEmployees: 'agenda:read:team',
+  myExecution: 'executions:read:self',
+  teamExecution: 'executions:read:team',
+  myEvidenceDownload: 'executions:read:self',
+  teamEvidenceDownload: 'executions:read:team',
+  startExecution: 'executions:write',
+  recordAdvance: 'executions:write',
+  requestEvidence: 'executions:write',
+  confirmEvidence: 'executions:write',
+  retryEvidence: 'executions:write',
   confirmationSaga: 'confirmations:read',
   confirmationByOperation: 'confirmations:read',
   orderConfirmations: 'confirmations:read',
@@ -250,6 +260,22 @@ export class BusinessGraphql {
       teamAgenda: (args: AgendaQuery) => this.agenda.list('team', args, token),
       teamAgendaWork: (args: { assignmentId: string }) => this.agenda.work('team', args.assignmentId, token),
       agendaTeamEmployees: (args: AgendaEmployeesQuery) => this.agenda.employees(args, token),
+      myExecution: (args: { assignmentId: string }) => this.operations.execution('me', args.assignmentId, token),
+      teamExecution: (args: { assignmentId: string }) => this.operations.execution('team', args.assignmentId, token),
+      myEvidenceDownload: (args: { assignmentId: string; evidenceId: string }) =>
+        this.operations.evidenceDownload('me', args.assignmentId, args.evidenceId, token),
+      teamEvidenceDownload: (args: { assignmentId: string; evidenceId: string }) =>
+        this.operations.evidenceDownload('team', args.assignmentId, args.evidenceId, token),
+      startExecution: (args: { assignmentId: string; input: OperationsCommand }) =>
+        this.operations.startExecution(args.assignmentId, args.input, token),
+      recordAdvance: (args: { assignmentId: string; input: OperationsCommand }) =>
+        this.operations.recordAdvance(args.assignmentId, args.input, token),
+      requestEvidence: (args: { assignmentId: string; advanceId: string; input: OperationsCommand }) =>
+        this.operations.requestEvidence(args.assignmentId, args.advanceId, args.input, token),
+      confirmEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>
+        this.operations.confirmEvidence(args.assignmentId, args.evidenceId, args.input, token),
+      retryEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>
+        this.operations.retryEvidence(args.assignmentId, args.evidenceId, args.input, token),
       confirmationSaga: (args: { id: string }) => this.operations.confirmationSaga(args.id, token),
       confirmationByOperation: (args: { operationId: string }) => this.operations.confirmationByOperation(args.operationId, token),
       orderConfirmations: (args: { orderId: string }) => this.operations.orderConfirmations(args.orderId, token),

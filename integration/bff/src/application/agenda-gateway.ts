@@ -19,6 +19,8 @@ export interface AgendaWork {
   description: string; notes: string | null;
   services: { serviceId: string; serviceName: string; quantity: number; estimatedMinutes: number }[];
   orderVersion: number; assignmentVersion: number; observedAt: string; confirmationObservation: 'observed' | 'pending';
+  executionStatus: 'not_started' | 'in_progress';
+  executionProgress: { advances: number; lastAdvanceAt: string | null; availableEvidence: number };
 }
 export interface AgendaPage {
   actor: AgendaActor; items: AgendaWork[]; total: number; limit: number; offset: number;
@@ -74,6 +76,12 @@ function work(value: unknown): AgendaWork {
     }),
     orderVersion: integer(item.orderVersion), assignmentVersion: integer(item.assignmentVersion), observedAt: text(item.observedAt),
     confirmationObservation: choice(item.confirmationObservation, ['observed', 'pending']),
+    executionStatus: choice(item.executionStatus, ['not_started', 'in_progress']),
+    executionProgress: (() => {
+      const progress = record(item.executionProgress);
+      return { advances: integer(progress.advances), lastAdvanceAt: progress.lastAdvanceAt === null ? null : text(progress.lastAdvanceAt),
+        availableEvidence: integer(progress.availableEvidence) };
+    })(),
   };
 }
 function page(value: unknown) {

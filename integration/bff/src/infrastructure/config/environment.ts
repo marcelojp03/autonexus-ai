@@ -47,6 +47,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const financeSchema = env.BFF_FINANCE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/finance.graphql');
   const confirmationSchema = env.BFF_CONFIRMATIONS_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/confirmations.graphql');
   const agendaSchema = env.BFF_AGENDA_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/agenda.graphql');
+  const executionsSchema = env.BFF_EXECUTIONS_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/executions.graphql');
   trustedHttpUrl(issuer, 'OIDC_ISSUER_URI');
   const jwksUri = env.OIDC_JWKS_URI ?? LOCAL_ISSUER + '/protocol/openid-connect/certs';
   trustedHttpUrl(jwksUri, 'OIDC_JWKS_URI');
@@ -67,6 +68,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   if (!isAbsolute(financeSchema) || !existsSync(financeSchema)) throw new Error('Invalid configuration: BFF_FINANCE_SCHEMA_PATH');
   if (!isAbsolute(confirmationSchema) || !existsSync(confirmationSchema)) throw new Error('Invalid configuration: BFF_CONFIRMATIONS_SCHEMA_PATH');
   if (!isAbsolute(agendaSchema) || !existsSync(agendaSchema) || !statSync(agendaSchema).isFile()) throw new Error('Invalid configuration: BFF_AGENDA_SCHEMA_PATH');
+  if (!isAbsolute(executionsSchema) || !existsSync(executionsSchema) || !statSync(executionsSchema).isFile()) throw new Error('Invalid configuration: BFF_EXECUTIONS_SCHEMA_PATH');
   return Object.freeze({
     host: httpHost(env.HTTP_HOST),
     jwksUri,
@@ -77,6 +79,6 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
     origins: Object.freeze([...new Set(origins)]),
     operationsUrl: operationsTarget.origin,
     financeUrl: financeTarget.origin,
-    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema, agendaSchema]),
+    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema, agendaSchema, executionsSchema]),
   });
 }

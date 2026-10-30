@@ -21,10 +21,11 @@ describe('finance standalone origin', () => {
 });
 
 describe('CU05 seventh schema without transport-policy changes', () => {
-  it('loads seven schemas and the five exact agenda roots', () => {
+  it('loads eight schemas, keeping agenda seventh and executions last', () => {
     const paths = bffEnvironment({}).schemaPaths;
-    expect(paths).toHaveLength(7);
+    expect(paths).toHaveLength(8);
     expect(paths[6]).toBe(resolve('../../contracts/graphql/agenda.graphql'));
+    expect(paths[7]).toBe(resolve('../../contracts/graphql/executions.graphql'));
     const schema = buildSchema(paths.map(path => readFileSync(path, 'utf8')).join('\n'));
     expect(Object.keys(schema.getQueryType()!.getFields()).filter(name => /agenda/i.test(name)).sort()).toEqual(
       ['myAgenda', 'myAgendaWork', 'teamAgenda', 'teamAgendaWork', 'agendaTeamEmployees'].sort());

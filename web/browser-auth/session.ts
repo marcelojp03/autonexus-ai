@@ -1,4 +1,4 @@
-import type { BusinessFailure, BusinessResult, SessionPort, SessionSnapshot, TechnicalResult, WorkshopRole } from '../../contracts/auth/session.ts';
+import type { BusinessFailure, BusinessResult, EvidenceUploadOutcome, EvidenceUploadTarget, SessionPort, SessionSnapshot, TechnicalResult, WorkshopRole } from '../../contracts/auth/session.ts';
 
 export type BrowserApplication = 'shell' | 'employees' | 'operations' | 'finance';
 export interface BrowserOidcAdapter {
@@ -219,6 +219,35 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
       } catch (error) {
         if (error instanceof Error && ['Sesión no disponible.', 'Sesión rechazada (401). Ingresa nuevamente.', 'El servicio empresarial no está disponible.', 'Respuesta empresarial inválida.', 'Solicitud empresarial inválida.'].includes(error.message)) throw error;
         throw new Error('No se pudo contactar al servicio empresarial. Reintenta.');
+      } finally { clearTimeout(timeout); requests.delete(controller); }
+    },
+    /**
+     * CU16 evidence bytes. It sends no token and no credential: the owner already authorized this
+     * exact object and the signed headers carry the conditional write and the declared checksum.
+     */
+    async uploadEvidence(target: EvidenceUploadTarget, body: Blob | ArrayBuffer): Promise<EvidenceUploadOutcome> {
+      if (!target || typeof target.url !== 'string' || !/^https:\/\//.test(target.url)) throw new Error('Carga de evidencia inválida.');
+      if (target.method !== 'PUT' || !target.headers || typeof target.headers !== 'object') throw new Error('Carga de evidencia inválida.');
+      if (!(body instanceof Blob) && !(body instanceof ArrayBuffer)) throw new Error('Carga de evidencia inválida.');
+      const headers = { ...target.headers };
+      if (Object.keys(headers).some(name => ['authorization', 'cookie'].includes(name.toLowerCase()))) throw new Error('Carga de evidencia inválida.');
+      if (new Date(target.expiresAt).getTime() <= Date.now()) throw new Error('La autorización de carga venció. Solicitá una nueva.');
+      const controller = new AbortController();
+      requests.add(controller);
+      const timeout = setTimeout(() => controller.abort(), 60000);
+      try {
+        const response = await fetch(target.url, {
+          method: 'PUT',
+          headers,
+          body,
+          credentials: 'omit',
+          redirect: 'error',
+          signal: controller.signal,
+        });
+        return Object.freeze({ completed: response.ok, status: response.status });
+      } catch (error) {
+        if (error instanceof Error && ['Carga de evidencia inválida.', 'La autorización de carga venció. Solicitá una nueva.'].includes(error.message)) throw error;
+        return Object.freeze({ completed: false, status: 0 });
       } finally { clearTimeout(timeout); requests.delete(controller); }
     },
   };

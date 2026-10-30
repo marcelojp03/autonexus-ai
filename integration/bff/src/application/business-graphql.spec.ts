@@ -18,13 +18,14 @@ const ALL = [
   'catalog:read', 'catalog:write', 'appointments:read', 'appointments:write',
   'receptions:read', 'receptions:write', 'orders:read', 'orders:write',
   'quotes:read', 'quotes:write', 'quotes:decide',
-  'confirmations:read', 'confirmations:write',
+  'confirmations:read', 'confirmations:write', 'executions:read:self', 'executions:read:team', 'executions:write',
 ];
 const effectiveFor = (token: string): string[] =>
   token === 'head-token' ? ['schedules:read', 'schedules:write', 'confirmations:read', 'confirmations:write']
     : token === 'security-token' ? ['security:read']
-      : token === 'no-role-token' ? []
-        : ALL;
+      : token === 'team-token' ? ['executions:read:team']
+        : token === 'no-role-token' ? []
+          : ALL;
 
 function build(rejected?: Error) {
   const operations = {
@@ -59,6 +60,19 @@ function build(rejected?: Error) {
     orders: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
     order: vi.fn(),
     createWorkOrder: vi.fn(),
+    execution: vi.fn(async () => ({
+      assignmentId: EMPLOYEE_ID,
+      status: 'in_progress',
+      version: 1,
+      advances: [],
+      evidenceSummary: { pending: 0, available: 0, failed: 0 },
+    })),
+    startExecution: vi.fn(async () => ({ execution: { assignmentId: EMPLOYEE_ID }, replayed: false })),
+    recordAdvance: vi.fn(),
+    requestEvidence: vi.fn(),
+    confirmEvidence: vi.fn(),
+    retryEvidence: vi.fn(),
+    evidenceDownload: vi.fn(async () => ({ url: 'https://storage.test/signed', expiresAt: '2026-11-02T12:02:00Z' })),
   };
   const gateway = {
     confirmationMechanics: vi.fn(async () => ({ items: [], total: 0, limit: 20, offset: 0 })),
@@ -361,6 +375,35 @@ describe('operations policy (CU06, CU07, CU09, CU10)', () => {
     expect(operations.createAppointment).not.toHaveBeenCalled();
   });
 });
+describe('CU16 execution and evidence policy', () => {
+  const FIELDS = ['assignmentId', 'status', 'version'];
+  const work = (root: string) => '{ ' + root + '(assignmentId: "' + EMPLOYEE_ID + '") { ' + FIELDS.join(' ') + ' } }';
+  it('routes the own and team reads to the owner with their own permission', async () => {
+    const { graphql, operations } = build();
+    const own = await graphql.run({ query: work('myExecution') }, ADMIN, 'admin-token');
+    expect(own.errors).toBeUndefined();
+    expect(operations.execution).toHaveBeenCalledWith('me', EMPLOYEE_ID, 'admin-token');
+    const team = await graphql.run({ query: work('teamExecution') }, HEAD, 'team-token');
+    expect(team.errors).toBeUndefined();
+    expect(operations.execution).toHaveBeenCalledWith('team', EMPLOYEE_ID, 'team-token');
+  });
+  it('denies writing without executions:write and never calls the owner', async () => {
+    const { graphql, operations } = build();
+    const denied = await graphql.run({
+      query: 'mutation ($input: StartExecutionInput!) { startExecution(assignmentId: "' + EMPLOYEE_ID + '", input: $input) { execution { assignmentId } } }',
+      variables: { input: { operationId: EMPLOYEE_ID } },
+    }, HEAD, 'team-token');
+    expect(denied.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(operations.startExecution).not.toHaveBeenCalled();
+  });
+  it('does not let the team permission pass the own scope', async () => {
+    const { graphql, operations } = build();
+    const denied = await graphql.run({ query: work('myExecution') }, HEAD, 'team-token');
+    expect(denied.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(operations.execution).not.toHaveBeenCalled();
+  });
+});
+
 describe('finanzas policy (CU13, CU14)', () => {
   it('publishes the finance root fields in the SDL', () => {
     const source = readFileSync(financePath, 'utf8');

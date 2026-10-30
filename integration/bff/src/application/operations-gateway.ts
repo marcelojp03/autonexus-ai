@@ -31,6 +31,16 @@ const PUBLIC_CODES = new Set([
   'VERSION_CONFLICT',
   'IDEMPOTENCY_CONFLICT',
   'CONCURRENT_OPERATION',
+  'EXECUTION_ACCESS_DENIED',
+  'EXECUTION_WORK_NOT_FOUND',
+  'EXECUTION_ALREADY_STARTED',
+  'EXECUTION_NOT_STARTED',
+  'EXECUTION_STATE_UNAVAILABLE',
+  'EXECUTION_DEPENDENCY_UNAVAILABLE',
+  'EVIDENCE_STATE_CONFLICT',
+  'EVIDENCE_ATTEMPTS_EXHAUSTED',
+  'EVIDENCE_STORAGE_UNAVAILABLE',
+  'EXECUTION_DEPENDENCY_UNAVAILABLE',
   'PERSISTENCE_UNAVAILABLE',
 ]);
 
@@ -60,6 +70,13 @@ export interface OperationsGateway {
   startServiceConfirmation(orderId: string, input: OperationsCommand, token: string): Promise<unknown>;
   retryServiceConfirmation(id: string, input: OperationsCommand, token: string): Promise<unknown>;
   customers(query: OperationsPageQuery, token: string): Promise<unknown>;
+  execution(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown>;
+  startExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  recordAdvance(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  requestEvidence(assignmentId: string, advanceId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  confirmEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  retryEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  evidenceDownload(kind: 'me' | 'team', assignmentId: string, evidenceId: string, token: string): Promise<unknown>;
   customer(id: string, token: string): Promise<unknown>;
   createCustomer(input: OperationsCommand, token: string): Promise<unknown>;
   updateCustomer(id: string, input: OperationsCommand, token: string): Promise<unknown>;
@@ -155,6 +172,34 @@ export class HttpOperationsGateway implements OperationsGateway {
 
   customers(query: OperationsPageQuery, token: string): Promise<unknown> {
     return this.request('/customers' + this.suffix(query), token);
+  }
+
+  execution(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown> {
+    return this.request(`/executions/${kind}/${encodeURIComponent(assignmentId)}`, token);
+  }
+
+  startExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/start`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  recordAdvance(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/advances`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  requestEvidence(assignmentId: string, advanceId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/advances/${encodeURIComponent(advanceId)}/evidences`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  }
+
+  confirmEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/confirm`, token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  retryEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/retry`, token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  evidenceDownload(kind: 'me' | 'team', assignmentId: string, evidenceId: string, token: string): Promise<unknown> {
+    return this.request(`/executions/${kind}/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/download`, token);
   }
 
   customer(id: string, token: string): Promise<unknown> {

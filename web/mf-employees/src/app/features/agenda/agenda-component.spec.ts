@@ -8,6 +8,7 @@ import { AgendaComponent } from './agenda.component';
 import type { SessionSnapshot } from '../../../../../../contracts/auth/session';
 import { SESSION_PORT } from '../../auth/session';
 import { EmployeesFailure } from '../employees/employees-api';
+import type { AgendaWork } from './agenda.contract';
 test('UTC early morning stays on the previous La Paz day with consistent 24-hour start and end', () => {
   const c = TestBed.createComponent(AgendaComponent).componentInstance;
   const start = c.stamp('2026-11-06T03:00:00Z');
@@ -28,6 +29,27 @@ test('rendered form has civil date inputs and a real empty state after an author
   expect(fixture.nativeElement.querySelectorAll('input[type=date]')).toHaveLength(2);
   expect(fixture.nativeElement.textContent).toContain('No hay trabajos confirmados');
   expect(fixture.nativeElement.textContent).toContain('Última comprobación');
+});
+test('CU16 status and progress appear in agenda list and detail while the work stays confirmed', async () => {
+  const work: AgendaWork = {
+    assignmentId: 'assignment-1', orderId: 'order-1', orderNumber: 'OT-1',
+    employee: { id: 'employee-1', fullName: 'Mecánico', status: 'active' },
+    vehicle: { id: 'vehicle-1', plate: 'SYN-001', make: 'Test', model: 'Fixture' },
+    startsAt: '2026-11-06T12:00:00Z', endsAt: '2026-11-06T14:00:00Z', priority: 'normal', status: 'confirmed',
+    description: 'Trabajo confirmado', notes: null, services: [], orderVersion: 2, assignmentVersion: 1,
+    observedAt: '2026-11-01T12:00:00Z', confirmationObservation: 'observed', executionStatus: 'in_progress',
+    executionProgress: { advances: 2, lastAdvanceAt: '2026-11-01T11:00:00Z', availableEvidence: 1 }
+  };
+  requestBusiness.mockResolvedValueOnce({ data: { myAgenda: { ...page('A'), items: [work], total: 1, from: '2026-11-01', to: '2026-11-30', timeZone: 'America/La_Paz' } } })
+    .mockResolvedValueOnce({ data: { myAgendaWork: work } });
+  const fixture = TestBed.createComponent(AgendaComponent); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+  expect(fixture.nativeElement.textContent).toContain('En ejecución');
+  expect(fixture.nativeElement.textContent).toContain('2 avances');
+  expect(fixture.nativeElement.textContent).toContain('1 evidencias confirmadas');
+  params.next(convertToParamMap({ assignmentId: work.assignmentId })); await fixture.whenStable(); fixture.detectChanges();
+  expect(fixture.nativeElement.textContent).toContain('Confirmado · En ejecución');
+  expect(fixture.nativeElement.textContent).toContain('Último avance');
+  expect(fixture.nativeElement.textContent).toContain('Abrir ejecución');
 });
 test('offline event clears previously loaded RAM instead of presenting cached agenda', async () => {
   requestBusiness.mockResolvedValue({ data: { myAgenda: page('A') } });

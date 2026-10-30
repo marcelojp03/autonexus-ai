@@ -48,7 +48,7 @@ Las rutas de lectura se separan por alcance, igual que la agenda: `me` exige per
 
 ```
 POST /executions/:assignmentId/start
-{ "operationId": UUID, "expectedVersion": Int? }
+{ "operationId": UUID }
 
 POST /executions/:assignmentId/advances
 { "operationId": UUID, "expectedVersion": Int, "description": String, "minutesWorked": Int, "occurredAt": DateTime? }
@@ -60,7 +60,7 @@ POST /executions/:assignmentId/evidences/:evidenceId/confirm
 { "operationId": UUID, "expectedVersion": Int }
 
 POST /executions/:assignmentId/evidences/:evidenceId/retry
-{ "operationId": UUID, "expectedVersion": Int, "checksumSha256": String }
+{ "operationId": UUID, "expectedVersion": Int, "fileName": String, "contentType": String, "sizeBytes": Int, "checksumSha256": String }
 ```
 
 Claves cerradas: cualquier propiedad ajena al cuerpo correspondiente produce `400 VALIDATION_ERROR`.
@@ -79,7 +79,7 @@ Las mutaciones responden con `{execution|advance|evidence, replayed}`. La solici
 { "evidence": Evidence, "upload": { "url": String, "method": "PUT", "headers": {String:String}, "expiresAt": DateTime }, "replayed": Boolean }
 ```
 
-`headers` es exacto y debe enviarse literal: incluye la escritura condicional `If-None-Match: *` y el checksum declarado. La descarga responde `{url, expiresAt}`.
+`headers` es exacto y debe enviarse literal: incluye la escritura condicional `If-None-Match: *` y el checksum declarado. El URL firma también el Content-Length y Content-Type exactos; el navegador genera Content-Length desde el Blob/ArrayBuffer y los bytes deben coincidir con el tamaño declarado. La descarga responde `{url, expiresAt}`.
 
 ### Reglas de ejecución
 
@@ -110,7 +110,7 @@ Las mutaciones responden con `{execution|advance|evidence, replayed}`. La solici
 | Contenido distinto para el mismo operationId | 409 IDEMPOTENCY_CONFLICT |
 | Evidencia ya disponible o intento incoherente | 409 EVIDENCE_STATE_CONFLICT |
 | Intentos agotados | 409 EVIDENCE_ATTEMPTS_EXHAUSTED |
-| Firma real del archivo no permitida | 409 EVIDENCE_STATE_CONFLICT con evidencia `failed` |
+| Firma real del archivo no permitida / falta objeto / size/checksum mismatch | 200 con evidencia `failed` y código seguro; no se registra disponible |
 | Falta configuración de almacenamiento | 503 EVIDENCE_STORAGE_UNAVAILABLE |
 | No se puede resolver el actor en Empleados | 503 EXECUTION_DEPENDENCY_UNAVAILABLE |
 | Referencias o estado de la orden no verificables | 503 EXECUTION_STATE_UNAVAILABLE |
