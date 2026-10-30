@@ -31,6 +31,9 @@ Contrato aprobado en `docs/compose/spec/cu02-security.md` y ampliado en `docs/co
 | confirmations:write | Confirmaciones | write | Iniciar y solicitar recuperación de la Saga (CU15) |
 | agenda:read:self | Agenda propia | read:self | Consultar listado/detalle del empleado vigente autenticado (CU05 online) |
 | agenda:read:team | Agenda del equipo | read:team | Consulta explícita de equipo y selector laboral mínimo (CU05 online) |
+| `executions:read:self` | Ejecuciones | read:self | Avances y evidencias del trabajo asignado al empleado vigente (CU16) |
+| `executions:read:team` | Ejecuciones | read:team | Avances y evidencias de los trabajos del taller y su descarga temporal (CU16) |
+| `executions:write` | Ejecuciones | write | Iniciar ejecución, registrar avances y solicitar/confirmar evidencias del trabajo propio (CU16) |
 
 Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, en minúsculas ASCII; conjunto cerrado, sin herencia por prefijo. Un permiso desconocido produce VALIDATION_ERROR. El catálogo se publica por GET /security/permissions y securityCatalog. CU05 añade solo dos permisos de lectura acotada, no acceso general a órdenes, clientes, documentos o cotizaciones.
 
@@ -41,7 +44,7 @@ Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, e
 | `administrador` | los veinticinco del catálogo CU05 | Autoridad completa, con vínculo laboral activo adicional obligatorio para CU05 |
 | `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team | Planificación, catálogo, órdenes, decisión financiera y confirmación CU15 |
 | `recepcionista` | customers:read/write, vehicles:read/write, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes y decisión del cliente; no elabora cotizaciones |
-| `mecanico` | receptions:read/write, agenda:read:self | Recepción CU11 y agenda propia CU05; sin CRUD general ni agenda del equipo |
+| `mecanico` | receptions:read/write, agenda:read:self, executions:read:self/write | Recepción CU11, agenda propia CU05 y ejecución de sus trabajos CU16; sin CRUD general ni agenda del equipo |
 | `responsable_financiero` | orders:read, quotes:read/write/decide | Cotizaciones y decisiones CU13/CU14; aprobar no confirma el servicio |
 
 Los roles iniciales son `system=true`: no se renombran y no se borran. Sus permisos sí pueden editarse, con las restricciones de último administrador. Un rol nuevo requiere nombre `^[a-z][a-z0-9_]{2,63}$`, distinto de cualquier otro, y al menos un permiso del catálogo.
@@ -98,3 +101,13 @@ Contrato aprobado: [agenda REST](../rest/agenda.md) y [agenda GraphQL](../graphq
 El subject debe resolver un empleado activo y su vínculo actual; las asignaciones de seguridad CU05 se contrastan bajo esa identidad. No se usa la excepción CU02 de cuentas no vinculadas, ni siquiera para administrador/jefe. Empleados revalida por petición; caches de BFF/guard general nunca autorizan por encima de ese contexto. Sin vínculo/permiso/actividad devuelve403 seguro, no vacío.
 
 Propia no admite employeeId del navegador. Equipo exige su permiso y trata employeeId solo como filtro. Lista/detalle se autorizan independientemente; ID ajeno/inexistente404 indistinguible. DTO mínimo, sin datos administrativos/financieros; solo Oconfirmed+Sagaconfirmed y asignación Eactualcorrespondiente. Roles personalizados funcionan por estos permisos cerrados. No se cambian las políticas de otros CU.
+
+## CU16 ejecución — autorización por registro
+
+Contrato: [executions REST](../rest/executions.md) y [executions GraphQL](../graphql/executions.graphql). El catálogo pasa a veintiocho permisos con `executions:read:self`, `executions:read:team` y `executions:write`; la migración propietaria de Empleados los añade de forma aditiva preservando personalizaciones.
+
+Resolución: el subject debe resolver un empleado activo con identidad vigente y asignación de seguridad actual; no se aplica la excepción CU02 de cuentas de infraestructura no vinculadas. El alcance se otorga por permiso, nunca por nombre de rol.
+
+Escritura acotada al asignado: solo el mecánico cuya asignación vigente corresponde al trabajo inicia, registra avances y confirma evidencias. Jefe de taller y administrador no escriben en nombre de otro; si la misma persona tiene asignación y permisos, actúa sobre su propio trabajo. Lectura acotada por registro: `read:self` solo el trabajo propio, `read:team` cualquier trabajo del taller. Ajeno o inexistente responde404 indistinguible; sin vínculo/actividad/permiso responde403 seguro.
+
+Jefatura consulta avances y evidencias del taller y solicita descarga temporal autorizada; no recibe datos personales, financieros ni técnicos internos. Verificar y finalizar son CU17 y no se habilitan por anticipado. El catálogo de la agenda publica además el estado de ejecución, que no sustituye la confirmación de CU15.

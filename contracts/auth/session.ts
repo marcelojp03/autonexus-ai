@@ -24,6 +24,21 @@ export interface BusinessResult {
   readonly data?: unknown;
   readonly errors?: readonly BusinessFailure[];
 }
+/**
+ * Evidence bytes go straight to the owner-authorized storage URL. The browser never receives
+ * AWS credentials and never sends the Keycloak token to storage: this is the bounded, explicit
+ * exception to the GraphQL business channel, and it carries bytes only.
+ */
+export interface EvidenceUploadTarget {
+  readonly url: string;
+  readonly method: 'PUT';
+  readonly headers: Readonly<Record<string, string>>;
+  readonly expiresAt: string;
+}
+export interface EvidenceUploadOutcome {
+  readonly completed: boolean;
+  readonly status: number;
+}
 export interface SessionPort {
   snapshot(): Readonly<SessionSnapshot>;
   subscribe(listener: (snapshot: Readonly<SessionSnapshot>) => void): () => void;
@@ -32,6 +47,8 @@ export interface SessionPort {
   requestTechnical(service: TechnicalService, resource: TechnicalResource): Promise<TechnicalResult>;
   /** Executes an allowlisted BFF GraphQL request with the RAM-only token; never exposes it. */
   requestBusiness(query: string, variables?: Readonly<Record<string, unknown>>): Promise<BusinessResult>;
+  /** Transfers evidence bytes to an already authorized URL; attaches no token and decides nothing. */
+  uploadEvidence(target: EvidenceUploadTarget, body: Blob | ArrayBuffer): Promise<EvidenceUploadOutcome>;
 }
 export interface IntegratedProps {
   domElement: HTMLElement;

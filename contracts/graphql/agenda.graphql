@@ -4,6 +4,9 @@ enum AgendaStatus { confirmed }
 enum AgendaPriority { baja normal alta urgente }
 enum AgendaEmployeeStatus { active inactive }
 enum AgendaConfirmationObservation { observed pending }
+enum AgendaExecutionStatus { not_started in_progress }
+"""CU16 progress published by the owner. Confirmation still comes from the CU15 saga."""
+type AgendaExecutionProgress { advances: Int!, lastAdvanceAt: DateTime, availableEvidence: Int! }
 type AgendaActor { employeeId: UUID!, fullName: String!, status: AgendaEmployeeStatus!, scopes: [AgendaScope!]! }
 type AgendaEmployee { id: UUID!, fullName: String!, status: AgendaEmployeeStatus! }
 type AgendaVehicle { id: UUID!, plate: String!, make: String!, model: String! }
@@ -25,6 +28,8 @@ type AgendaWork {
   assignmentVersion: Int!
   observedAt: DateTime!
   confirmationObservation: AgendaConfirmationObservation!
+  executionStatus: AgendaExecutionStatus!
+  executionProgress: AgendaExecutionProgress!
 }
 type AgendaPage { actor: AgendaActor!, items: [AgendaWork!]!, total: Int!, limit: Int!, offset: Int!, from: Date!, to: Date!, timeZone: String!, observedAt: DateTime! }
 type AgendaEmployeesPage { items: [AgendaEmployee!]!, total: Int!, limit: Int!, offset: Int!, observedAt: DateTime! }

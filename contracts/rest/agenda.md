@@ -37,7 +37,9 @@ Resolver contexto E con bearer humano por petición, luego consultar exclusivame
 
 GET listado = {actor,items:[AgendaWork],total,limit,offset,from,to,timeZone:"America/La_Paz",observedAt}. GET detalle = AgendaWork. Actor usa la forma anterior; no se fabrica identidad desde el filtro.
 
-AgendaWork = {assignmentId,orderId,orderNumber,employee:{id,fullName,status},vehicle:{id,plate,make,model},startsAt,endsAt,priority,status:"confirmed",description,notes:null|string,services:[{serviceId,serviceName,quantity,estimatedMinutes}],orderVersion,assignmentVersion,observedAt,confirmationObservation:"observed"|"pending"}.
+AgendaWork = {assignmentId,orderId,orderNumber,employee:{id,fullName,status},vehicle:{id,plate,make,model},startsAt,endsAt,priority,status:"confirmed",description,notes:null|string,services:[{serviceId,serviceName,quantity,estimatedMinutes}],orderVersion,assignmentVersion,observedAt,confirmationObservation:"observed"|"pending",executionStatus:"not_started"|"in_progress",executionProgress:{advances:int,lastAdvanceAt:null|ISO,availableEvidence:int}}.
+
+CU16 amplía AgendaWork de forma aditiva: la agenda debe seguir mostrando el trabajo durante su ejecución, no solo como confirmado. `executionStatus` y `executionProgress` provienen del agregado de ejecución del propietario; la confirmación sigue siendo la de la Saga CU15 y ningún contador de avances la sustituye. Una ejecución no iniciada informa `not_started` con contadores en cero. Contrato de ejecución: `contracts/rest/executions.md`.
 
 DTO distinto de WorkOrder/Employee generales: sin customerId/customerName, documentos/contactos, precios/tarifas/totales, cotización/vínculo, credenciales o cuerpos técnicos. Descripción/notas de orden y snapshots de servicios, no recepción/evidencias privadas. Modelo/marca de vehículo desde persistencia propia O; matrícula asociada a la orden. No HTML de observaciones.
 

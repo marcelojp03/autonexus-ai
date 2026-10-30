@@ -1,0 +1,69 @@
+"""CU16 execution, advances and evidence. Every root declares its permission; owners revalidate the record."""
+enum ExecutionStatus { in_progress }
+enum EvidenceState { pending available failed }
+type ExecutionEvidence {
+  id: UUID!
+  advanceId: UUID!
+  fileName: String!
+  contentType: String!
+  sizeBytes: Int!
+  state: EvidenceState!
+  attempt: Int!
+  failureCode: String
+  createdAt: DateTime!
+  confirmedAt: DateTime
+}
+type ExecutionAdvance {
+  id: UUID!
+  sequence: Int!
+  description: String!
+  minutesWorked: Int!
+  occurredAt: DateTime!
+  recordedAt: DateTime!
+  version: Int!
+  evidences: [ExecutionEvidence!]!
+}
+type ExecutionEvidenceSummary { pending: Int!, available: Int!, failed: Int! }
+type Execution {
+  orderId: UUID!
+  orderNumber: String!
+  assignmentId: UUID!
+  employeeId: UUID!
+  status: ExecutionStatus!
+  startedAt: DateTime!
+  version: Int!
+  advances: [ExecutionAdvance!]!
+  evidenceSummary: ExecutionEvidenceSummary!
+}
+"""Signed headers are exact: send them verbatim. They carry conditional write and the declared checksum."""
+type EvidenceUpload {
+  evidence: ExecutionEvidence!
+  url: String!
+  method: String!
+  headersJson: String!
+  expiresAt: DateTime!
+}
+type ExecutionMutationResult { execution: Execution!, replayed: Boolean! }
+type AdvanceMutationResult { execution: Execution!, advance: ExecutionAdvance!, replayed: Boolean! }
+type EvidenceMutationResult { evidence: ExecutionEvidence!, replayed: Boolean! }
+type EvidenceUploadResult { evidence: ExecutionEvidence!, upload: EvidenceUpload!, replayed: Boolean! }
+"""Temporary authorized download; the owner revalidated the actor and the record."""
+type EvidenceDownload { url: String!, expiresAt: DateTime! }
+input StartExecutionInput { operationId: UUID!, expectedVersion: Int }
+input RecordAdvanceInput { operationId: UUID!, expectedVersion: Int!, description: String!, minutesWorked: Int!, occurredAt: DateTime }
+input RequestEvidenceInput { operationId: UUID!, fileName: String!, contentType: String!, sizeBytes: Int!, checksumSha256: String! }
+input ConfirmEvidenceInput { operationId: UUID!, expectedVersion: Int! }
+input RetryEvidenceInput { operationId: UUID!, expectedVersion: Int!, checksumSha256: String! }
+extend type Query {
+  myExecution(assignmentId: UUID!): Execution!
+  teamExecution(assignmentId: UUID!): Execution!
+  myEvidenceDownload(assignmentId: UUID!, evidenceId: UUID!): EvidenceDownload!
+  teamEvidenceDownload(assignmentId: UUID!, evidenceId: UUID!): EvidenceDownload!
+}
+extend type Mutation {
+  startExecution(assignmentId: UUID!, input: StartExecutionInput!): ExecutionMutationResult!
+  recordAdvance(assignmentId: UUID!, input: RecordAdvanceInput!): AdvanceMutationResult!
+  requestEvidence(assignmentId: UUID!, advanceId: UUID!, input: RequestEvidenceInput!): EvidenceUploadResult!
+  confirmEvidence(assignmentId: UUID!, evidenceId: UUID!, input: ConfirmEvidenceInput!): EvidenceMutationResult!
+  retryEvidence(assignmentId: UUID!, evidenceId: UUID!, input: RetryEvidenceInput!): EvidenceUploadResult!
+}
