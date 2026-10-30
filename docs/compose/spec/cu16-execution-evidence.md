@@ -1,7 +1,7 @@
 ---
 feature: cu16-execution-evidence
-status: designed
-updated: 2026-10-29
+status: in-progress
+updated: 2026-10-30
 source: work/marcelo
 ---
 
@@ -74,7 +74,7 @@ Un fallo de almacenamiento **no** borra el avance: el avance persiste y la evide
 El navegador nunca recibe credenciales AWS ni el JWT de Keycloak viaja a S3.
 
 1. La web pide por GraphQL/BFF una autorización de carga para un avance concreto (nombre, `contentType`, tamaño, checksum SHA-256 en base64).
-2. Operaciones autoriza al actor sobre la orden y la asignación vigentes, **genera** el identificador de evidencia y la clave del objeto, y devuelve una autorización temporal acotada a esa clave, con cabeceras firmadas y `expiresAt`.
+2. Operaciones autoriza al actor sobre la orden y la asignación vigentes, **genera** el identificador de evidencia y la clave del objeto, y devuelve una autorización temporal acotada a esa clave, con cabeceras firmadas (Content-Length exacto, Content-Type, checksum y condición de escritura) y expiresAt.
 3. El navegador transfiere únicamente los bytes a S3 con esa autorización, usando un método de transporte binario nuevo del `SessionPort`. Es una **excepción expresa** al canal GraphQL empresarial: solo transporta bytes a una URL ya autorizada, no contiene lógica de negocio y no recibe tokens.
 4. La web confirma la carga por GraphQL. Operaciones vuelve a autorizar al actor y verifica existencia, tamaño, checksum y tipo real permitido.
 5. Las descargas también exigen autorización y devuelven una URL temporal; el alcance se revalida en cada solicitud.
@@ -133,17 +133,20 @@ CU17 (verificar/finalizar, transición a pendiente de verificación, entrega), I
 
 ## Tasks
 
-- [ ] T1: Contratos CU16 — acceptance: REST, GraphQL, permisos y `SessionPort` publicados con DTO, estados y errores cerrados (covers: S2.2–S2.7).
-- [ ] T2: Empleados — permisos `executions:*` con migración aditiva y resolución de actor/asignaciones para ejecución — acceptance: migración aplicada, roles iniciales correctos, autorización por permiso y por registro con pruebas (depends: T1; covers: S2.2).
-- [ ] T3: Operaciones — modelo, migración, casos de uso y REST de ejecución/avances con idempotencia, versión y auditoría — acceptance: pruebas verdes y API real sobre orden confirmada (depends: T2; covers: S2.1, S2.3, S2.6).
-- [ ] T4: Operaciones — almacenamiento S3 privado, autorización prefirmada, validación real de archivo e inmutabilidad — acceptance: pruebas deterministas del adaptador y estados `pending/available/failed` sin exponer credenciales (depends: T3; covers: S2.4, S2.5, S2.8).
-- [ ] T5: Agenda — estado de ejecución en lista y detalle — acceptance: CU05 sigue mostrando el trabajo confirmado con su progreso, sin cambiar su confirmación (depends: T3; covers: S2.7).
-- [ ] T6: BFF GraphQL — SDL, política por campo y gateways — acceptance: campos autorizados por permiso, pruebas unitarias/HTTP y build (depends: T1, T3; covers: S2.6, S2.7).
-- [ ] T7: Web — pantalla de ejecución, avances y evidencias; enlace del Shell — acceptance: registro real con distinción pendiente/disponible/fallido, build y smoke de navegador (depends: T6; covers: S2.3–S2.7).
-- [ ] T8: Compose y docs — configuración S3 por entorno y detalle técnico — acceptance: Compose válido, documentación de lo verificado y de lo pendiente (depends: T4; covers: S2.8).
-- [ ] T9: Verificación real y revisión — acceptance: recorrido real de ejecución/avances, estado de S3 declarado con exactitud, revisión resuelta (depends: T5, T7, T8).
-- [ ] T10: Cierre — acceptance: STATUS, decisiones y handoff actualizados; integración y publicación normales verificadas (depends: T9).
+- [x] T1: Contratos CU16 — REST, GraphQL, permisos, SessionPort y DTO publicados (covers: S2.2–S2.7).
+- [x] T2: Empleados — catálogo/migración aditiva y resolución de actor/asignaciones por permiso; pruebas y build PASS (covers: S2.2).
+- [x] T3: Operaciones — modelo, migración V9/V10, casos de uso/REST, idempotencia, versión y auditoría; 24 pruebas y recorrido real de ejecución/avances PASS (covers: S2.1, S2.3, S2.6).
+- [x] T4: Operaciones — adaptador S3 verificado contra el bucket real: la prueba del presigner exige `if-none-match` en `X-Amz-SignedHeaders`, Operaciones falla cerrado si falta, y AWS devolvió 412 al reescribir la clave (covers: S2.4, S2.5, S2.8).
+- [x] T5: Agenda — lista/detalle CU05 publican ejecución/progreso sin alterar confirmed (covers: S2.7).
+- [x] T6: BFF GraphQL — SDL, permisos por campo, gateways, 144 unidades/35 HTTP y build PASS (covers: S2.6, S2.7).
+- [x] T7: Web — pantalla, enlace desde detalle CU05, avance independiente de evidencia; build, 18 pruebas y smoke real desktop/móvil PASS (covers: S2.3–S2.7).
+- [x] T8: Compose y docs — `S3_EVIDENCE_BUCKET`/`REGION` por entorno, override privado con `~/.aws/credentials` en solo lectura sólo para `operations`, `config --quiet` PASS en base y override; CORS mínimo aplicado tras aprobación explícita, con los orígenes exactos 4286 y 4280 (covers: S2.8).
+- [x] T9: Verificación real y revisión — 15 etapas contra AWS S3 (presign, PUT condicional, confirmación HEAD/checksum/firma real, descarga idéntica, sobrescritura rechazada, aislamiento) y 12 etapas de navegador sobre la imagen reconstruida (carga desde origen web, confirmación GraphQL, descarga autorizada, 412 y CORS efectivo). Carga verificada además desde el origen documentado 4280 con una página servida en ese origen (PUT 200, 412, confirmación y descarga de 70 bytes; 7 etapas PASS). Revisión independiente **focalizada en el fix de firma** resuelta en el worktree correcto; no existe dictamen de revisión integral del CU.
+- [x] T10: Cierre — STATUS, decisión, guía y traspaso actualizados con evidencia real; entrega integrada por fast-forward y publicada con push normal de main y work/marcelo.
 
 ## Journey log
 
 - Decisiones del usuario en esta sesión: ejecución separada de la confirmación, con estado propio y CU05 mostrando el progreso; carga directa prefirmada con confirmación verificada por el propietario; AWS S3 real sin MinIO, dejando la verificación pendiente si falta configuración; jefatura de solo lectura y escritura reservada al mecánico asignado.
+- Implementación comprobada el 2026-10-30: ejecución/avances reales e idempotentes, lectura propia/equipo, aislamiento entre mecánicos, jefatura read-only; CU05→CU16 verificado en navegador y vista móvil. S3_EVIDENCE_BUCKET/REGION y proveedor AWS no configurados en el stack cu16-fresh-proof; no se creó fila pending en esa condición. Evidencia detallada en docs/context/STATUS.md y output/stack/cu16-execution-real-result.json / cu16-execution-web-result.json.
+- Evidencia S3 real (2026-10-30): bucket privado `autonexus-ai-evidencias` us-east-1, identidad `arn:aws:iam::851725478821:user/mjimenezb` validada por STS, sin versionado. Bucket permanece privado y sin política; único cambio aplicado: CORS con los orígenes exactos `http://127.0.0.1:4286` y `http://127.0.0.1:4280`, PUT/GET/HEAD y cabeceras firmadas. El runtime local usó el usuario IAM personal con `AdministratorAccess`; queda pendiente una identidad propia de Operaciones con permisos mínimos sobre `evidence/*`. Objetos de prueba: 9 PNG de 70 bytes conservados por consistencia con filas `available`.
+- Límite residual declarado: sin versionado, la inmutabilidad tras confirmar depende de la escritura condicional firmada; la confirmación usa HEAD y lectura de prefijo en dos llamadas no fijadas a versión (TOCTOU residual que exige credenciales de escritura). No se promete inmutabilidad fuerte sin versionado.

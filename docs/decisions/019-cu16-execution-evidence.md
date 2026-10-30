@@ -1,0 +1,29 @@
+# 019 — CU16: ejecución separada y evidencias privadas
+
+Fecha: 2026-10-30. Contrato aprobado en docs/compose/spec/cu16-execution-evidence.md. Implementación propietaria de Operaciones, con autorización de identidad del propietario Empleados y consumo GraphQL/BFF por la web.
+
+## Decisiones
+
+1. La ejecución es un agregado en la misma base de Operaciones, vinculado a orden/asignación confirmadas. CU15 sigue siendo la verdad de confirmación y CU16 la de progreso. No se cambia el estado de la orden confirmada; lista/detalle CU05 exponen aditivamente estado/progreso de ejecución.
+2. CU16 solo alcanza in_progress. Inicio, avances y evidencia requieren empleado activo vinculado y mecánico asignado vigente. Jefatura lee equipo y descarga temporal, no escribe en nombre del mecánico. Verificación/finalización se reserva a CU17; ningún contador finaliza una orden.
+3. Operaciones persiste ejecución/avances/evidencias con versión, operationId y auditoría local. Creación, avance y registro de idempotencia comparten una transacción PostgreSQL; respuesta perdida se recupera sin duplicar. Cada evidencia es inmutable por intento/clave con escritura condicional y checksum.
+4. La autorización de S3 se firma con tamaño exacto Content-Length, tipo, SHA-256 y If-None-Match:*. La web hace PUT de bytes solamente a URL HTTPS prefirmada; sin JWT ni credenciales. Operaciones confirma verificando HEAD, tamaño, checksum y firma real JPEG/PNG/WEBP/MP4. Descargas se firman tras nueva autorización.
+5. Estados de evidencia: pending, available y failed. El objeto cargado no es evidencia disponible hasta confirmación; los rechazos de archivo devuelven estado failed y se pueden reintentar con metadata/clave nueva. Sin bucket/region la API contesta EVIDENCE_STORAGE_UNAVAILABLE y no inventa evidencia pending. El costo de uso de un bucket no se presume cero.
+6. No se crea recurso AWS ni se modifica IAM/CORS. Queda pendiente configurar bucket AWS S3 privado existente, region, credencial IAM autorizada con s3:PutObject/GetObject y DeleteObject para limpiar objetos inválidos (sin ListBucket), TTL y CORS por origen web exacto; entonces ejecutar el flujo real de upload/confirm/download. MinIO no es sustituto en esta entrega.
+7. Descarga directa S3 y carga de bytes son excepción acotada al canal GraphQL: el BFF autoriza solicitud/confirmación; SessionPort transporta solamente bytes a la autorización del propietario. ACL pública, CORS comodín y URLs firmadas en logs se prohíben.
+
+## Consecuencias y límites
+
+La entrega integra y prueba el recorrido real de ejecución y avances, el aislamiento entre dos mecánicos y la lectura de jefatura. El subsistema S3 real no puede verificarse sin bucket/region/credenciales y CORS autorizados; por ello CU16 no se declara completado punta a punta. Offline/Flutter/CU27 y CU17 quedan fuera. CU05 conserva su único pendiente G2 visual, documentado en el handoff de CU05.
+
+## Verificación real ejecutada (2026-10-30)
+
+Bucket autorizado `autonexus-ai-evidencias` (us-east-1), perfil local `default`, identidad confirmada por STS como `arn:aws:iam::851725478821:user/mjimenezb`. Las credenciales se entregaron sólo al contenedor de Operaciones mediante un override de Compose privado e ignorado por Git que monta `~/.aws/credentials` en solo lectura en `/run/aws/credentials` y define `AWS_PROFILE` y `AWS_SHARED_CREDENTIALS_FILE`; el Compose base sigue funcionando sin esa configuración y ningún otro servicio recibe el montaje.
+
+Recorrido servidor-side contra AWS real con el usuario IAM personal del entorno (AdministratorAccess; configuración local de verificación, no modelo de despliegue): 15 comprobaciones PASS, incluidas autorización prefirmada, PUT condicional, confirmación con HEAD/size/checksum y firma binaria real, descarga con bytes idénticos, rechazo de sobrescritura y aislamiento entre mecánicos. Recorrido desde navegador real sobre la imagen reconstruida desde fuentes: 12 etapas PASS, incluidas carga directa desde el origen web, confirmación por GraphQL, evidencia en estado Confirmada, descarga autorizada de 70 bytes con ETag expuesto, bloqueo de una cabecera fuera del allowlist y rechazo 412 al reescribir la clave.
+
+Configuración del bucket: permanece privado (bloqueo público total, sin política, `BucketOwnerEnforced`, SSE-S3). El único cambio aplicado fue CORS, tras aprobación explícita, con dos orígenes exactos (4286 y el documentado 4280), métodos PUT/GET/HEAD y sólo las cabeceras firmadas. La carga desde 4280 se verificó con una página servida en ese origen: PUT 200, sobrescritura 412, confirmación y descarga autorizada. No se modificó IAM, política, ACL ni acceso público y no se creó ningún recurso.
+
+Revisión independiente **focalizada en el fix de firma** (no existe dictamen de revisión integral del CU). Defecto encontrado y corregido: la cabecera condicional se devolvía al navegador pero no estaba cubierta por la firma. Ahora se incorpora al `PutObjectRequest` antes de presignar y el servicio falla cerrado si el SDK no la incluye en `X-Amz-SignedHeaders`; una prueba lo verifica sobre la URL y AWS real respondió 412 a la reescritura.
+
+Límites declarados que permanecen: el bucket no tiene versionado, por lo que la inmutabilidad posterior a la confirmación depende de la escritura condicional firmada; en el despliegue se requiere una identidad propia de Operaciones con permisos mínimos sobre `evidence/*`, porque el runtime local usó el usuario personal con `AdministratorAccess`; la descarga sirve el objeto vigente de la clave. La confirmación hace HEAD y lectura de prefijo en dos llamadas no fijadas a una versión, de modo que una sustitución entre ambas requeriría credenciales de escritura (TOCTOU residual). CU17, offline, Flutter y la limpieza de los objetos sintéticos conservados quedan fuera de esta entrega.

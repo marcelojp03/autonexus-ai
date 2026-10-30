@@ -1,5 +1,32 @@
 # Estado comprobado
 
+## CU16 — ejecución y evidencias verificadas contra AWS S3 real (2026-10-30)
+
+En work/marcelo quedó implementado el estado de ejecución separado de la confirmación CU15: la orden conserva confirmed y el agregado de ejecución queda in_progress hasta CU17. El mecánico activo y asignado es el único que inicia y registra avances/evidencias; jefatura consulta y descarga sin escribir. La agenda CU05 muestra estado y progreso, y el detalle enlaza al trabajo ya seleccionado en CU16. El BFF autoriza cada campo GraphQL por permiso; los bytes van por PUT directo a una URL prefirmada sin JWT.
+
+| Comprobación observada | Resultado |
+| --- | --- |
+| Operaciones, ManageExecutionsTest + EvidenceRulesTest + S3EvidenceStorageTest | 24 pruebas PASS; el test del presigner exige X-Amz-SignedHeaders con if-none-match |
+| Empleados, authorize-execution.spec + agenda.spec | 21 pruebas PASS; build Nest PASS |
+| BFF, unidades y HTTP | 144 unidades y 35 HTTP PASS; build Nest PASS |
+| Web Empleados/agenda, pruebas focalizadas | 18 pruebas PASS; build integrado Angular PASS (aviso preexistente del bundle inicial sobre budget de 2 MiB) |
+| Shell | TypeScript y Vite build PASS; detector mecánico de UI sin hallazgos |
+| Compose, base y override privado | `config --quiet` PASS en ambos; sólo `operations` obtiene el montaje de credenciales en solo lectura |
+| API real CU16 | 12 etapas PASS: permisos, agenda CU05, inicio, duplicado, avance, replay, versión obsoleta, aislamiento 404, jefatura lectura/escritura y ausencia de S3 sin fila pending |
+| Evidencia real contra AWS S3 | 15 etapas PASS: presign, PUT condicional, confirmación con HEAD/checksum/firma real, descarga idéntica, rechazo de sobrescritura y aislamiento entre mecánicos |
+| Navegador real (imagen reconstruida) | 12 etapas PASS: PKCE, CU05→CU16, avance, carga prefirmada desde el origen web, confirmación GraphQL, evidencia Confirmada, descarga autorizada de 70 bytes, ETag expuesto, cabecera fuera de allowlist bloqueada, sobrescritura 412 y móvil 390; consola inesperada/página/5xx = 0 |
+| Imagen web desde fuentes | rebuild `exit=0`; el `main.js` servido coincide en SHA-256 con el horneado en la imagen, sin copias manuales |
+
+El bucket privado autorizado `autonexus-ai-evidencias` (us-east-1) se usó con la identidad IAM verificada por STS (`arn:aws:iam::851725478821:user/mjimenezb`, perfil local `default`). Esa identidad es el usuario personal del entorno y tiene `AdministratorAccess`, así que el runtime local **no** opera con permisos mínimos: es configuración local de verificación, no el modelo de despliegue. Queda pendiente una identidad propia de Operaciones con permisos acotados a `evidence/*` (PutObject/GetObject/DeleteObject, sin ListBucket ni administración); no se crearon usuarios, claves ni políticas. Las credenciales llegaron sólo a Operaciones montando `~/.aws/credentials` en solo lectura en `/run/aws/credentials` con `AWS_PROFILE` y `AWS_SHARED_CREDENTIALS_FILE`, mediante un override de Compose privado ignorado por Git; ningún otro servicio recibe el montaje ni variables AWS, y el Compose general funciona sin esa configuración. No se copiaron claves al repositorio, contexto de build, imagen, BFF, frontend ni logs.
+
+El bucket conserva bloqueo público total, ausencia de política, ownership `BucketOwnerEnforced` y SSE-S3. El único cambio aplicado fue CORS con dos orígenes exactos (`http://127.0.0.1:4286` y el documentado `http://127.0.0.1:4280`), métodos PUT/GET/HEAD y sólo las cabeceras firmadas necesarias; no se modificó IAM, política, ACL ni acceso público, y no se creó ningún recurso.
+
+Revisión independiente **focalizada en el fix de firma**, no una revisión integral del CU: detectó que `If-None-Match` se devolvía pero no se firmaba. Se reprodujo en rojo y se corrigió firmándolo en el `PutObjectRequest` antes de presignar, con fallo cerrado si falta del `signedHeaders`. La re-revisión acotada, ya sobre el worktree correcto, confirmó firma, fallo cerrado y aserción real sobre `X-Amz-SignedHeaders`; el rechazo 412 se observó además contra AWS real. No existe dictamen de revisión integral del CU16.
+
+Límites declarados: el bucket no tiene versionado, así que la inmutabilidad posterior a la confirmación se apoya en la escritura condicional firmada (412 verificado); la descarga sirve el objeto vigente de la clave. La confirmación hace HEAD y lectura de prefijo en dos llamadas no fijadas a versión, de modo que una sustitución entre ambas exigiría credenciales de escritura (TOCTOU residual). Los 9 PNG sintéticos de 70 bytes bajo `evidence/b1ea2754-…` se conservaron para no dejar filas `available` sin objeto; no se tocó ningún objeto previo.
+
+Carga desde el origen documentado: además del recorrido en la instancia 4286, se sirvió una página en `http://127.0.0.1:4280` (origen del inicio rápido) y desde ahí se ejecutó el PUT prefirmado real contra S3 (200), el rechazo de sobrescritura (412), la confirmación y la descarga autorizada de 70 bytes con ETag; 7 etapas PASS, sin errores inesperados.
+
 ## Infraestructura local reproducible — entregada, integrada y publicada (2026-10-29)
 
 T25 se cierra con aceptación funcional y revisión independiente resueltas. CU05 permanece abierto solo por G2 visual: la consulta de secuencia fue descartada sin respuesta y compose-next permitió seguir la alternativa recomendada no destructiva; no se presenta el cierre de infraestructura como conformidad visual de CU05.

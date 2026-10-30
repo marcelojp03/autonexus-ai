@@ -54,6 +54,36 @@ Cada aplicación monta solo su volumen de configuración. El estado canónico600
 
 ## Persistencia y parada
 
+## CU16 — evidencias privadas en AWS S3
+
+El Compose no crea ni modifica buckets, IAM, CORS u otros recursos AWS. La configuración privada no está presente en este entorno; por tanto, el resto de CU16 funciona, pero solicitar una evidencia responde 503 EVIDENCE_STORAGE_UNAVAILABLE. La subida, confirmación y descarga a S3 real quedan pendientes hasta disponer de un bucket existente y acceso autorizado. Usar un bucket puede generar consumo.
+
+Solo el contenedor operations recibe S3_EVIDENCE_BUCKET, S3_EVIDENCE_REGION, S3_EVIDENCE_ENDPOINT opcional, S3_EVIDENCE_PATH_STYLE, S3_EVIDENCE_UPLOAD_TTL_SECONDS, S3_EVIDENCE_DOWNLOAD_TTL_SECONDS y las credenciales estándar AWS (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN). Credenciales también pueden provenir de la cadena de proveedor AWS del runtime. Nunca se copian a la imagen, migración, BFF ni navegador. No registrar URLs prefirmadas.
+
+Para una configuración local autorizada, guardar los valores en un archivo privado ignorado por Git, por ejemplo output/stack/cu16-s3.private.env; no llenar ni versionar .env.example. Añadirlo como --env-file final a cada comando Compose. No copiar credenciales de otros proyectos ni publicar su contenido. Sin credenciales y bucket no hay verificación AWS real.
+
+El propietario del bucket debe conservarlo privado (sin ACL/policy pública ni listado anónimo) y configurar CORS con los orígenes web exactos que se usen, no *. Para el origen local por defecto, permitir http://127.0.0.1:4280, métodos PUT, GET y HEAD, y solo las cabeceras de carga Content-Type, If-None-Match y x-amz-checksum-sha256; exponer ETag, x-amz-version-id y x-amz-checksum-sha256. Ajustar el origen exacto si cambia WEB_PORT o PUBLIC_ORIGIN. El adaptador sólo usa operaciones de objeto, y el navegador no recibe credenciales AWS ni entrega JWT a S3.
+
+Aviso de permisos en la verificación local: el runtime se conectó con el usuario IAM personal del entorno, que tiene `AdministratorAccess`. Eso es configuración local de verificación y **no** representa el modelo de despliegue. Antes de desplegar debe crearse una identidad propia de Operaciones con permisos mínimos sobre `evidence/*` (PutObject, GetObject y DeleteObject, sin ListBucket ni administración); esta entrega no crea usuarios, claves ni políticas.
+
+Dependencia concreta para habilitar y verificar el recorrido: nombre de un bucket AWS S3 privado ya existente, su región y una identidad autorizada para Operations mediante la cadena estándar del SDK. El principal necesita s3:PutObject, s3:GetObject (incluye HEAD/descarga) y s3:DeleteObject para retirar objetos inválidos, limitados al prefijo arn:aws:s3:::BUCKET/evidence/*; no requiere s3:ListBucket. El origen CORS debe ser exactamente el de la instancia web en uso, con las cabeceras firmadas descritas arriba. En la verificación del 2026-10-30 se usó el bucket privado `autonexus-ai-evidencias` (us-east-1) con la identidad IAM del perfil local `default` validada por STS.
+
+Conexión de credenciales usada (sólo Operaciones, sin copiar secretos): un override privado ignorado por Git monta el archivo del perfil en solo lectura y lo declara al SDK. El Compose general sigue funcionando sin el override ni el archivo privado.
+
+```powershell
+# output/stack/cu16-s3.private.env  (ignorado por Git; sin claves dentro)
+#   S3_EVIDENCE_BUCKET=autonexus-ai-evidencias
+#   S3_EVIDENCE_REGION=us-east-1
+#   AWS_PROFILE=default
+#   CU16_AWS_CREDENTIALS_FILE=C:/Users/<usuario>/.aws/credentials
+docker compose -p <proyecto> --env-file output/stack/cu16-s3.private.env \
+  -f compose.yaml -f output/stack/cu16-compose-s3.yaml up -d --no-deps operations
+```
+
+El override monta el archivo en `/run/aws/credentials` (`read_only: true`) y fija `AWS_SHARED_CREDENTIALS_FILE`, de modo que el SDK del contenedor lo lee con `AWS_PROFILE`. Verificado: sólo el servicio `operations` recibe el montaje; ni BFF, ni web, ni el resto de servicios obtienen credenciales. Con credenciales de usuario IAM de larga duración no hay token de sesión que renovar; si se usan credenciales temporales, deben exportarse al archivo privado antes de cada arranque porque caducan.
+
+Aceptar el recorrido real requiere autorización GraphQL/BFF, autorización prefirmada, PUT condicional directo, confirmación con HEAD, tamaño, checksum y firma binaria, estado available, descarga temporal y controles de propietario. Ninguna parte de esto se acredita por una compilación o por una prueba con dobles.
+
 Comandos de parada/arranque conservando datos, comprobados sobre proyectos de aceptación:
 
 ~~~sh
