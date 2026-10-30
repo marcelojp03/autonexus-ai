@@ -68,7 +68,8 @@ public final class ReadAgenda {
                     || a.orderConfirmedObserved() == null) throw state();
             result.add(new Work(row.assignmentId(), row.orderId(), row.orderNumber(), new Employee(a.employeeId(), a.fullName(), a.employeeStatus()),
                     row.vehicle(), row.startsAt(), row.endsAt(), row.priority(), "confirmed", row.description(), row.notes(), row.services(),
-                    row.orderVersion(), a.version(), checked.observedAt(), a.orderConfirmedObserved() ? "observed" : "pending"));
+                    row.orderVersion(), a.version(), checked.observedAt(), a.orderConfirmedObserved() ? "observed" : "pending",
+                    row.executionStatus(), new ExecutionProgress(row.advanceCount(), row.lastAdvanceAt(), row.availableEvidence())));
         }
         return List.copyOf(result);
     }

@@ -25,6 +25,9 @@ export const PERMISSIONS = [
   'confirmations:write',
   'agenda:read:self',
   'agenda:read:team',
+  'executions:read:self',
+  'executions:read:team',
+  'executions:write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -62,6 +65,9 @@ export const PERMISSION_CATALOG: readonly PermissionDescriptor[] = Object.freeze
   { id: 'confirmations:write', module: 'Confirmaciones', operation: 'write', description: 'Iniciar y recuperar confirmaciones (CU15)' },
   { id: 'agenda:read:self', module: 'Agenda', operation: 'read', description: 'Consultar agenda propia vinculada (CU05)' },
   { id: 'agenda:read:team', module: 'Agenda', operation: 'read', description: 'Consultar agenda del equipo (CU05)' },
+  { id: 'executions:read:self', module: 'Ejecuciones', operation: 'read', description: 'Consultar avances y evidencias del trabajo propio (CU16)' },
+  { id: 'executions:read:team', module: 'Ejecuciones', operation: 'read', description: 'Consultar avances y evidencias del taller (CU16)' },
+  { id: 'executions:write', module: 'Ejecuciones', operation: 'write', description: 'Iniciar ejecución, registrar avances y confirmar evidencias propias (CU16)' },
 ]);
 
 const KNOWN = new Set<string>(PERMISSIONS);
@@ -76,12 +82,13 @@ export const INITIAL_ROLES: readonly { name: string; description: string; permis
     'appointments:read', 'appointments:write', 'receptions:read', 'orders:read', 'orders:write',
     'quotes:read', 'quotes:decide', 'confirmations:read', 'confirmations:write',
     'agenda:read:self', 'agenda:read:team',
+    'executions:read:self', 'executions:read:team',
   ] },
   { name: 'recepcionista', description: 'Atención al cliente en recepción', permissions: [
     'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write', 'catalog:read',
     'appointments:read', 'appointments:write', 'receptions:read', 'receptions:write',
     'orders:read', 'orders:write', 'quotes:read', 'quotes:decide',
   ] },
-  { name: 'mecanico', description: 'Trabajo técnico en el taller', permissions: ['receptions:read', 'receptions:write', 'agenda:read:self'] },
+  { name: 'mecanico', description: 'Trabajo técnico en el taller', permissions: ['receptions:read', 'receptions:write', 'agenda:read:self', 'executions:read:self', 'executions:write'] },
   { name: 'responsable_financiero', description: 'Responsabilidad financiera', permissions: ['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide'] },
 ]);

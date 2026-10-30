@@ -37,9 +37,9 @@ describe('permission catalog', () => {
     expect(INITIAL_ROLES[1].permissions).not.toContain('quotes:write');
     expect(INITIAL_ROLES[2].permissions).toContain('receptions:write');
     expect(INITIAL_ROLES[2].permissions).toContain('quotes:decide');
-    expect(INITIAL_ROLES[3].permissions).toEqual(['receptions:read', 'receptions:write', 'agenda:read:self']);
+    expect(INITIAL_ROLES[3].permissions).toEqual(['receptions:read', 'receptions:write', 'agenda:read:self', 'executions:read:self', 'executions:write']);
     expect(INITIAL_ROLES[4].permissions).toEqual(['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide']);
-    expect(PERMISSIONS.length).toBe(25);
+    expect(PERMISSIONS.length).toBe(28);
     expect(INITIAL_ROLES[1].permissions).toContain('confirmations:write');
   });
 });

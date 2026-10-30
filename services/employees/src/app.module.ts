@@ -6,6 +6,9 @@ import { PostgresMechanicProjection } from './infrastructure/postgres/postgres-m
 import { PostgresCu15Inbox } from './infrastructure/postgres/postgres-cu15-inbox.js';
 import { Cu15Messaging } from './infrastructure/messaging/cu15-messaging.js';
 import { Module } from '@nestjs/common';
+import { AuthorizeExecution } from './application/authorize-execution.js';
+import { ExecutionsController } from './infrastructure/http/executions.controller.js';
+import { PostgresExecutionsRepository } from './infrastructure/postgres/postgres-executions-repository.js';
 import { ReadAgenda } from './application/read-agenda.js';
 import { AgendaController } from './infrastructure/http/agenda.controller.js';
 import { PostgresAgendaRepository } from './infrastructure/postgres/postgres-agenda-repository.js';
@@ -35,6 +38,7 @@ import { PostgresSecurityRepository } from './infrastructure/postgres/postgres-s
   imports: [AuthModule],
   controllers: [
     AgendaController,
+    ExecutionsController,
     AssignmentsController,
     MechanicsController,
     HealthController,
@@ -52,6 +56,16 @@ import { PostgresSecurityRepository } from './infrastructure/postgres/postgres-s
       provide: ReadAgenda,
       inject: [PostgresAgendaRepository],
       useFactory: (repository: PostgresAgendaRepository) => new ReadAgenda(repository),
+    },
+    {
+      provide: PostgresExecutionsRepository,
+      useFactory: () => new PostgresExecutionsRepository(),
+    },
+    {
+      provide: AuthorizeExecution,
+      inject: [PostgresExecutionsRepository],
+      useFactory: (repository: PostgresExecutionsRepository) =>
+        new AuthorizeExecution(repository),
     },
     {
       provide: PostgresAssignmentRepository,

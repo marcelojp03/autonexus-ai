@@ -37,6 +37,10 @@ class JdbcAgendaRepositoryTest {
         when(rs.getLong("quote_version")).thenReturn(1L); when(rs.getLong("saga_version")).thenReturn(8L);
         when(rs.getTimestamp("starts_at")).thenReturn(Timestamp.from(start)); when(rs.getTimestamp("ends_at")).thenReturn(Timestamp.from(end));
         when(rs.getString("saga_status")).thenReturn("confirmed"); when(rs.getString("plate")).thenReturn("ORDER-SNAPSHOT");
+        // CU16 progress columns travel with the same row; the agenda publishes them additively.
+        when(rs.getString("execution_status")).thenReturn("in_progress");
+        when(rs.getInt("advance_count")).thenReturn(2); when(rs.getInt("available_evidence")).thenReturn(1);
+        when(rs.getTimestamp("last_advance_at")).thenReturn(Timestamp.from(start));
         when(rs.getString("make")).thenReturn("Toyota"); when(rs.getString("model")).thenReturn("Corolla");
         when(rs.getString("services")).thenReturn(json.writeValueAsString(List.of(new Service(UUID.randomUUID(),"Frenos",1,60))));
         document();

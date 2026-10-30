@@ -22,7 +22,7 @@ import org.springframework.web.cors.*;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
     private static final List<String> BUSINESS_PATHS = List.of(
-            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/receptions/**", "/orders/**", "/confirmations/**", "/agenda/**");
+            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/receptions/**", "/orders/**", "/confirmations/**", "/agenda/**", "/executions/**");
 
     @Bean
     JwtDecoder jwtDecoder(@Value("${OIDC_ISSUER_URI:http://127.0.0.1:8180/realms/autonexus}") String issuer,
@@ -76,6 +76,12 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/technical/admin").hasAuthority("administrador")
                 .requestMatchers(HttpMethod.GET, "/agenda/me", "/agenda/me/*").hasAuthority("agenda:read:self")
                 .requestMatchers(HttpMethod.GET, "/agenda/team", "/agenda/team/*").hasAuthority("agenda:read:team")
+                // CU16 execution progress and evidence. Downloads share the read scopes.
+                .requestMatchers(HttpMethod.GET, "/executions/me/**").hasAuthority("executions:read:self")
+                .requestMatchers(HttpMethod.GET, "/executions/team/**").hasAuthority("executions:read:team")
+                .requestMatchers(HttpMethod.POST, "/executions/*/start", "/executions/*/advances",
+                        "/executions/*/advances/*/evidences", "/executions/*/evidences/*/confirm",
+                        "/executions/*/evidences/*/retry").hasAuthority("executions:write")
                 // CU06 customers
                 .requestMatchers(HttpMethod.GET, "/customers", "/customers/*").hasAuthority("customers:read")
                 .requestMatchers(HttpMethod.POST, "/customers").hasAuthority("customers:write")

@@ -17,7 +17,7 @@ class ReadAgendaTest {
     Actor actor=new Actor(employee,"Mecánico","active",List.of("self","team"));
     ReadAgenda useCase=new ReadAgenda(repository,employees,clock);
     Candidate row=new Candidate(assignment,saga,order,"WO-2026-1",employee,new Vehicle(UUID.randomUUID(),"123ABC","Toyota","Corolla"),
-        now,now.plusSeconds(3600),"alta","Frenos","Nota",List.of(new Service(UUID.randomUUID(),"Revisión",1,60)),3,2);
+        now,now.plusSeconds(3600),"alta","Frenos","Nota",List.of(new Service(UUID.randomUUID(),"Revisión",1,60)),3,2,"in_progress",2,now,1);
     AgendaFilter filter=AgendaFilter.parse(Map.of(),"self",clock);
     AssignmentCheck check(String status,long version,UUID owner,boolean observed) {
         return new AssignmentCheck(assignment,saga,order,owner,"Mecánico","active",now,now.plusSeconds(3600),status,version,observed);
@@ -90,7 +90,8 @@ class ReadAgendaTest {
         var json=new ObjectMapper(); var work=useCase.detail("human","self",assignment);
         Map<?,?> dto=json.readValue(json.writeValueAsString(work),Map.class);
         assertEquals(Set.of("assignmentId","orderId","orderNumber","employee","vehicle","startsAt","endsAt","priority","status",
-            "description","notes","services","orderVersion","assignmentVersion","observedAt","confirmationObservation"),dto.keySet());
+            "description","notes","services","orderVersion","assignmentVersion","observedAt","confirmationObservation",
+            "executionStatus","executionProgress"),dto.keySet());
         assertEquals(Set.of("id","fullName","status"),((Map<?,?>)dto.get("employee")).keySet());
         assertEquals(Set.of("serviceId","serviceName","quantity","estimatedMinutes"),((Map<?,?>)((List<?>)dto.get("services")).getFirst()).keySet());
     }

@@ -31,7 +31,13 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             (SELECT jsonb_agg(jsonb_build_object('serviceId',item->>'serviceId','serviceName',item->>'serviceName',
                 'quantity',item->'quantity','estimatedMinutes',item->'estimatedMinutes'))
                 FROM jsonb_array_elements(h.snapshot->'items') item) AS services,
-            s.document,s.status AS saga_status,s.order_id AS saga_order_id,s.version AS saga_version
+            s.document,s.status AS saga_status,s.order_id AS saga_order_id,s.version AS saga_version,
+            COALESCE((SELECT 'in_progress' FROM operations.work_executions x WHERE x.order_id=o.id),'not_started') AS execution_status,
+            (SELECT count(*)::int FROM operations.work_advances ad
+                JOIN operations.work_executions x2 ON x2.id=ad.execution_id WHERE x2.order_id=o.id) AS advance_count,
+            (SELECT max(ad2.recorded_at) FROM operations.work_advances ad2
+                JOIN operations.work_executions x3 ON x3.id=ad2.execution_id WHERE x3.order_id=o.id) AS last_advance_at,
+            (SELECT count(*)::int FROM operations.work_evidence v WHERE v.order_id=o.id AND v.state='available') AS available_evidence
         """;
     static final String CONFIRMED = " WHERE o.status='confirmed' AND o.confirmation_saga_id IS NOT NULL";
     private final JdbcClient jdbc;
@@ -98,9 +104,16 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             if(plate==null || plate.isBlank() || make==null || model==null) throw ReadAgenda.state();
             Service[] services=json.readValue(rs.getString("services"),Service[].class);
             if(services==null || services.length==0 || Arrays.stream(services).anyMatch(s->s.serviceId()==null || s.serviceName()==null || s.quantity()<1 || s.estimatedMinutes()<1)) throw ReadAgenda.state();
+            String executionStatus=rs.getString("execution_status");
+            int advanceCount=rs.getInt("advance_count"),availableEvidence=rs.getInt("available_evidence");
+            java.sql.Timestamp lastAdvance=rs.getTimestamp("last_advance_at");
+            if(executionStatus==null || !Set.of("not_started","in_progress").contains(executionStatus)
+                    || advanceCount<0 || availableEvidence<0
+                    || (lastAdvance==null && advanceCount>0) || (lastAdvance!=null && advanceCount==0)) throw ReadAgenda.state();
             return new Candidate(assignment,sagaId,order,rs.getString("number"),employee,
                 new Vehicle(rs.getObject("vehicle_id",UUID.class),plate,make,model),start,end,
-                rs.getString("priority"),rs.getString("description"),rs.getString("notes"),List.of(services),saga.orderVersion,positive(resource.get("version")));
+                rs.getString("priority"),rs.getString("description"),rs.getString("notes"),List.of(services),saga.orderVersion,positive(resource.get("version")),
+                executionStatus,advanceCount,lastAdvance==null?null:lastAdvance.toInstant(),availableEvidence);
         } catch(RuntimeException invalid) { throw ReadAgenda.state(); }
     }
 }
