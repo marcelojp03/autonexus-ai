@@ -1,5 +1,5 @@
 """CU16 execution, advances and evidence. Every root declares its permission; owners revalidate the record."""
-enum ExecutionStatus { in_progress }
+enum ExecutionStatus { in_progress pending_verification completed }
 enum EvidenceState { pending available failed }
 type ExecutionEvidence {
   id: UUID!

@@ -74,11 +74,21 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                 .requestMatchers(HttpMethod.GET, "/technical/session").hasAnyAuthority(WorkshopAuthorities.ROLES.toArray(String[]::new))
                 .requestMatchers(HttpMethod.GET, "/technical/admin").hasAuthority("administrador")
+                // CU17 history keeps the record scopes of the active agenda.
+                .requestMatchers(HttpMethod.GET, "/agenda/history/me", "/agenda/history/me/*").hasAuthority("agenda:read:self")
+                .requestMatchers(HttpMethod.GET, "/agenda/history/team", "/agenda/history/team/*").hasAuthority("agenda:read:team")
                 .requestMatchers(HttpMethod.GET, "/agenda/me", "/agenda/me/*").hasAuthority("agenda:read:self")
                 .requestMatchers(HttpMethod.GET, "/agenda/team", "/agenda/team/*").hasAuthority("agenda:read:team")
                 // CU16 execution progress and evidence. Downloads share the read scopes.
                 .requestMatchers(HttpMethod.GET, "/executions/me/**").hasAuthority("executions:read:self")
                 .requestMatchers(HttpMethod.GET, "/executions/team/**").hasAuthority("executions:read:team")
+                // CU17 verification: reading is scoped, decisions need the dedicated permission.
+                .requestMatchers(HttpMethod.GET, "/executions/review-self/**").hasAuthority("executions:read:self")
+                .requestMatchers(HttpMethod.GET, "/executions/verify/**").hasAuthority("executions:read:team")
+                .requestMatchers(HttpMethod.POST, "/executions/*/checklist/*/complete",
+                        "/executions/*/checklist/*/reopen", "/executions/*/request-review").hasAuthority("executions:write")
+                .requestMatchers(HttpMethod.POST, "/executions/*/approve", "/executions/*/return")
+                        .hasAuthority("executions:verify")
                 .requestMatchers(HttpMethod.POST, "/executions/*/start", "/executions/*/advances",
                         "/executions/*/advances/*/evidences", "/executions/*/evidences/*/confirm",
                         "/executions/*/evidences/*/retry").hasAuthority("executions:write")

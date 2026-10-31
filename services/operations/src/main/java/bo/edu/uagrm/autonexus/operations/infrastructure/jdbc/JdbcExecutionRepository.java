@@ -16,7 +16,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
-/** CU16 persistence. The order row is only read: confirmation belongs to CU15. */
+/**\n * CU16/CU17 persistence. The order row is only read here: confirmation belongs to CU15. A\n * completed order keeps the same saga proof so its execution stays readable in history.\n */
 @Repository
 public class JdbcExecutionRepository extends OperationsStore implements ExecutionPorts.Repository {
     private static final String WORK = """
@@ -24,7 +24,7 @@ public class JdbcExecutionRepository extends OperationsStore implements Executio
                 o.starts_at,o.ends_at,o.version AS order_version
             FROM operations.work_orders o
             JOIN operations.cu15_sagas s ON s.id=o.confirmation_saga_id AND s.status='confirmed' AND s.order_id=o.id
-            WHERE o.assignment_id=? AND o.status='confirmed'
+            WHERE o.assignment_id=? AND o.status IN ('confirmed','completed')
               AND o.assignment_id IS NOT NULL AND o.employee_id IS NOT NULL
               AND o.confirmation_saga_id IS NOT NULL AND o.starts_at IS NOT NULL AND o.ends_at IS NOT NULL
               AND o.starts_at < o.ends_at

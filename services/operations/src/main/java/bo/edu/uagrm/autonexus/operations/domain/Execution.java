@@ -24,8 +24,9 @@ public record Execution(
         Summary evidenceSummary) {
 
     public static final String IN_PROGRESS = "in_progress";
-    /** CU17 owns any terminal state; CU16 must reject anything else instead of inventing it. */
-    public static final Set<String> STATUSES = Set.of(IN_PROGRESS);
+    /** CU16 starts and progresses the work; CU17 owns the review states that follow. */
+    public static final Set<String> STATUSES =
+            Set.of(IN_PROGRESS, "pending_verification", "completed");
 
     public record Advance(
             UUID id,

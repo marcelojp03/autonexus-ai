@@ -1,16 +1,16 @@
 # Plan de cobertura del segundo parcial
 
-Actualizado: 2026-10-30. Fuente de alcance: `docs/context/PROJECT.md`, `docs/use-cases/CU01..CU31` y contratos vigentes.
+Actualizado: 2026-10-31. Fuente de alcance: `docs/context/PROJECT.md`, `docs/use-cases/CU01..CU31` y contratos vigentes.
 
 ## Regla de medición
 
-La cobertura se mide por **puntos** del reparto (102 en total), no por cantidad de CU: un CU de 5 puntos no vale lo mismo que uno de 2. Cada fila se clasifica como:
+La cobertura se mide por **puntos**, no por cantidad de CU. Los 102 puntos provienen del **reparto interno de `docs/context/PROJECT.md`**: son una **estimación de cobertura para planificar**, no el puntaje oficial del docente, que no está en el repositorio. Cada fila se clasifica como:
 
 - **Verificado**: existe código, se ejecutó una prueba real o smoke del recorrido y hay evidencia registrada.
 - **Parcial**: hay modelo, contrato o parte del recorrido, pero falta un tramo o no se probó de punta a punta.
 - **Pendiente**: sin implementación funcional.
 
-Las dimensiones se miden por separado y no se mezclan: **web online**, **móvil**, **offline** y **cloud/despliegue**.
+Las dimensiones se miden por separado y no se mezclan: **funcional**, **validación visual**, **móvil**, **offline** y **despliegue**. Un CU puede estar funcionalmente verificado y conservar su validación visual pendiente.
 
 ## Matriz requisito → implementación → evidencia → pendiente
 
@@ -20,7 +20,7 @@ Las dimensiones se miden por separado y no se mezclan: **web online**, **móvil*
 | CU02 Roles y permisos | 3 | Empleados, catálogo, BFF, UI | Verificado | 89/89 pruebas, verificación real, decisión 012 | — |
 | CU03 Empleados | 2 | Empleados REST + BFF + MF | Verificado | CU03 API/BFF/browser | — |
 | CU04 Horarios | 3 | Empleados staffing + UI | Verificado | CU04 API/browser | — |
-| CU05 Agenda | 2 | Agenda propia/equipo, BFF, MF | Verificado, **visual pendiente** | CU05 API/BFF/browser | G2 visual sin canal de píxeles |
+| CU05 Agenda | 2 | Agenda propia/equipo, BFF, MF | Funcional verificado; **visual pendiente** | CU05 API/BFF/browser | G2 visual sin canal de píxeles |
 | CU06 Clientes | 2 | Operaciones + MF Operaciones | Verificado | Verificación real CU06 | — |
 | CU07 Vehículos | 2 | Operaciones (propietarios append-only) | Verificado | Verificación real CU07 | — |
 | CU08 Historial del vehículo | 2 | Sólo `vehicle_owners` como modelo | **Pendiente** | — | Endpoint de historial de servicios + UI |
@@ -48,32 +48,47 @@ Las dimensiones se miden por separado y no se mezclan: **web online**, **móvil*
 | CU30 MCP acciones | 5 | Ninguna | Pendiente | — | Acciones autorizadas con permisos y auditoría |
 | CU31 Acceso MCP externo | 3 | Ninguna | Pendiente | — | Registro y alcance por cliente MCP |
 
-## Cobertura actual
+## Cobertura actual (estimación interna, no puntaje oficial)
 
-- Verificado: CU01–CU07, CU09–CU16 = **43 de 102 puntos (42 %)**.
-- Si CU17 cierra: **45 puntos (44 %)**.
-- Objetivo del parcial: ~70 % (≈71 puntos). El salto real no viene de la gestión empresarial restante (CU08, CU18–CU21 = 13 puntos) sino de **IA + offline + MCP** (CU22–CU27, CU29–CU31 = 36 puntos).
+- Verificado funcionalmente: CU01–CU07 y CU09–CU16 = **43 puntos**.
+- Con CU17 completo: **45**.
+- Referencia del 70 % sobre 102: **72 puntos** (71 equivale a 69,6 %).
+- IA + offline + MCP (CU22–CU27 y CU29–CU31) suman **41 puntos**, no 36: son el salto real de cobertura, no la gestión empresarial restante (CU08, CU18–CU21 = 13).
 
-## Bloques y dependencias
+Ruta orientativa por entregas (cada fila sólo se suma cuando está verificada):
 
-| Bloque | CUs | Puntos | Depende de | Criterio de cierre |
-| --- | --- | --- | --- | --- |
-| A. Cierre operativo | CU17 | 2 | CU16 | Solicitud/aprobación/devolución reales y agenda adaptada |
-| B. Inteligencia con datos reales | CU24, CU23 | 10 | CU16 (evidencias), MongoDB | Inferencia real servida, evaluada y documentada; sin reentrenamiento automático |
-| C. IA local en cliente | CU22 | 5 | CU16 (evidencias), B | Modelo ejecutado en web (TensorFlow.js) y en móvil (LiteRT) |
-| D. Offline + sincronización | CU27 | 5 | CU05/CU16 (recorridos), mobile | PWA y Flutter con almacenamiento local y sincronización idempotente con DynamoDB |
-| E. Agentes y reportes | CU25, CU26 | 9 | B (datos), CU19–CU21 deseable | Asistente y reporte con datos reales del taller |
-| F. MCP y automatización | CU29, CU30, CU31, CU28 | 15 | CU21/B (herramientas) | Servidor MCP separado con permisos/auditoría y automatización real |
-| G. Gestión empresarial restante | CU08, CU18, CU19, CU20, CU21 | 13 | CU17 | Entrega y cobro separados de la finalización técnica |
+| Entrega | Acumulado |
+| --- | ---: |
+| Base verificada actual | 43 |
+| CU17 completo (solicitud, aprobación, devolución, agenda activa/historial) | 45 |
+| CU24 ML de duración + CU23 visión de servidor | 55 |
+| CU22 visión local en web **y móvil** | 60 |
+| CU27 offline y sincronización | 65 |
+| CU29 MCP de consulta | 69 |
+| CU28 automatización n8n | **72 ≈ 70,6 %** |
 
-Orden elegido por cobertura frente a esfuerzo: **A → B → C → D → E → F**, y G sólo cuando alimente un recorrido (CU19 cobro → CU21 indicadores para reportes y MCP). CU18 puede reducirse a registro mínimo si el tiempo aprieta.
+La meta no es un techo: CU25 (agentes) y CU26 (reportes generativos) son requisitos explícitos y se implementan después aprovechando los datos y herramientas anteriores. CU30/CU31 completan MCP.
 
+## Cobertura por dimensión
+
+| Dimensión | Estado |
+| --- | --- |
+| Funcional web online | CU01–CU07, CU09–CU16 verificados; CU17 en curso |
+| Validación visual | CU05 con G2 pendiente; el resto sin revisión visual declarada |
+| Móvil (Flutter) | Pendiente: sólo existe el esqueleto `mobile/autonexus_app` |
+| Offline (PWA + almacenamiento local + sincronización) | Pendiente |
+| Despliegue | Compose local reproducible y publicado; cloud sólo como propuesta, sin despliegue probado |
+## Modelos: duración y visión son distintos
+
+- **CU24** estima **duración** a partir de datos observados y no acredita nada de visión.
+- **CU23** (servidor) y **CU22** (cliente) analizan **imágenes**; el reutilizable entre servidor, web y móvil es el **modelo visual**, con sus conversiones y verificaciones de ejecución real en cada plataforma.
+- El modelo de duración no se reutiliza como modelo visual ni al revés.
 ## Dependencias transversales
 
 - **MongoDB** entra con CU23 y sirve también a CU25/CU26 (evidencias analizadas, reportes).
 - **DynamoDB** entra con CU27; sin él no hay sincronización real ni conflictos.
 - **Una misma evidencia** de CU16 alimenta visión local (CU22) y de servidor (CU23): no duplicar captura.
-- **Un mismo modelo** de duración (CU24) puede adaptarse a web y móvil, reduciendo trabajo de CU22.
+- **Un mismo modelo visual** (CU23) puede adaptarse a web (TensorFlow.js) y móvil (LiteRT); el modelo de duración (CU24) es independiente y no acredita visión.
 - Ningún bloque puede declarar confirmación de transacciones distribuidas estando offline.
 
 ## Restricciones vigentes

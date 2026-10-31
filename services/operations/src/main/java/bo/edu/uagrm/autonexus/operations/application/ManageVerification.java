@@ -108,19 +108,22 @@ public final class ManageVerification {
         Authorized authorized = authorize(token, "write", assignmentId);
         Assignment assignment = authorized.items().get(0);
         Confirmed work = confirmed(assignment);
-        Execution execution = executionOf(assignment, work);
-        requireStatus(execution, Execution.IN_PROGRESS);
-        if (verifications.advanceCount(execution.id()) < 1) throw OperationsError.conflict("EVIDENCE_REQUIRED");
-        if (verifications.availableEvidence(work.orderId()) < 1) throw OperationsError.conflict("EVIDENCE_REQUIRED");
-        if (verifications.checklist(execution.id()).stream()
-                .anyMatch(item -> Verification.PENDING.equals(item.state()))) {
-            throw OperationsError.conflict("CHECKLIST_INCOMPLETE");
-        }
+        // Idempotency is decided before the transition rules: a replay must not fail because the
+        // first call already moved the execution out of in_progress.
         String fingerprint = fingerprint("request-review", operationId, work, Integer.toString(expectedVersion));
-        if (verifications.replayed(operationId, fingerprint).isEmpty()
-                && !verifications.requestReview(execution, expectedVersion,
-                        assignment.employeeId().toString(), clock.instant(), operationId, fingerprint)) {
-            throw OperationsError.conflict("VERSION_CONFLICT");
+        if (verifications.replayed(operationId, fingerprint).isEmpty()) {
+            Execution execution = executionOf(assignment, work);
+            requireStatus(execution, Execution.IN_PROGRESS);
+            if (verifications.advanceCount(execution.id()) < 1) throw OperationsError.conflict("EVIDENCE_REQUIRED");
+            if (verifications.availableEvidence(work.orderId()) < 1) throw OperationsError.conflict("EVIDENCE_REQUIRED");
+            if (verifications.checklist(execution.id()).stream()
+                    .anyMatch(item -> Verification.PENDING.equals(item.state()))) {
+                throw OperationsError.conflict("CHECKLIST_INCOMPLETE");
+            }
+            if (!verifications.requestReview(execution, expectedVersion,
+                    assignment.employeeId().toString(), clock.instant(), operationId, fingerprint)) {
+                throw OperationsError.conflict("VERSION_CONFLICT");
+            }
         }
         return view(reload(assignment), work);
     }
@@ -145,14 +148,15 @@ public final class ManageVerification {
             throw new OperationsError(403, "SELF_VERIFICATION_FORBIDDEN");
         }
         Confirmed work = confirmed(assignment);
-        Execution execution = executionOf(assignment, work);
-        requireStatus(execution, Verification.PENDING_VERIFICATION);
         String fingerprint = fingerprint(approved ? "approve" : "return", operationId, work,
                 expectedVersion + ":" + (reason == null ? "" : reason));
-        if (verifications.replayed(operationId, fingerprint).isEmpty()
-                && !verifications.decide(execution, expectedVersion, approved, reason,
-                        authorized.actor().employeeId().toString(), clock.instant(), operationId, fingerprint)) {
-            throw OperationsError.conflict("VERSION_CONFLICT");
+        if (verifications.replayed(operationId, fingerprint).isEmpty()) {
+            Execution execution = executionOf(assignment, work);
+            requireStatus(execution, Verification.PENDING_VERIFICATION);
+            if (!verifications.decide(execution, expectedVersion, approved, reason,
+                    authorized.actor().employeeId().toString(), clock.instant(), operationId, fingerprint)) {
+                throw OperationsError.conflict("VERSION_CONFLICT");
+            }
         }
         return view(reload(assignment), work);
     }
