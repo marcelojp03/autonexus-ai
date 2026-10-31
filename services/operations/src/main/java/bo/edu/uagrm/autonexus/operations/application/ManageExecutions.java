@@ -76,6 +76,13 @@ public class ManageExecutions {
         return work;
     }
 
+    /** CU17 closes the record: once the work awaits verification or is completed, CU16 stops writing. */
+    private static void requireWritable(Execution execution) {
+        if (!Execution.IN_PROGRESS.equals(execution.status())) {
+            throw OperationsError.conflict("EXECUTION_STATE_CONFLICT");
+        }
+    }
+
     private Execution readExecution(Confirmed work) {
         return repository.load(work.assignmentId()).orElseThrow(ManageExecutions::missing);
     }
@@ -120,6 +127,7 @@ public class ManageExecutions {
         Authorized authorized = authorize(token, "write", assignmentId);
         Confirmed work = confirmed(assignmentId, authorized.items().get(0), true);
         Execution current = readExecution(work);
+        requireWritable(current);
         Instant now = clock.instant();
         Instant occurredAt = requested == null ? now : requested;
         if (occurredAt.isAfter(now) || occurredAt.isBefore(current.startedAt())) throw OperationsError.invalid();
@@ -147,6 +155,7 @@ public class ManageExecutions {
         Authorized authorized = authorize(token, "write", assignmentId);
         Confirmed work = confirmed(assignmentId, authorized.items().get(0), true);
         Execution execution = readExecution(work);
+        requireWritable(execution);
         requireAdvance(execution, advanceId, true);
         requireStorage();
         String fingerprint = fingerprint("evidence-request", operationId, work,
@@ -174,6 +183,7 @@ public class ManageExecutions {
         Execution execution = readExecution(work);
         EvidenceRecord record = repository.evidence(work.orderId(), evidenceId).orElseThrow(ManageExecutions::missing);
         requireOwned(execution, record.evidence());
+        requireWritable(execution);
         String fingerprint = fingerprint("evidence-confirm", operationId, work, evidenceId + "\u001F" + expectedVersion);
         Optional<UUID> replay = repository.replayed(operationId, fingerprint);
         if (replay.isPresent()) {
@@ -216,6 +226,7 @@ public class ManageExecutions {
         Execution execution = readExecution(work);
         EvidenceRecord record = repository.evidence(work.orderId(), evidenceId).orElseThrow(ManageExecutions::missing);
         requireOwned(execution, record.evidence());
+        requireWritable(execution);
         requireStorage();
         String fingerprint = fingerprint("evidence-retry", operationId, work, evidenceId + "\u001F"
                 + draft.fileName() + "\u001F" + draft.contentType() + "\u001F" + draft.sizeBytes() + "\u001F" + draft.checksumSha256());

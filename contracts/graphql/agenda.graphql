@@ -4,7 +4,7 @@ enum AgendaStatus { confirmed completed }
 enum AgendaPriority { baja normal alta urgente }
 enum AgendaEmployeeStatus { active inactive }
 enum AgendaConfirmationObservation { observed pending }
-enum AgendaExecutionStatus { not_started in_progress }
+enum AgendaExecutionStatus { not_started in_progress pending_verification completed }
 """CU16 progress published by the owner. Confirmation still comes from the CU15 saga."""
 type AgendaExecutionProgress { advances: Int!, lastAdvanceAt: DateTime, availableEvidence: Int! }
 type AgendaActor { employeeId: UUID!, fullName: String!, status: AgendaEmployeeStatus!, scopes: [AgendaScope!]! }

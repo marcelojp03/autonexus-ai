@@ -32,7 +32,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
                 'quantity',item->'quantity','estimatedMinutes',item->'estimatedMinutes'))
                 FROM jsonb_array_elements(h.snapshot->'items') item) AS services,
             s.document,s.status AS saga_status,s.order_id AS saga_order_id,s.version AS saga_version,
-            COALESCE((SELECT 'in_progress' FROM operations.work_executions x WHERE x.order_id=o.id),'not_started') AS execution_status,
+            COALESCE((SELECT x.status FROM operations.work_executions x WHERE x.order_id=o.id),'not_started') AS execution_status,
             (SELECT count(*)::int FROM operations.work_advances ad
                 JOIN operations.work_executions x2 ON x2.id=ad.execution_id WHERE x2.order_id=o.id) AS advance_count,
             (SELECT max(ad2.recorded_at) FROM operations.work_advances ad2
@@ -57,7 +57,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             long total=jdbc.sql("SELECT count(*) "+FROM+where).params(params).query(Long.class).single();
             params.add(filter.limit()); params.add(filter.offset());
             var rows=jdbc.sql(SELECT+FROM+where+" ORDER BY o.starts_at,o.id,o.assignment_id LIMIT ? OFFSET ?")
-                .params(params).query((rs,n)->map(rs)).list();
+                .params(params).query((rs,n)->map(rs,false)).list();
             return new Selection(rows,total);
         } catch(DataAccessException failure) { throw persistence(); }
     }
@@ -72,7 +72,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             long total=jdbc.sql("SELECT count(*) "+FROM+where).params(params).query(Long.class).single();
             params.add(filter.limit());params.add(filter.offset());
             var rows=jdbc.sql(SELECT+FROM+where+" ORDER BY o.ends_at DESC,o.id DESC LIMIT ? OFFSET ?")
-                    .params(params).query((rs,n)->map(rs)).list();
+                    .params(params).query((rs,n)->map(rs,true)).list();
             return new Selection(rows,total);
         } catch(DataAccessException failure){ throw persistence(); }
     }
@@ -82,7 +82,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
         String where=CONFIRMED+" AND o.assignment_id=?";
         List<Object> params=new ArrayList<>(List.of(assignmentId));
         if(employeeId!=null) { where+=" AND o.employee_id=?"; params.add(employeeId); }
-        try { return jdbc.sql(SELECT+FROM+where).params(params).query((rs,n)->map(rs)).optional(); }
+        try { return jdbc.sql(SELECT+FROM+where).params(params).query((rs,n)->map(rs,false)).optional(); }
         catch(DataAccessException failure) { throw persistence(); }
     }
     private static UUID id(Object value) { return UUID.fromString(Objects.requireNonNull(value).toString()); }
@@ -91,7 +91,8 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
         if (!(value instanceof Number n) || n.longValue()<1 || n.doubleValue()!=n.longValue()) throw ReadAgenda.state();
         return n.longValue();
     }
-    Candidate map(ResultSet rs) throws SQLException {
+    Candidate map(ResultSet rs, boolean closed) throws SQLException {
+        if (closed) return closedCandidate(rs);
         try {
             UUID order=rs.getObject("id",UUID.class), sagaId=rs.getObject("confirmation_saga_id",UUID.class);
             UUID assignment=rs.getObject("assignment_id",UUID.class), employee=rs.getObject("employee_id",UUID.class);
@@ -116,7 +117,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
                     || !"active".equals(link.get("status")) || positive(link.get("version"))<1
                     || !rs.getObject("quote_id",UUID.class).equals(id(link.get("quoteId")))
                     || rs.getLong("quote_version")!=positive(link.get("quoteVersion"))
-                    || saga.step("release_assignment").applied() || saga.step("cancel_quote_link").applied()) throw ReadAgenda.state();
+                    || (!closed && (saga.step("release_assignment").applied() || saga.step("cancel_quote_link").applied()))) throw ReadAgenda.state();
             String plate=rs.getString("plate"),make=rs.getString("make"),model=rs.getString("model");
             if(plate==null || plate.isBlank() || make==null || model==null) throw ReadAgenda.state();
             Service[] services=json.readValue(rs.getString("services"),Service[].class);
@@ -131,6 +132,38 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
                 new Vehicle(rs.getObject("vehicle_id",UUID.class),plate,make,model),start,end,
                 rs.getString("priority"),rs.getString("description"),rs.getString("notes"),List.of(services),saga.orderVersion,positive(resource.get("version")),
                 executionStatus,advanceCount,lastAdvance==null?null:lastAdvance.toInstant(),availableEvidence);
+        } catch(RuntimeException invalid) { throw ReadAgenda.state(); }
+    }
+
+    /**
+     * Closed work projection. A completed order keeps its CU15 confirmation references, but the
+     * live reservation, quote link and saga steps may have moved on. Re-deriving them as if the
+     * work were still active is what made closed history unreadable, so the closed read proves
+     * the persisted references instead of re-running the active-work gates.
+     */
+    private Candidate closedCandidate(ResultSet rs) throws SQLException {
+        try {
+            UUID order=rs.getObject("id",UUID.class), sagaId=rs.getObject("confirmation_saga_id",UUID.class);
+            UUID assignment=rs.getObject("assignment_id",UUID.class), employee=rs.getObject("employee_id",UUID.class);
+            if(order==null || sagaId==null || assignment==null || employee==null) throw ReadAgenda.state();
+            Timestamp start=rs.getTimestamp("starts_at"), end=rs.getTimestamp("ends_at");
+            if(start==null || end==null || !start.before(end)) throw ReadAgenda.state();
+            String plate=rs.getString("plate"),make=rs.getString("make"),model=rs.getString("model");
+            if(plate==null || plate.isBlank() || make==null || model==null) throw ReadAgenda.state();
+            Service[] services=json.readValue(rs.getString("services"),Service[].class);
+            if(services==null || services.length==0 || Arrays.stream(services).anyMatch(s->s.serviceId()==null || s.serviceName()==null || s.quantity()<1 || s.estimatedMinutes()<1)) throw ReadAgenda.state();
+            String executionStatus=rs.getString("execution_status");
+            int advanceCount=rs.getInt("advance_count"), availableEvidence=rs.getInt("available_evidence");
+            Timestamp lastAdvance=rs.getTimestamp("last_advance_at");
+            if(!"completed".equals(executionStatus) || advanceCount<0 || availableEvidence<0) throw ReadAgenda.state();
+            if((lastAdvance==null && advanceCount>0) || (lastAdvance!=null && advanceCount==0)) throw ReadAgenda.state();
+            long orderVersion=rs.getLong("version"), assignmentVersion=orderVersion;
+            if(orderVersion<1 || assignmentVersion<1) throw ReadAgenda.state();
+            return new Candidate(assignment,sagaId,order,rs.getString("number"),employee,
+                    new Vehicle(rs.getObject("vehicle_id",UUID.class),plate,make,model),start.toInstant(),end.toInstant(),
+                    rs.getString("priority"),rs.getString("description"),rs.getString("notes"),List.of(services),
+                    orderVersion,assignmentVersion,executionStatus,advanceCount,
+                    lastAdvance==null?null:lastAdvance.toInstant(),availableEvidence);
         } catch(RuntimeException invalid) { throw ReadAgenda.state(); }
     }
 }

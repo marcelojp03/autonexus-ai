@@ -33,10 +33,11 @@ public final class ReadAgenda {
                 "America/La_Paz", clock.instant());
     }
     public Result history(String token, String scope, AgendaFilter filter) {
+
         Actor actor = context(token, scope);
         UUID employee = scope.equals("self") ? actor.employeeId() : filter.employeeId();
         Selection page = repository.history(filter, employee);
-        List<Work> works = verify(token, scope, actor, page.items(), false, true);
+        List<Work> works = verifyCompleted(token, scope, actor, page.items());
         return new Result(actor, works, page.total(), filter.limit(), filter.offset(), filter.from(), filter.to(),
                 "America/La_Paz", clock.instant());
     }
@@ -45,7 +46,9 @@ public final class ReadAgenda {
         Actor actor = context(token, scope);
         Candidate row = repository.detail(id, scope.equals("self") ? actor.employeeId() : null).orElseThrow(ReadAgenda::missing);
         if (scope.equals("self") && !actor.employeeId().equals(row.employeeId())) throw missing();
-        return verify(token, scope, actor, List.of(row), true, "completed".equals(row.executionStatus())).getFirst();
+        return "completed".equals(row.executionStatus())
+                ? verifyCompleted(token, scope, actor, List.of(row)).getFirst()
+                : verify(token, scope, actor, List.of(row), true, false).getFirst();
     }
     private List<Work> verify(String token, String scope, Actor actor, List<Candidate> rows, boolean detail, boolean completed) {
         if (rows.isEmpty()) return List.of();
@@ -79,6 +82,44 @@ public final class ReadAgenda {
                     row.vehicle(), row.startsAt(), row.endsAt(), row.priority(), completed ? "completed" : "confirmed", row.description(), row.notes(), row.services(),
                     row.orderVersion(), a.version(), checked.observedAt(), a.orderConfirmedObserved() ? "observed" : "pending",
                     row.executionStatus(), new ExecutionProgress(row.advanceCount(), row.lastAdvanceAt(), row.availableEvidence())));
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * History read of closed work. Identity, record scope and the CU15 confirmation references are
+     * still proven, but the live reservation may have moved on: a completed order can keep a
+     * released assignment and a newer assignment version than the saga snapshot. Requiring the
+     * active-work equality here would make closed work unreadable.
+     */
+    private List<Work> verifyCompleted(String token, String scope, Actor actor, List<Candidate> rows) {
+        if (rows.isEmpty()) return List.of();
+        Checked checked = employees.check(token, scope, rows.stream().map(Candidate::assignmentId).toList());
+        if (checked == null || checked.observedAt() == null) throw state();
+        authorize(checked.actor(), scope);
+        if (!actor.employeeId().equals(checked.actor().employeeId())) throw denied();
+        if (checked.items() == null || checked.items().size() != rows.size()) throw state();
+        Map<UUID, AssignmentCheck> current = new HashMap<>();
+        for (AssignmentCheck a : checked.items()) {
+            if (a == null || a.assignmentId() == null || current.put(a.assignmentId(), a) != null) throw state();
+        }
+        List<Work> result = new ArrayList<>();
+        for (Candidate row : rows) {
+            AssignmentCheck a = current.get(row.assignmentId());
+            if (a == null) throw missing();
+            if (scope.equals("self") && !actor.employeeId().equals(a.employeeId())) throw missing();
+            if (!Objects.equals(row.sagaId(), a.sagaId()) || !Objects.equals(row.orderId(), a.orderId())
+                    || !Objects.equals(row.employeeId(), a.employeeId())
+                    || !Set.of("confirmed", "released").contains(a.status())
+                    || a.fullName() == null || a.fullName().isBlank()
+                    || !Set.of("active", "inactive").contains(a.employeeStatus() == null ? "" : a.employeeStatus())
+                    || a.orderConfirmedObserved() == null) throw state();
+            result.add(new Work(row.assignmentId(), row.orderId(), row.orderNumber(),
+                    new Employee(a.employeeId(), a.fullName(), a.employeeStatus()),
+                    row.vehicle(), row.startsAt(), row.endsAt(), row.priority(), "completed", row.description(),
+                    row.notes(), row.services(), row.orderVersion(), a.version(), checked.observedAt(),
+                    a.orderConfirmedObserved() ? "observed" : "pending", row.executionStatus(),
+                    new ExecutionProgress(row.advanceCount(), row.lastAdvanceAt(), row.availableEvidence())));
         }
         return List.copyOf(result);
     }

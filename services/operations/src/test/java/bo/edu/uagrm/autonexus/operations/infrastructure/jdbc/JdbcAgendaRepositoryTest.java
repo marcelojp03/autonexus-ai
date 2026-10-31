@@ -47,28 +47,28 @@ class JdbcAgendaRepositoryTest {
     }
     void document() throws Exception { when(rs.getString("document")).thenReturn(json.writeValueAsString(saga)); }
     @Test void readsGlobalProofAndSnapshotsWithCanonicalInstantEquality() throws Exception {
-        var row=repository.map(rs); assertEquals(2,row.assignmentVersion()); assertEquals(start,row.startsAt());
+        var row=repository.map(rs,false); assertEquals(2,row.assignmentVersion()); assertEquals(start,row.startsAt());
         assertEquals("ORDER-SNAPSHOT",row.vehicle().plate());
     }
     @Test void nonConfirmedOrCompensatedSagaIsNotAJob() throws Exception {
         for(String state:List.of("running","recovery_pending","compensating","compensation_pending","rejected")) {
             saga.status=state; document();
-            assertEquals("AGENDA_STATE_UNAVAILABLE",assertThrows(OperationsError.class,()->repository.map(rs)).code());
+            assertEquals("AGENDA_STATE_UNAVAILABLE",assertThrows(OperationsError.class,()->repository.map(rs,false)).code());
         }
         saga.status="confirmed"; saga.step("release_assignment").status="applied"; document();
-        assertThrows(OperationsError.class,()->repository.map(rs));
+        assertThrows(OperationsError.class,()->repository.map(rs,false));
     }
     @Test void missingOrInconsistentReferencesFailNotPrune() throws Exception {
         when(rs.getObject("quote_link_id",UUID.class)).thenReturn(UUID.randomUUID());
-        assertThrows(OperationsError.class,()->repository.map(rs));
+        assertThrows(OperationsError.class,()->repository.map(rs,false));
         when(rs.getObject("quote_link_id",UUID.class)).thenReturn(link); when(rs.getLong("version")).thenReturn(4L);
-        assertThrows(OperationsError.class,()->repository.map(rs));
+        assertThrows(OperationsError.class,()->repository.map(rs,false));
     }
     @Test void missingSnapshotAndNonPositiveIntervalAreStateErrors() throws Exception {
         when(rs.getTimestamp("ends_at")).thenReturn(Timestamp.from(start));
-        assertThrows(OperationsError.class,()->repository.map(rs));
+        assertThrows(OperationsError.class,()->repository.map(rs,false));
         when(rs.getTimestamp("ends_at")).thenReturn(Timestamp.from(end)); when(rs.getString("plate")).thenReturn(null);
-        assertThrows(OperationsError.class,()->repository.map(rs));
+        assertThrows(OperationsError.class,()->repository.map(rs,false));
     }
     @Test @SuppressWarnings("unchecked") void ownedSqlHasBoundedStablePageAndScopeAndNoCrossDatabase() {
         when(jdbc.sql(anyString()).params(anyList()).query(Long.class).single()).thenReturn(0L);
