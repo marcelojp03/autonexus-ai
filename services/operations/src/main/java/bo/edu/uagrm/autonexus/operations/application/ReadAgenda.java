@@ -28,17 +28,26 @@ public final class ReadAgenda {
         Actor actor = context(token, scope);
         UUID employee = scope.equals("self") ? actor.employeeId() : filter.employeeId();
         Selection page = repository.list(filter, employee);
-        List<Work> works = verify(token, scope, actor, page.items(), false);
+        List<Work> works = verify(token, scope, actor, page.items(), false, false);
         return new Result(actor, works, page.total(), filter.limit(), filter.offset(), filter.from(), filter.to(),
                 "America/La_Paz", clock.instant());
     }
+    public Result history(String token, String scope, AgendaFilter filter) {
+        Actor actor = context(token, scope);
+        UUID employee = scope.equals("self") ? actor.employeeId() : filter.employeeId();
+        Selection page = repository.history(filter, employee);
+        List<Work> works = verify(token, scope, actor, page.items(), false, true);
+        return new Result(actor, works, page.total(), filter.limit(), filter.offset(), filter.from(), filter.to(),
+                "America/La_Paz", clock.instant());
+    }
+
     public Work detail(String token, String scope, UUID id) {
         Actor actor = context(token, scope);
         Candidate row = repository.detail(id, scope.equals("self") ? actor.employeeId() : null).orElseThrow(ReadAgenda::missing);
         if (scope.equals("self") && !actor.employeeId().equals(row.employeeId())) throw missing();
-        return verify(token, scope, actor, List.of(row), true).getFirst();
+        return verify(token, scope, actor, List.of(row), true, "completed".equals(row.executionStatus())).getFirst();
     }
-    private List<Work> verify(String token, String scope, Actor actor, List<Candidate> rows, boolean detail) {
+    private List<Work> verify(String token, String scope, Actor actor, List<Candidate> rows, boolean detail, boolean completed) {
         if (rows.isEmpty()) return List.of();
         Checked checked;
         try { checked = employees.check(token, scope, rows.stream().map(Candidate::assignmentId).toList()); }
@@ -67,7 +76,7 @@ public final class ReadAgenda {
                     || !Set.of("active", "inactive").contains(a.employeeStatus() == null ? "" : a.employeeStatus())
                     || a.orderConfirmedObserved() == null) throw state();
             result.add(new Work(row.assignmentId(), row.orderId(), row.orderNumber(), new Employee(a.employeeId(), a.fullName(), a.employeeStatus()),
-                    row.vehicle(), row.startsAt(), row.endsAt(), row.priority(), "confirmed", row.description(), row.notes(), row.services(),
+                    row.vehicle(), row.startsAt(), row.endsAt(), row.priority(), completed ? "completed" : "confirmed", row.description(), row.notes(), row.services(),
                     row.orderVersion(), a.version(), checked.observedAt(), a.orderConfirmedObserved() ? "observed" : "pending",
                     row.executionStatus(), new ExecutionProgress(row.advanceCount(), row.lastAdvanceAt(), row.availableEvidence())));
         }

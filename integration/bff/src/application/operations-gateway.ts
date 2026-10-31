@@ -77,6 +77,11 @@ export interface OperationsGateway {
   confirmEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown>;
   retryEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown>;
   evidenceDownload(kind: 'me' | 'team', assignmentId: string, evidenceId: string, token: string): Promise<unknown>;
+  verification(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown>;
+  activity(assignmentId: string, itemId: string, input: OperationsCommand, done: boolean, token: string): Promise<unknown>;
+  requestVerification(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  approveExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  returnExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
   customer(id: string, token: string): Promise<unknown>;
   createCustomer(input: OperationsCommand, token: string): Promise<unknown>;
   updateCustomer(id: string, input: OperationsCommand, token: string): Promise<unknown>;
@@ -198,6 +203,30 @@ export class HttpOperationsGateway implements OperationsGateway {
     return this.request(`/executions/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/retry`, token, { method: 'POST', body: JSON.stringify(input) });
   }
 
+  verification(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown> {
+    const prefix = kind === 'team' ? 'verify' : 'review-self';
+    return this.request(`/executions/${prefix}/${encodeURIComponent(assignmentId)}`, token);
+  }
+
+  activity(assignmentId: string, itemId: string, input: OperationsCommand, done: boolean, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/checklist/${encodeURIComponent(itemId)}/${done ? 'complete' : 'reopen'}`,
+      token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  requestVerification(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/request-review`,
+      token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  approveExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/approve`,
+      token, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  returnExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
+    return this.request(`/executions/${encodeURIComponent(assignmentId)}/return`,
+      token, { method: 'POST', body: JSON.stringify(input) });
+  }
   evidenceDownload(kind: 'me' | 'team', assignmentId: string, evidenceId: string, token: string): Promise<unknown> {
     return this.request(`/executions/${kind}/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/download`, token);
   }

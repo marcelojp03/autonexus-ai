@@ -4,7 +4,7 @@ export type AgendaScope = 'self' | 'team';
 export type AgendaEmployeeStatus = 'active' | 'inactive';
 export type AgendaPriority = 'baja' | 'normal' | 'alta' | 'urgente';
 export interface AgendaQuery {
-  from?: string; to?: string; status?: 'confirmed'; priority?: AgendaPriority;
+  from?: string; to?: string; status?: 'confirmed' | 'completed'; priority?: AgendaPriority;
   employeeId?: string; limit?: number; offset?: number;
 }
 export interface AgendaEmployeesQuery {
@@ -15,11 +15,11 @@ export interface AgendaActor { employeeId: string; fullName: string; status: Age
 export interface AgendaWork {
   assignmentId: string; orderId: string; orderNumber: string; employee: AgendaEmployee;
   vehicle: { id: string; plate: string; make: string; model: string };
-  startsAt: string; endsAt: string; priority: AgendaPriority; status: 'confirmed';
+  startsAt: string; endsAt: string; priority: AgendaPriority; status: 'confirmed' | 'completed';
   description: string; notes: string | null;
   services: { serviceId: string; serviceName: string; quantity: number; estimatedMinutes: number }[];
   orderVersion: number; assignmentVersion: number; observedAt: string; confirmationObservation: 'observed' | 'pending';
-  executionStatus: 'not_started' | 'in_progress';
+  executionStatus: 'not_started' | 'in_progress' | 'pending_verification' | 'completed';
   executionProgress: { advances: number; lastAdvanceAt: string | null; availableEvidence: number };
 }
 export interface AgendaPage {
@@ -29,6 +29,7 @@ export interface AgendaPage {
 export interface AgendaEmployeesPage { items: AgendaEmployee[]; total: number; limit: number; offset: number; observedAt: string; }
 export interface AgendaGateway {
   list(scope: AgendaScope, query: AgendaQuery, token: string): Promise<AgendaPage>;
+  history(scope: AgendaScope, query: AgendaQuery, token: string): Promise<AgendaPage>;
   work(scope: AgendaScope, assignmentId: string, token: string): Promise<AgendaWork>;
   employees(query: AgendaEmployeesQuery, token: string): Promise<AgendaEmployeesPage>;
 }
@@ -68,7 +69,7 @@ function work(value: unknown): AgendaWork {
     employee: employee(item.employee),
     vehicle: { id: text(vehicle.id), plate: text(vehicle.plate), make: text(vehicle.make), model: text(vehicle.model) },
     startsAt: text(item.startsAt), endsAt: text(item.endsAt), priority: choice(item.priority, PRIORITIES),
-    status: choice(item.status, ['confirmed']), description: text(item.description), notes: item.notes === null ? null : text(item.notes),
+    status: choice(item.status, ['confirmed', 'completed']), description: text(item.description), notes: item.notes === null ? null : text(item.notes),
     services: array(item.services, value => {
       const service = record(value);
       return { serviceId: text(service.serviceId), serviceName: text(service.serviceName),
@@ -76,7 +77,7 @@ function work(value: unknown): AgendaWork {
     }),
     orderVersion: integer(item.orderVersion), assignmentVersion: integer(item.assignmentVersion), observedAt: text(item.observedAt),
     confirmationObservation: choice(item.confirmationObservation, ['observed', 'pending']),
-    executionStatus: choice(item.executionStatus, ['not_started', 'in_progress']),
+    executionStatus: choice(item.executionStatus, ['not_started', 'in_progress', 'pending_verification', 'completed']),
     executionProgress: (() => {
       const progress = record(item.executionProgress);
       return { advances: integer(progress.advances), lastAdvanceAt: progress.lastAdvanceAt === null ? null : text(progress.lastAdvanceAt),
@@ -114,14 +115,24 @@ export class HttpAgendaGateway implements AgendaGateway {
   constructor(private readonly operationsUrl: string, private readonly employeesUrl: string, private readonly transport: typeof fetch = fetch) {}
 
   async list(scope: AgendaScope, query: AgendaQuery, token: string): Promise<AgendaPage> {
+    return this.pageAt(scope, query, token, '');
+  }
+
+  /** Completed work: same record-scope checks, different collection. */
+  async history(scope: AgendaScope, query: AgendaQuery, token: string): Promise<AgendaPage> {
+    return this.pageAt(scope, query, token, 'history/');
+  }
+
+  private async pageAt(scope: AgendaScope, query: AgendaQuery, token: string, prefix: string): Promise<AgendaPage> {
     const keys = ['from', 'to', 'status', 'priority', 'limit', 'offset', ...(scope === 'team' ? ['employeeId'] : [])];
     const search = suffix(query, keys);
     const from = query.from == null ? undefined : date(query.from);
     const to = query.to == null ? undefined : date(query.to);
     if (from !== undefined && to !== undefined && (from > to || to - from > 30 * 86400000)) return invalid();
-    if (query.status != null && query.status !== 'confirmed') return invalid();
+    const allowed = prefix === 'history/' ? ['completed'] : ['confirmed'];
+    if (query.status != null && !allowed.includes(query.status)) return invalid();
     if (query.priority != null && !PRIORITIES.includes(query.priority)) return invalid();
-    const item = record(await this.request(this.operationsUrl, '/agenda/' + (scope === 'self' ? 'me' : 'team') + search, token));
+    const item = record(await this.request(this.operationsUrl, '/agenda/' + prefix + (scope === 'self' ? 'me' : 'team') + search, token));
     const actor = record(item.actor);
     return { ...page(item),
       actor: { employeeId: text(actor.employeeId), fullName: text(actor.fullName), status: choice(actor.status, ['active']),

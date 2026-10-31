@@ -31,7 +31,7 @@ type Permission =
   | 'quotes:read' | 'quotes:write' | 'quotes:decide'
   | 'confirmations:read' | 'confirmations:write'
   | 'agenda:read:self' | 'agenda:read:team'
-  | 'executions:read:self' | 'executions:read:team' | 'executions:write';
+  | 'executions:read:self' | 'executions:read:team' | 'executions:write' | 'executions:verify';
 
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
@@ -51,6 +51,15 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.fre
   requestEvidence: 'executions:write',
   confirmEvidence: 'executions:write',
   retryEvidence: 'executions:write',
+  myVerification: 'executions:read:self',
+  teamVerification: 'executions:read:team',
+  completeActivity: 'executions:write',
+  reopenActivity: 'executions:write',
+  requestVerification: 'executions:write',
+  approveExecution: 'executions:verify',
+  returnExecution: 'executions:verify',
+  myAgendaHistory: 'agenda:read:self',
+  teamAgendaHistory: 'agenda:read:team',
   confirmationSaga: 'confirmations:read',
   confirmationByOperation: 'confirmations:read',
   orderConfirmations: 'confirmations:read',
@@ -274,6 +283,20 @@ export class BusinessGraphql {
         this.operations.requestEvidence(args.assignmentId, args.advanceId, args.input, token),
       confirmEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>
         this.operations.confirmEvidence(args.assignmentId, args.evidenceId, args.input, token),
+      myVerification: (args: { assignmentId: string }) => this.operations.verification('me', args.assignmentId, token),
+      teamVerification: (args: { assignmentId: string }) => this.operations.verification('team', args.assignmentId, token),
+      completeActivity: (args: { assignmentId: string; itemId: string; input: OperationsCommand }) =>
+        this.operations.activity(args.assignmentId, args.itemId, args.input, true, token),
+      reopenActivity: (args: { assignmentId: string; itemId: string; input: OperationsCommand }) =>
+        this.operations.activity(args.assignmentId, args.itemId, args.input, false, token),
+      requestVerification: (args: { assignmentId: string; input: OperationsCommand }) =>
+        this.operations.requestVerification(args.assignmentId, args.input, token),
+      approveExecution: (args: { assignmentId: string; input: OperationsCommand }) =>
+        this.operations.approveExecution(args.assignmentId, args.input, token),
+      returnExecution: (args: { assignmentId: string; input: OperationsCommand }) =>
+        this.operations.returnExecution(args.assignmentId, args.input, token),
+      myAgendaHistory: (args: AgendaQuery) => this.agenda.history('self', args, token),
+      teamAgendaHistory: (args: AgendaQuery) => this.agenda.history('team', args, token),
       retryEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>
         this.operations.retryEvidence(args.assignmentId, args.evidenceId, args.input, token),
       confirmationSaga: (args: { id: string }) => this.operations.confirmationSaga(args.id, token),

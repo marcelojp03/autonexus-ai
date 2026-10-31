@@ -28,6 +28,8 @@ public final class AgendaPorts {
     public record Selection(List<Candidate> items, long total) {}
     public interface Repository {
         Selection list(AgendaFilter filter, UUID employeeId);
+        /** Completed work: the order left the active view but stays readable by record scope. */
+        Selection history(AgendaFilter filter, UUID employeeId);
         Optional<Candidate> detail(UUID assignmentId, UUID employeeId);
     }
     public interface EmpleadoAgendaGateway {

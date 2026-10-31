@@ -28,7 +28,7 @@ describe('CU05 seventh schema without transport-policy changes', () => {
     expect(paths[7]).toBe(resolve('../../contracts/graphql/executions.graphql'));
     const schema = buildSchema(paths.map(path => readFileSync(path, 'utf8')).join('\n'));
     expect(Object.keys(schema.getQueryType()!.getFields()).filter(name => /agenda/i.test(name)).sort()).toEqual(
-      ['myAgenda', 'myAgendaWork', 'teamAgenda', 'teamAgendaWork', 'agendaTeamEmployees'].sort());
+      ['myAgenda', 'myAgendaWork', 'teamAgenda', 'teamAgendaWork', 'agendaTeamEmployees', 'myAgendaHistory', 'teamAgendaHistory'].sort());
     expect(Object.isFrozen(paths)).toBe(true);
   });
   it('accepts an existing absolute agenda override and rejects relative, missing and directory paths', () => {

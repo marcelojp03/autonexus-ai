@@ -1,6 +1,6 @@
 """CU05 web online. Every root has a dedicated permission; owners revalidate identity."""
 enum AgendaScope { self team }
-enum AgendaStatus { confirmed }
+enum AgendaStatus { confirmed completed }
 enum AgendaPriority { baja normal alta urgente }
 enum AgendaEmployeeStatus { active inactive }
 enum AgendaConfirmationObservation { observed pending }
@@ -39,4 +39,10 @@ extend type Query {
   teamAgenda(from: Date, to: Date, status: AgendaStatus, priority: AgendaPriority, employeeId: UUID, limit: Int, offset: Int): AgendaPage!
   teamAgendaWork(assignmentId: UUID!): AgendaWork!
   agendaTeamEmployees(search: String, status: AgendaEmployeeStatus, limit: Int, offset: Int): AgendaEmployeesPage!
+}
+
+# CU17 history: completed work leaves the active view but stays readable by record scope.
+extend type Query {
+  myAgendaHistory(from: Date, to: Date, status: AgendaStatus, priority: AgendaPriority, limit: Int, offset: Int): AgendaPage!
+  teamAgendaHistory(from: Date, to: Date, status: AgendaStatus, priority: AgendaPriority, employeeId: UUID, limit: Int, offset: Int): AgendaPage!
 }

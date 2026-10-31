@@ -40,6 +40,8 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             (SELECT count(*)::int FROM operations.work_evidence v WHERE v.order_id=o.id AND v.state='available') AS available_evidence
         """;
     static final String CONFIRMED = " WHERE o.status='confirmed' AND o.confirmation_saga_id IS NOT NULL";
+    /** Completed work keeps the CU15 references and stays reachable for authorized history reads. */
+    static final String COMPLETED = " WHERE o.status='completed' AND o.confirmation_saga_id IS NOT NULL";
     private final JdbcClient jdbc;
     private final ObjectMapper json;
     public JdbcAgendaRepository(JdbcClient jdbc, ObjectMapper json) { this.jdbc=jdbc; this.json=json; }
@@ -59,8 +61,23 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             return new Selection(rows,total);
         } catch(DataAccessException failure) { throw persistence(); }
     }
+    /** Completed work, newest first. Same record-scope checks as the active view. */
     @Override
-    @Transactional(readOnly=true)
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
+    public Selection history(AgendaFilter filter, UUID employeeId) {
+        String where=COMPLETED+" AND o.ends_at >= ? AND o.ends_at < ?";
+        List<Object> params=new ArrayList<>(List.of(Timestamp.from(filter.start()),Timestamp.from(filter.end())));
+        if(employeeId!=null){where+=" AND o.employee_id=?";params.add(employeeId);}
+        try {
+            long total=jdbc.sql("SELECT count(*) "+FROM+where).params(params).query(Long.class).single();
+            params.add(filter.limit());params.add(filter.offset());
+            var rows=jdbc.sql(SELECT+FROM+where+" ORDER BY o.ends_at DESC,o.id DESC LIMIT ? OFFSET ?")
+                    .params(params).query((rs,n)->map(rs)).list();
+            return new Selection(rows,total);
+        } catch(DataAccessException failure){ throw persistence(); }
+    }
+    @Override
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     public Optional<Candidate> detail(UUID assignmentId, UUID employeeId) {
         String where=CONFIRMED+" AND o.assignment_id=?";
         List<Object> params=new ArrayList<>(List.of(assignmentId));
@@ -107,7 +124,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             String executionStatus=rs.getString("execution_status");
             int advanceCount=rs.getInt("advance_count"),availableEvidence=rs.getInt("available_evidence");
             java.sql.Timestamp lastAdvance=rs.getTimestamp("last_advance_at");
-            if(executionStatus==null || !Set.of("not_started","in_progress").contains(executionStatus)
+            if(executionStatus==null || !Set.of("not_started","in_progress","completed").contains(executionStatus)
                     || advanceCount<0 || availableEvidence<0
                     || (lastAdvance==null && advanceCount>0) || (lastAdvance!=null && advanceCount==0)) throw ReadAgenda.state();
             return new Candidate(assignment,sagaId,order,rs.getString("number"),employee,

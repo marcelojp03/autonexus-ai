@@ -68,3 +68,47 @@ extend type Mutation {
   confirmEvidence(assignmentId: UUID!, evidenceId: UUID!, input: ConfirmEvidenceInput!): EvidenceMutationResult!
   retryEvidence(assignmentId: UUID!, evidenceId: UUID!, input: RetryEvidenceInput!): EvidenceUploadResult!
 }
+
+"""CU17 technical verification. Approval completes the order; the CU15 saga is never reopened."""
+enum ExecutionLifecycle { in_progress pending_verification completed }
+enum ChecklistState { pending done }
+type ChecklistActivity {
+  id: UUID!
+  orderItemId: UUID!
+  position: Int!
+  description: String!
+  quantity: Int!
+  state: ChecklistState!
+  doneAt: DateTime
+  doneBy: String
+  version: Int!
+}
+type ExecutionReviewEntry {
+  id: UUID!
+  action: String!
+  actor: String!
+  reason: String
+  executionVersion: Int!
+  occurredAt: DateTime!
+}
+type ExecutionVerification {
+  execution: Execution!
+  checklist: [ChecklistActivity!]!
+  reviews: [ExecutionReviewEntry!]!
+  mandatoryPending: Int!
+  availableEvidence: Int!
+}
+input ActivityInput { operationId: UUID!, expectedVersion: Int! }
+input ReviewInput { operationId: UUID!, expectedVersion: Int! }
+input ReturnInput { operationId: UUID!, expectedVersion: Int!, reason: String! }
+extend type Query {
+  myVerification(assignmentId: UUID!): ExecutionVerification!
+  teamVerification(assignmentId: UUID!): ExecutionVerification!
+}
+extend type Mutation {
+  completeActivity(assignmentId: UUID!, itemId: UUID!, input: ActivityInput!): ExecutionVerification!
+  reopenActivity(assignmentId: UUID!, itemId: UUID!, input: ActivityInput!): ExecutionVerification!
+  requestVerification(assignmentId: UUID!, input: ReviewInput!): ExecutionVerification!
+  approveExecution(assignmentId: UUID!, input: ReviewInput!): ExecutionVerification!
+  returnExecution(assignmentId: UUID!, input: ReturnInput!): ExecutionVerification!
+}
