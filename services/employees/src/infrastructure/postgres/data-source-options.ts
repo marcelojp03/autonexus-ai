@@ -1,6 +1,7 @@
 import type { DataSourceOptions } from 'typeorm';
 import { AddAgendaPermissions1793541600000 } from './migrations/1793541600000-add-agenda-permissions.js';
 import { AddExecutionPermissions1793628000000 } from './migrations/1793628000000-add-execution-permissions.js';
+import { AddVerificationPermission1793714400000 } from './migrations/1793714400000-add-verification-permission.js';
 import { CreateCu151793455200000 } from './migrations/1793455200000-create-cu15.js';
 import { databaseEnvironment } from '../config/environment.js';
 import { CreateEmployeesSchema1792886400000 } from './migrations/1792886400000-create-employees-schema.js';
@@ -27,6 +28,7 @@ export function dataSourceOptions(): DataSourceOptions {
       CreateCu151793455200000,
       AddAgendaPermissions1793541600000,
     AddExecutionPermissions1793628000000,
+      AddVerificationPermission1793714400000,
     ],
     migrationsTableName: 'employees_migrations',
     logging: false,

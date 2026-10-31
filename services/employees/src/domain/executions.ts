@@ -2,13 +2,14 @@ import { invalid, object, only, uuid } from './employee.js';
 import type { Permission } from './permissions.js';
 
 /** CU16 scopes. The scope selects both the required permission and the record constraint. */
-export type ExecutionScope = 'write' | 'read-self' | 'read-team';
+export type ExecutionScope = 'write' | 'read-self' | 'read-team' | 'verify';
 
 /** One closed permission per scope: no prefix inheritance, no decisions by role name. */
 export const EXECUTION_PERMISSION: Readonly<Record<ExecutionScope, Permission>> = Object.freeze({
   write: 'executions:write',
   'read-self': 'executions:read:self',
   'read-team': 'executions:read:team',
+  verify: 'executions:verify',
 });
 
 /** Scopes that constrain the record to the resolved employee. */
@@ -21,7 +22,7 @@ export interface ExecutionActor {
 }
 
 export function executionScope(value: unknown): ExecutionScope {
-  if (value !== 'write' && value !== 'read-self' && value !== 'read-team') return invalid();
+  if (value !== 'write' && value !== 'read-self' && value !== 'read-team' && value !== 'verify') return invalid();
   return value;
 }
 

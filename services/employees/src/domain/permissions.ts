@@ -28,6 +28,7 @@ export const PERMISSIONS = [
   'executions:read:self',
   'executions:read:team',
   'executions:write',
+  'executions:verify',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -68,6 +69,7 @@ export const PERMISSION_CATALOG: readonly PermissionDescriptor[] = Object.freeze
   { id: 'executions:read:self', module: 'Ejecuciones', operation: 'read', description: 'Consultar avances y evidencias del trabajo propio (CU16)' },
   { id: 'executions:read:team', module: 'Ejecuciones', operation: 'read', description: 'Consultar avances y evidencias del taller (CU16)' },
   { id: 'executions:write', module: 'Ejecuciones', operation: 'write', description: 'Iniciar ejecución, registrar avances y confirmar evidencias propias (CU16)' },
+  { id: 'executions:verify', module: 'Ejecuciones', operation: 'verify', description: 'Solicitar y resolver la verificación técnica de un trabajo (CU17)' },
 ]);
 
 const KNOWN = new Set<string>(PERMISSIONS);
@@ -82,7 +84,7 @@ export const INITIAL_ROLES: readonly { name: string; description: string; permis
     'appointments:read', 'appointments:write', 'receptions:read', 'orders:read', 'orders:write',
     'quotes:read', 'quotes:decide', 'confirmations:read', 'confirmations:write',
     'agenda:read:self', 'agenda:read:team',
-    'executions:read:self', 'executions:read:team',
+    'executions:read:self', 'executions:read:team', 'executions:verify',
   ] },
   { name: 'recepcionista', description: 'Atención al cliente en recepción', permissions: [
     'customers:read', 'customers:write', 'vehicles:read', 'vehicles:write', 'catalog:read',

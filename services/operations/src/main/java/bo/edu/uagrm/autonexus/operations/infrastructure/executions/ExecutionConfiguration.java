@@ -2,6 +2,8 @@ package bo.edu.uagrm.autonexus.operations.infrastructure.executions;
 
 import bo.edu.uagrm.autonexus.operations.application.ExecutionPorts;
 import bo.edu.uagrm.autonexus.operations.application.ManageExecutions;
+import bo.edu.uagrm.autonexus.operations.application.ManageVerification;
+import bo.edu.uagrm.autonexus.operations.application.VerificationPorts;
 import java.net.http.HttpClient;
 import java.time.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,5 +27,11 @@ public class ExecutionConfiguration {
             ExecutionPorts.EvidenceStorage storage, @Value("${S3_EVIDENCE_DOWNLOAD_TTL_SECONDS:120}") long downloadTtl) {
         if (downloadTtl < 30 || downloadTtl > 3600) throw new IllegalArgumentException("Invalid download TTL");
         return new ManageExecutions(repository, employees, storage, Clock.systemUTC(), Duration.ofSeconds(downloadTtl));
+    }
+
+    @Bean
+    ManageVerification manageVerification(ExecutionPorts.Repository executions,
+            VerificationPorts.Repository verifications, ExecutionPorts.IdentityGateway employees) {
+        return new ManageVerification(executions, verifications, employees, Clock.systemUTC());
     }
 }
