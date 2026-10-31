@@ -1,5 +1,14 @@
 # Estado comprobado
 
+## CU17 — verificación técnica en curso; no integrada (2026-10-31)
+
+Backend y BFF de CU17 implementados: estados `in_progress → pending_verification → completed`, devolución con motivo, checklist obligatorio derivado de los ítems de la orden, permiso `executions:verify`, autoaprobación prohibida por identidad e historial de revisiones append-only. Migración `V11` aplicada en el stack real y migración de Empleados `1793714400000` ejecutada.
+
+Verificado con ejecución real sobre dos trabajos sintéticos: checklist incompleto rechaza la solicitud (`CHECKLIST_INCOMPLETE`), actividades marcadas de forma explícita, solicitud de revisión, replay idempotente con el mismo cuerpo, autoaprobación denegada, versión obsoleta rechazada, devolución con motivo y reenvío, y cierre con **una sola** aprobación por ejecución aunque las peticiones fueran concurrentes. La base confirma ambas órdenes en `completed`, sus ejecuciones en `completed` y el rastro `requested → returned → requested → approved`.
+
+Pendiente antes de contar CU17: la **consulta de historial devuelve `AGENDA_STATE_UNAVAILABLE`** en el stack real (la agenda activa sí excluye los completados), falta la interfaz de verificación y una revisión independiente del bloque. La suite de Operaciones (43 pruebas) y las 144 del BFF pasan. No se integró a `main`.
+
+Correcciones del plan: IA+offline+MCP son **41 puntos**; la referencia del 70 % es **72**; los 102 puntos son estimación interna del reparto, no puntaje oficial; el modelo de duración (CU24) no acredita visión y el reutilizable web/móvil es el modelo visual (CU22/CU23); MCP y n8n no dependen de cobros ni indicadores.
 ## CU16 — ejecución y evidencias verificadas contra AWS S3 real (2026-10-30)
 
 En work/marcelo quedó implementado el estado de ejecución separado de la confirmación CU15: la orden conserva confirmed y el agregado de ejecución queda in_progress hasta CU17. El mecánico activo y asignado es el único que inicia y registra avances/evidencias; jefatura consulta y descarga sin escribir. La agenda CU05 muestra estado y progreso, y el detalle enlaza al trabajo ya seleccionado en CU16. El BFF autoriza cada campo GraphQL por permiso; los bytes van por PUT directo a una URL prefirmada sin JWT.
