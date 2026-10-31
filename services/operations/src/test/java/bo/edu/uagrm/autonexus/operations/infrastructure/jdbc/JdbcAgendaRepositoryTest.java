@@ -50,6 +50,12 @@ class JdbcAgendaRepositoryTest {
         var row=repository.map(rs,false); assertEquals(2,row.assignmentVersion()); assertEquals(start,row.startsAt());
         assertEquals("ORDER-SNAPSHOT",row.vehicle().plate());
     }
+    @Test void workUnderReviewStaysVisibleInTheActiveAgenda() throws Exception {
+        // CU17 regression: the order remains confirmed while the execution awaits verification.
+        when(rs.getString("execution_status")).thenReturn("pending_verification");
+        var pending=repository.map(rs,false);
+        assertEquals("pending_verification",pending.executionStatus());
+    }
     @Test void nonConfirmedOrCompensatedSagaIsNotAJob() throws Exception {
         for(String state:List.of("running","recovery_pending","compensating","compensation_pending","rejected")) {
             saga.status=state; document();

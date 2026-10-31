@@ -90,13 +90,15 @@ public final class ManageVerification {
         Authorized authorized = authorize(token, "write", assignmentId);
         Assignment assignment = authorized.items().get(0);
         Confirmed work = confirmed(assignment);
-        Execution execution = executionOf(assignment, work);
-        requireStatus(execution, Execution.IN_PROGRESS);
         String fingerprint = fingerprint("checklist", operationId, work, itemId + ":" + done + ":" + expectedVersion);
-        if (verifications.replayed(operationId, fingerprint).isEmpty()
-                && !verifications.markItem(execution.id(), itemId, expectedVersion, done,
-                        assignment.employeeId().toString(), clock.instant(), operationId, fingerprint)) {
-            throw OperationsError.conflict("VERSION_CONFLICT");
+        // Same rule as the review request: idempotency is decided before the transition guard.
+        if (verifications.replayed(operationId, fingerprint).isEmpty()) {
+            Execution execution = executionOf(assignment, work);
+            requireStatus(execution, Execution.IN_PROGRESS);
+            if (!verifications.markItem(execution.id(), itemId, expectedVersion, done,
+                    assignment.employeeId().toString(), clock.instant(), operationId, fingerprint)) {
+                throw OperationsError.conflict("VERSION_CONFLICT");
+            }
         }
         return view(reload(assignment), work);
     }

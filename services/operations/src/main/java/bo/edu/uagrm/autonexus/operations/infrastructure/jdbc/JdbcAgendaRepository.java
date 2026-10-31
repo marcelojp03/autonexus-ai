@@ -25,7 +25,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
         ) h ON true
         """;
     static final String SELECT = """
-        SELECT o.id,o.number,o.confirmation_saga_id,o.assignment_id,o.employee_id,o.starts_at,o.ends_at,
+        SELECT o.id,o.number,o.status AS order_status,o.confirmation_saga_id,o.assignment_id,o.employee_id,o.starts_at,o.ends_at,
             o.quote_id,o.quote_version,o.quote_link_id,o.version,o.priority,o.description,o.notes,o.vehicle_id,
             v.make,v.model,h.snapshot->>'vehiclePlate' AS plate,
             (SELECT jsonb_agg(jsonb_build_object('serviceId',item->>'serviceId','serviceName',item->>'serviceName',
@@ -79,7 +79,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
     @Override
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     public Optional<Candidate> detail(UUID assignmentId, UUID employeeId) {
-        String where=CONFIRMED+" AND o.assignment_id=?";
+        String where=" WHERE o.status IN ('confirmed','completed') AND o.confirmation_saga_id IS NOT NULL AND o.assignment_id=?";
         List<Object> params=new ArrayList<>(List.of(assignmentId));
         if(employeeId!=null) { where+=" AND o.employee_id=?"; params.add(employeeId); }
         try { return jdbc.sql(SELECT+FROM+where).params(params).query((rs,n)->map(rs,false)).optional(); }
@@ -92,7 +92,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
         return n.longValue();
     }
     Candidate map(ResultSet rs, boolean closed) throws SQLException {
-        if (closed) return closedCandidate(rs);
+        if (closed || "completed".equals(rs.getString("order_status"))) return closedCandidate(rs);
         try {
             UUID order=rs.getObject("id",UUID.class), sagaId=rs.getObject("confirmation_saga_id",UUID.class);
             UUID assignment=rs.getObject("assignment_id",UUID.class), employee=rs.getObject("employee_id",UUID.class);
@@ -125,7 +125,7 @@ public class JdbcAgendaRepository implements AgendaPorts.Repository {
             String executionStatus=rs.getString("execution_status");
             int advanceCount=rs.getInt("advance_count"),availableEvidence=rs.getInt("available_evidence");
             java.sql.Timestamp lastAdvance=rs.getTimestamp("last_advance_at");
-            if(executionStatus==null || !Set.of("not_started","in_progress","completed").contains(executionStatus)
+            if(executionStatus==null || !Set.of("not_started","in_progress","pending_verification","completed").contains(executionStatus)
                     || advanceCount<0 || availableEvidence<0
                     || (lastAdvance==null && advanceCount>0) || (lastAdvance!=null && advanceCount==0)) throw ReadAgenda.state();
             return new Candidate(assignment,sagaId,order,rs.getString("number"),employee,
