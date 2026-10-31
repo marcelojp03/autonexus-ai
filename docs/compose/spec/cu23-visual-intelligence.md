@@ -1,6 +1,6 @@
 ---
 feature: cu23-visual-intelligence
-status: designed
+status: in-progress
 updated: 2026-10-31
 source: work/marcelo
 ---
@@ -17,9 +17,9 @@ Restricción explícita: los PNG de 71 bytes usados para probar S3 **no** son da
 
 ## [S2] Design
 
-### [S2.1] Tarea visual acotada
+### [S2.1] Tarea visual acotada (sujeta a los datos y modelos que se encuentren)
 
-Clasificación **multi-etiqueta de condición visual** sobre una sola fotografía de evidencia, en cuatro categorías observables, no diagnósticas:
+La tarea se decide después de la investigación de fuentes y modelos; las cuatro etiquetas siguientes son una **hipótesis de trabajo, no un compromiso**. Se implementan sólo las condiciones que los datos y los resultados sostengan:
 
 | Etiqueta | Qué significa | Qué NO significa |
 | --- | --- | --- |
@@ -70,6 +70,17 @@ Clasificación **multi-etiqueta de condición visual** sobre una sola fotografí
 - El modelo visual se exporta a TensorFlow.js (web) y LiteRT/TFLite (móvil) desde el mismo artefacto, verificando que la conversión produce puntajes equivalentes dentro de una tolerancia declarada sobre un conjunto fijo de imágenes.
 - CU22 usa el mismo contrato de etiquetas; si la conversión no está verificada, CU22 no se acredita aunque CU23 funcione.
 
+
+### [S2.9] Separación de entregables y regla de acreditación
+
+| Entregable | Qué incluye | Qué acredita |
+| --- | --- | --- |
+| Infraestructura funcional | FastAPI, MongoDB, autorización por permiso, contratos, BFF y UI | El servicio existe y persiste análisis |
+| Capacidad visual | Modelo real, imágenes representativas con licencia, evaluación particionada y recorrido integrado | El requisito de IA |
+
+`MODEL_NOT_READY` es un estado válido del sistema pero **no acredita CU23**: sin inferencia real sobre imágenes representativas, con procedencia, preprocesamiento, versión y evaluación registradas, el requisito de IA queda pendiente.
+
+La investigación de fuentes públicas y modelos está autorizada y no requiere dataset del operador: se permite obtener datasets con licencia compatible, preparar y etiquetar datos, entrenar, ajustar, evaluar y comparar modelos, y usar varios modelos si una sola etiqueta no es sustentable. También se permite ampliar a las condiciones que los resultados sostengan (óxido, desgaste, fuga, daño u otras).
 ## [S3] Out of Scope
 
 CU24 (duración), diagnóstico mecánico, vídeo, reentrenamiento automático, dataset sin licencia verificable, detector de matrículas o personas, y cualquier afirmación de precisión sin partición de evaluación.
