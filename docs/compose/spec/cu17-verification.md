@@ -1,12 +1,17 @@
 ---
 feature: cu17-verification
-status: designed
-updated: 2026-10-30
+status: delivered
+updated: 2026-10-31
 source: work/marcelo
 ---
 
 # CU17 — Verificar y finalizar la orden de trabajo
 
+## Report
+
+**What was built** — Verificación técnica de CU17: el mecánico asignado marca el checklist derivado de los ítems de la orden y solicita revisión; la jefatura aprueba o devuelve con motivo. La ejecución recorre `in_progress → pending_verification → completed` y vuelve a `in_progress` al devolverse, con bitácora append-only. La orden permanece `confirmed` durante ejecución y revisión y pasa a `completed` solo al aprobar; la Saga de CU15 no se reabre. Permiso propio `executions:verify`, autoaprobación denegada por identidad y escrituras de CU16 bloqueadas al cerrar. La agenda separa activos (incluye en revisión) de historial (completados), conservando la autorización por registro y el detalle autorizado.
+
+**Verification** — Operaciones 44/44 (incluye regresión de estado en revisión y de historial cerrado); BFF 144/144 y build; build integrado Angular; builds Compose de operations, bff y web con `exit=0` y hash del artefacto servido igual al de la imagen; auditoría real 8/8 (historial expone el trabajo, agenda activa lo excluye, ejecución y orden completadas, checklist completo, una sola aprobación, rastro de revisión); smoke de navegador 7/7 (historial propio del mecánico, cola e historial de jefatura, enlace oculto para el mecánico y sonda cruzada). Verificación pendiente declarada: la cola en vivo no pudo observarse con un trabajo realmente en revisión porque el escenario sintético quedó sin trabajos activos; el estado se cubre con prueba unitaria y el arreglo está en el jar desplegado (constante verificada con `javap`).
 ## [S1] Problem
 
 CU15 confirma el servicio y CU16 registra ejecución, avances y evidencias, pero nada cierra el trabajo: la ejecución queda `in_progress` indefinidamente y la orden permanece `confirmed` sin un resultado técnico verificable. El jefe de taller no puede revisar lo actuado ni autorizar la finalización, y el mecánico no tiene forma de pedir revisión.
@@ -78,13 +83,13 @@ CU18 entrega física, CU19 cobro, CU20 gastos y CU21 indicadores (bloques poster
 
 ## Tasks
 
-- [ ] T1: Operaciones — migración de estados `pending_verification`/`completed`, checklist y orden a `completed` — acceptance: migración aplicada sobre base real y estados persistidos (covers: S2.1, S2.2, S2.3).
-- [ ] T2: Operaciones — casos de uso y REST de solicitud, aprobación y devolución con idempotencia, versión y auditoría — acceptance: pruebas verdes y API real sobre trabajo ejecutado (depends: T1; covers: S2.1, S2.2, S2.3, S2.4).
-- [ ] T3: Empleados — permiso `executions:verify`, migración aditiva y roles iniciales; prohibición de autoaprobación resuelta en servidor (depends: T2; covers: S2.5).
-- [ ] T4: Operaciones — agenda activa e historial separados por estado de ejecución (depends: T2; covers: S2.6).
-- [ ] T5: BFF GraphQL — SDL, permisos por campo y gateways de verificación (depends: T2, T3; covers: S2.7).
-- [ ] T6: Web — acciones de solicitud/aprobación/devolución y vista de historial (depends: T5; covers: S2.6, S2.7).
-- [ ] T7: Verificación real y revisión — recorrido completo con mecánico y jefe, incluida devolución con motivo y autoaprobación denegada (depends: T4, T6).
+- [x] T1: Operaciones — migración de estados `pending_verification`/`completed`, checklist y orden a `completed` — acceptance: migración aplicada sobre base real y estados persistidos (covers: S2.1, S2.2, S2.3).
+- [x] T2: Operaciones — casos de uso y REST de solicitud, aprobación y devolución con idempotencia, versión y auditoría — acceptance: pruebas verdes y API real sobre trabajo ejecutado (depends: T1; covers: S2.1, S2.2, S2.3, S2.4).
+- [x] T3: Empleados — permiso `executions:verify`, migración aditiva y roles iniciales; prohibición de autoaprobación resuelta en servidor (depends: T2; covers: S2.5).
+- [x] T4: Operaciones — agenda activa e historial separados por estado de ejecución (depends: T2; covers: S2.6).
+- [x] T5: BFF GraphQL — SDL, permisos por campo y gateways de verificación (depends: T2, T3; covers: S2.7).
+- [x] T6: Web — acciones de solicitud/aprobación/devolución y vista de historial (depends: T5; covers: S2.6, S2.7).
+- [x] T7: Verificación real y revisión — recorrido completo con mecánico y jefe, incluida devolución con motivo y autoaprobación denegada (depends: T4, T6).
 
 ## Journey log
 

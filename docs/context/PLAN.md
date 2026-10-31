@@ -32,7 +32,7 @@ Las dimensiones se miden por separado y no se mezclan: **funcional**, **validaci
 | CU14 Decisión de cotización | 2 | Finanzas | Verificado | Flujo CU11–14 | — |
 | CU15 Confirmar servicio | 5 | Saga Operaciones/Empleados/Finanzas | Verificado | Verificación real CU15, decisión 015 | — |
 | CU16 Ejecución y evidencias | 4 | Operaciones + BFF + MF + S3 | Verificado | 15+12+7 etapas reales, decisión 019 | Deuda: identidad IAM mínima |
-| CU17 Verificar y finalizar | 2 | En implementación (este bloque) | Parcial | `docs/compose/spec/cu17-verification.md` | Backend, permisos, BFF, UI |
+| CU17 Verificar y finalizar | 2 | Operaciones + BFF + MF | Verificado | Suites 44 + BFF 144, auditoría real 8/8, smoke 7/7, `6f954a7` | Cola en vivo con trabajo en revisión (limitación declarada) |
 | CU18 Entrega de vehículo | 2 | Ninguna | Pendiente | — | Registro de entrega separado de finalización |
 | CU19 Cobro de servicio | 3 | Ninguna | Pendiente | — | Cobro local, sin pasarela |
 | CU20 Gastos operativos | 2 | Ninguna | Pendiente | — | Registro de gastos |
@@ -51,7 +51,7 @@ Las dimensiones se miden por separado y no se mezclan: **funcional**, **validaci
 ## Cobertura actual (estimación interna, no puntaje oficial)
 
 - Verificado funcionalmente: CU01–CU07 y CU09–CU16 = **43 puntos**.
-- Con CU17 completo: **45**.
+- Con CU17 completo: **45** (entregado el 2026-10-31).
 - Referencia del 70 % sobre 102: **72 puntos** (71 equivale a 69,6 %).
 - IA + offline + MCP (CU22–CU27 y CU29–CU31) suman **41 puntos**, no 36: son el salto real de cobertura, no la gestión empresarial restante (CU08, CU18–CU21 = 13).
 

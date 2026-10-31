@@ -1,12 +1,12 @@
 # Estado comprobado
 
-## CU17 — verificación técnica en curso; no integrada (2026-10-31)
+## CU17 — verificación técnica entregada, integrada y publicada (2026-10-31)
 
 Backend y BFF de CU17 implementados: estados `in_progress → pending_verification → completed`, devolución con motivo, checklist obligatorio derivado de los ítems de la orden, permiso `executions:verify`, autoaprobación prohibida por identidad e historial de revisiones append-only. Migración `V11` aplicada en el stack real y migración de Empleados `1793714400000` ejecutada.
 
 Verificado con ejecución real sobre dos trabajos sintéticos: checklist incompleto rechaza la solicitud (`CHECKLIST_INCOMPLETE`), actividades marcadas de forma explícita, solicitud de revisión, replay idempotente con el mismo cuerpo, autoaprobación denegada, versión obsoleta rechazada, devolución con motivo y reenvío, y cierre con **una sola** aprobación por ejecución aunque las peticiones fueran concurrentes. La base confirma ambas órdenes en `completed`, sus ejecuciones en `completed` y el rastro `requested → returned → requested → approved`.
 
-Pendiente antes de contar CU17: la **consulta de historial devuelve `AGENDA_STATE_UNAVAILABLE`** en el stack real (la agenda activa sí excluye los completados), falta la interfaz de verificación y una revisión independiente del bloque. La suite de Operaciones (43 pruebas) y las 144 del BFF pasan. No se integró a `main`.
+El historial quedó resuelto: la proyección SQL fijaba `execution_status` en `in_progress`, el mapeo compartido reaplicaba la puerta de compensación de la vista activa y los enums GraphQL no aceptaban los estados de revisión. Historia usa ahora una proyección de trabajo cerrado y la vista activa conserva sus comprobaciones. Revisión independiente del bloque resuelta: detectó que la agenda activa rechazaba `pending_verification` (la cola de jefatura fallaba en revisión) y que un trabajo completado perdía su detalle; ambos corregidos con regresión unitaria. Entrega integrada por fast-forward y publicada; `main` y `work/marcelo` en `6f954a7`. Interfaz de jefatura y de historial incluidas. Limitación declarada: la cola en vivo no se observó con un trabajo realmente en revisión porque el escenario quedó sin trabajos activos.
 
 Correcciones del plan: IA+offline+MCP son **41 puntos**; la referencia del 70 % es **72**; los 102 puntos son estimación interna del reparto, no puntaje oficial; el modelo de duración (CU24) no acredita visión y el reutilizable web/móvil es el modelo visual (CU22/CU23); MCP y n8n no dependen de cobros ni indicadores.
 ## CU16 — ejecución y evidencias verificadas contra AWS S3 real (2026-10-30)
