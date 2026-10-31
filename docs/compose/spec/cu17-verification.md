@@ -1,49 +1,91 @@
 ---
 feature: cu17-verification
-status: draft-for-approval
+status: designed
 updated: 2026-10-30
 source: work/marcelo
 ---
 
 # CU17 — Verificar y finalizar la orden de trabajo
 
-## [S1] Estado de partida real
+## [S1] Problem
 
-CU15 deja la orden `confirmed` con Saga confirmada, asignación y empleado. CU16 añade, en la misma base de Operaciones, la ejecución `in_progress` con avances append-only y evidencias `pending|available|failed` verificadas contra S3 real. CU17 es lo que hoy **no** existe: no hay endpoint de finalización, ni transición terminal, ni estado `pending_verification`, y ningún contador o porcentaje de avances cambia el estado de la orden.
+CU15 confirma el servicio y CU16 registra ejecución, avances y evidencias, pero nada cierra el trabajo: la ejecución queda `in_progress` indefinidamente y la orden permanece `confirmed` sin un resultado técnico verificable. El jefe de taller no puede revisar lo actuado ni autorizar la finalización, y el mecánico no tiene forma de pedir revisión.
 
-Precondición del caso de uso: existe una orden en ejecución y el mecánico registró las actividades requeridas. Eso hoy se satisface con `work_executions.status='in_progress'` y al menos un avance.
+## [S2] Design
 
-## [S2] Decisiones que requieren aprobación antes de implementar
+### [S2.1] Flujo y estados
 
-1. **Alcance del cierre**: CU17 decide sobre ejecución y orden, pero la confirmación de CU15 no se reabre. Se propone que la orden pase de `confirmed` a un estado técnico propio (`completed` o `pending_verification` seguido de `finished`) sin tocar la Saga.
-2. **Quién decide**: el jefe de taller verifica y autoriza; el mecánico sólo consulta su propio trabajo. Se reutilizan `executions:read:team` para lectura y se necesita un permiso nuevo de escritura de verificación (p. ej. `executions:verify`), porque `executions:write` está reservado al mecánico asignado y no debe permitir que jefatura escriba avances.
-3. **Rechazo**: si la revisión es negativa, la ejecución vuelve a un estado corregible y la orden permanece en ejecución. Se propone `verification_rejected` con motivo obligatorio y auditoría, sin borrar avances ni evidencias.
-4. **Actividades obligatorias**: el flujo pide comprobar que no existan actividades obligatorias pendientes. Falta definir si "obligatoria" es un atributo del servicio del catálogo (CU09) o una regla del cierre. **Bloquea la implementación** hasta acordarlo.
-5. **Estados posteriores** (`pendiente de entrega`, `pendiente de cobro`) tocan Finanzas y entrega física; se propone que CU17 sólo marque la finalización técnica y emita el evento, dejando entrega y cobro fuera.
-6. **Evidencia insuficiente**: definir mínimo exigible por cierre (¿al menos una evidencia `available`, o una por avance?). Sin esta regla no puede implementarse la validación.
+El mecánico asignado **solicita revisión** cuando terminó su trabajo; el jefe de taller **aprueba** o **devuelve**.
 
-## [S3] Invariantes propuestos
+```
+in_progress --(request review, mecánico)--> pending_verification
+pending_verification --(approve, jefe)--> completed
+pending_verification --(return + motivo, jefe)--> in_progress
+```
 
-- Sólo el jefe de taller (permiso de verificación) finaliza; el mecánico asignado nunca se autoaprueba.
-- La finalización exige ejecución `in_progress`, versión esperada y `operationId` idempotente.
-- No se finaliza si hay evidencias `pending` o `failed` cuando la regla acordada las considere obligatorias.
-- Rechazar exige motivo y deja auditoría; no elimina avances, evidencias ni objetos en S3.
-- Un conflicto de versión responde `409`, nunca finaliza dos veces ni cambia silenciosamente el resultado.
-- La orden y la ejecución se actualizan en una transacción local con auditoría; el evento posterior se publica por Outbox como en CU15.
+- La solicitud exige ejecución en `in_progress`, versión esperada e `operationId` idempotente.
+- La aprobación exige `pending_verification`; la devolución exige `pending_verification` y motivo obligatorio (3–500 caracteres).
+- Una devolución conserva avances, evidencias y checklist; no borra nada y queda en historial.
+- Estados no alcanzables en CU17 → `409 EXECUTION_STATE_CONFLICT`.
 
-## [S4] Fuera de alcance
+### [S2.2] Orden, Saga y separación de responsabilidades
 
-Cobros y facturación, entrega física del vehículo, notificaciones al cliente, IA de inspección, offline/Flutter y cualquier finalización automática por porcentaje o contador.
+- `work_orders.status` permanece `confirmed` durante ejecución y revisión.
+- Al aprobar, la orden pasa a `completed` (finalización técnica) en la misma transacción local de la ejecución.
+- La Saga de CU15 conserva su resultado histórico: no se reabre ni se reescribe.
+- Entrega física y cobro son hechos separados, con su propio registro y estado; no se derivan de la finalización técnica.
 
-## Tasks (borrador, no iniciar)
+### [S2.3] Checklist de actividades obligatorias
 
-- [ ] T1: Acordar S2.1–S2.6 (estados, permiso, actividades obligatorias y mínimo de evidencia).
-- [ ] T2: Contratos REST/GraphQL de verificación, rechazo y finalización, con códigos y DTO mínimos.
-- [ ] T3: Empleados: permiso de verificación en el catálogo y sus roles iniciales.
-- [ ] T4: Operaciones: transición, idempotencia, auditoría, Outbox y pruebas.
-- [ ] T5: BFF y UI de verificación para jefatura, incluida la devolución al mecánico.
-- [ ] T6: Verificación real con orden del escenario sintético y estado de S3 declarado con exactitud.
+- El checklist se deriva de los ítems de servicio ya copiados a la orden (`order_items`), uno por ítem, con su cantidad y descripción.
+- Cada ítem tiene realización explícita y trazable: `done` con actor y momento, o `pending`.
+- Un avance textual, un porcentaje o una evidencia **no** marcan un ítem como realizado.
+- Para solicitar revisión, todos los ítems deben estar `done`.
+- El checklist se materializa al iniciar la ejecución (o al migrar) y no se recrea en cada solicitud.
 
-## Pendiente visual heredado
+### [S2.4] Requisito mínimo de evidencia
 
-CU05 mantiene su G2 visual abierto; no se acredita conformidad visual y no debe declararse cerrado por este trabajo.
+- Al menos **un avance** y **una evidencia `available`** por ejecución para solicitar revisión.
+- No se exige una evidencia por avance.
+- Evidencias `pending` o `failed` no cuentan como disponibles: la solicitud se rechaza con `409 EVIDENCE_REQUIRED`, sin borrar esos registros ni presentarlos como disponibles.
+- Los adjuntos pendientes/fallidos se informan al usuario y permanecen consultables; el reintento sigue el flujo de CU16.
+
+### [S2.5] Autorización
+
+- Permiso nuevo `executions:verify` en el catálogo cerrado, compatible con roles personalizados.
+- Roles iniciales: `administrador` y `jefe_taller` lo reciben; `mecanico` no.
+- **Autoaprobación prohibida**: un actor no puede aprobar ni devolver una ejecución cuyo empleado asignado sea él mismo, aunque acumule roles o permisos (`403 SELF_VERIFICATION_FORBIDDEN`).
+- Jefatura no registra avances ni evidencias en nombre del mecánico; `executions:write` sigue reservado al asignado.
+- Lectura de revisión usa `executions:read:team`; el mecánico sigue viendo sólo su trabajo.
+
+### [S2.6] Agenda activa e historial
+
+- La agenda activa incluye ejecuciones `in_progress` y `pending_verification`.
+- Los trabajos `completed` dejan de aparecer en la vista activa y pasan a **historial**, con acceso autorizado al detalle.
+- El filtro no puede seguir dependiendo sólo de `work_orders.status='confirmed'`: debe considerar el estado de la ejecución para no perder los completados ni duplicar los activos.
+- La autorización por registro se mantiene: propio para el mecánico, equipo para jefatura.
+
+### [S2.7] Contratos y errores
+
+- REST del propietario (Operaciones): `POST /executions/:assignmentId/request-review`, `POST /executions/:assignmentId/approve`, `POST /executions/:assignmentId/return`, `GET /executions/history/{me|team}`.
+- GraphQL por BFF con permisos por campo raíz.
+- Códigos nuevos: `EXECUTION_STATE_CONFLICT`, `SELF_VERIFICATION_FORBIDDEN`, `CHECKLIST_INCOMPLETE`, `EVIDENCE_REQUIRED`, `RETURN_REASON_REQUIRED`.
+- Auditoría append-only por solicitud, aprobación y devolución, con actor y motivo.
+
+## [S3] Out of Scope
+
+CU18 entrega física, CU19 cobro, CU20 gastos y CU21 indicadores (bloques posteriores); notificaciones al cliente; IA de inspección; offline; Flutter; finalización automática por porcentaje o contador.
+
+## Tasks
+
+- [ ] T1: Operaciones — migración de estados `pending_verification`/`completed`, checklist y orden a `completed` — acceptance: migración aplicada sobre base real y estados persistidos (covers: S2.1, S2.2, S2.3).
+- [ ] T2: Operaciones — casos de uso y REST de solicitud, aprobación y devolución con idempotencia, versión y auditoría — acceptance: pruebas verdes y API real sobre trabajo ejecutado (depends: T1; covers: S2.1, S2.2, S2.3, S2.4).
+- [ ] T3: Empleados — permiso `executions:verify`, migración aditiva y roles iniciales; prohibición de autoaprobación resuelta en servidor (depends: T2; covers: S2.5).
+- [ ] T4: Operaciones — agenda activa e historial separados por estado de ejecución (depends: T2; covers: S2.6).
+- [ ] T5: BFF GraphQL — SDL, permisos por campo y gateways de verificación (depends: T2, T3; covers: S2.7).
+- [ ] T6: Web — acciones de solicitud/aprobación/devolución y vista de historial (depends: T5; covers: S2.6, S2.7).
+- [ ] T7: Verificación real y revisión — recorrido completo con mecánico y jefe, incluida devolución con motivo y autoaprobación denegada (depends: T4, T6).
+
+## Journey log
+
+- Decisiones aprobadas por el usuario el 2026-10-30: flujo mecánico solicita → jefatura aprueba/devuelve; estados exactos; orden a `completed` sólo al aprobar; Saga intacta; checklist por ítems de servicio con realización explícita; una evidencia `available` por ejecución; permiso específico y autoaprobación prohibida; alcance técnico con entrega y cobro separados; agenda con activos e historial.
