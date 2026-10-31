@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { authorize } from '../../services/employees/scripts/local-pkce.mjs';
 
 const origin = process.env.CU16_PUBLIC_ORIGIN || 'http://127.0.0.1:4286';
-const accountsFile = process.env.CU16_ACCOUNTS_FILE || 'output/stack/cu16-fresh-proof.accounts.private.json';
+const accountsFile = process.env.CU16_ACCOUNTS_FILE || 'output/stack/cu17-demo/accounts.json';
 const accounts = JSON.parse(readFileSync(accountsFile, 'utf8')).accounts;
 const issuer = origin + '/identity/realms/autonexus';
 
@@ -49,7 +49,7 @@ try {
   const agenda = await gql(
     mechanic,
     'query($from:Date,$to:Date){myAgenda(from:$from,to:$to,limit:50){items{assignmentId executionStatus executionProgress{advances availableEvidence}}}}',
-    { from: '2026-11-01', to: '2026-11-30' },
+    { from: process.env.CU17_FROM || '2026-11-01', to: process.env.CU17_TO || '2026-11-30' },
   );
   const items = agenda.data?.myAgenda?.items ?? [];
   const work = items.find((item) => item.executionStatus === 'in_progress') ?? items.find((item) => item.executionStatus === 'not_started');
@@ -57,6 +57,10 @@ try {
 
   let version = (await gql(mechanic, 'query($id:UUID!){myExecution(assignmentId:$id){version}}', { id: work.assignmentId }))
     .data?.myExecution?.version;
+  if (!version) {
+    await gql(mechanic, 'mutation($id:UUID!,$i:StartExecutionInput!){startExecution(assignmentId:$id,input:$i){execution{status}}}', { id: work.assignmentId, i: { operationId: randomUUID() } });
+    version = (await gql(mechanic, 'query($id:UUID!){myExecution(assignmentId:$id){version}}', { id: work.assignmentId })).data?.myExecution?.version;
+  }
   if (!work.executionProgress.advances) {
     const advance = await gql(
       mechanic,
@@ -78,6 +82,7 @@ try {
       },
     );
     const issued = requested.data?.requestEvidence;
+    if (!issued) { for (const e of requested.errors ?? []) report.lastError = e.extensions?.code; throw new Error('EVIDENCE_REQUEST_FAILED:' + (requested.errors?.[0]?.extensions?.code ?? 'UNKNOWN')); }
     const put = await fetch(issued.upload.url, { method: 'PUT', headers: JSON.parse(issued.upload.headersJson), body: png });
     check('synthetic evidence uploaded for the verification run', put.ok);
     const confirmed = await gql(
@@ -130,6 +135,16 @@ try {
   );
   view = requested.data?.requestVerification;
   check('mechanic requests review and the execution awaits verification', view?.execution?.status === 'pending_verification');
+  // CU17 review regression: while the execution awaits verification the order is still confirmed,
+  // so the head queue and its detail must work in that exact window.
+  const queue = await gql(chief, 'query($f:Date,$t:Date){teamAgenda(from:$f,to:$t,limit:100){items{assignmentId executionStatus}}}',
+    { f: process.env.CU17_FROM || '2026-11-01', t: process.env.CU17_TO || '2026-11-30' });
+  const queued = (queue.data?.teamAgenda?.items ?? []).find((item) => item.assignmentId === work.assignmentId);
+  check('work under review appears in the head queue', queued?.executionStatus === 'pending_verification');
+
+  const queueDetail = await gql(chief, 'query($id:UUID!){teamAgendaWork(assignmentId:$id){orderNumber status executionStatus}}',
+    { id: work.assignmentId });
+  check('detail of a work under review opens for the head', !queueDetail.errors && queueDetail.data?.teamAgendaWork?.executionStatus === 'pending_verification');
 
   const replay = await gql(
     mechanic,
@@ -183,7 +198,8 @@ try {
     fetch(origin + '/graphql', approveBody(randomUUID())).then((r) => r.json()),
   ]);
   const approved = [first, second].filter((response) => response.data?.approveExecution?.execution?.status === 'completed');
-  // The loser of the race is rejected either by version or by the state it no longer matches.\n  const conflicts = [first, second].filter((response) => ['VERSION_CONFLICT', 'EXECUTION_STATE_CONFLICT'].includes(code(response, 'approveExecution')));
+  // The loser of the race is rejected either by version or by the state it no longer matches.
+  const conflicts = [first, second].filter((response) => ["VERSION_CONFLICT", "EXECUTION_STATE_CONFLICT"].includes(code(response, "approveExecution")));
   check('concurrent approvals close the work exactly once', approved.length === 1 && conflicts.length === 1);
 
   const after = (await gql(chief, `query($id:UUID!){teamVerification(assignmentId:$id){${VERIFICATION_FIELDS}}}`, { id: work.assignmentId }))
@@ -192,13 +208,16 @@ try {
   check('the approval is recorded in the review trail', after.reviews.some((entry) => entry.action === 'approved'));
 
   const active = await gql(chief, 'query($from:Date,$to:Date){teamAgenda(from:$from,to:$to,limit:100){items{assignmentId}}}',
-    { from: '2026-11-01', to: '2026-11-30' });
+    { from: process.env.CU17_FROM || '2026-11-01', to: process.env.CU17_TO || '2026-11-30' });
   check('completed work leaves the active agenda', !(active.data?.teamAgenda?.items ?? []).some((item) => item.assignmentId === work.assignmentId));
 
   const history = await gql(chief, 'query($from:Date,$to:Date){teamAgendaHistory(from:$from,to:$to,limit:100){items{assignmentId status}}}',
-    { from: '2026-11-01', to: '2026-12-31' });
+    { from: process.env.CU17_FROM || '2026-11-01', to: process.env.CU17_TO || '2026-11-30' });
   const inHistory = (history.data?.teamAgendaHistory?.items ?? []).find((item) => item.assignmentId === work.assignmentId);
   check('the completed work is reachable in history with its status', inHistory?.status === 'completed');
+  const closedDetail = await gql(chief, 'query($id:UUID!){teamAgendaWork(assignmentId:$id){orderNumber status executionStatus}}',
+    { id: work.assignmentId });
+  check('detail of completed work still opens for the head', !closedDetail.errors && closedDetail.data?.teamAgendaWork?.status === 'completed');
 
   report.assignmentId = work.assignmentId;
   report.mechanic = mechanicKey;
