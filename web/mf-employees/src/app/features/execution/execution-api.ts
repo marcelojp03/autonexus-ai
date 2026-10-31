@@ -114,6 +114,27 @@ export class ExecutionApi {
     );
   }
 
+  /** CU17: the mechanic ticks mandatory activities and asks for verification. */
+  verification(assignmentId: string): Promise<{ execution: { status: string; version: number }; checklist: Array<{ id: string; description: string; quantity: number; state: 'pending' | 'done'; version: number }>; mandatoryPending: number; availableEvidence: number }> {
+    return this.run(
+      'query($id:UUID!){myVerification(assignmentId:$id){execution{status version} mandatoryPending availableEvidence checklist{id description quantity state version}}}',
+      { id: assignmentId },
+    );
+  }
+
+  completeActivity(assignmentId: string, itemId: string, operationId: string, expectedVersion: number): Promise<unknown> {
+    return this.run(
+      'mutation($id:UUID!,$item:UUID!,$input:ActivityInput!){completeActivity(assignmentId:$id,itemId:$item,input:$input){mandatoryPending}}',
+      { id: assignmentId, item: itemId, input: { operationId, expectedVersion } },
+    );
+  }
+
+  requestVerification(assignmentId: string, operationId: string, expectedVersion: number): Promise<unknown> {
+    return this.run(
+      'mutation($id:UUID!,$input:ReviewInput!){requestVerification(assignmentId:$id,input:$input){execution{status version}}}',
+      { id: assignmentId, input: { operationId, expectedVersion } },
+    );
+  }
   /** Bytes only: the owner authorized this exact object and the browser sends no credentials. */
   async upload(request: EvidenceRequest, body: ArrayBuffer): Promise<{ completed: boolean; status: number }> {
     const headers = JSON.parse(request.upload.headersJson) as Record<string, string>;

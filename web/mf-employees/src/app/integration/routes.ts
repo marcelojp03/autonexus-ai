@@ -7,6 +7,7 @@ import { agendaRoutes } from '../features/agenda/routes';
 import { employeesRoutes } from '../features/employees/routes';
 import { executionRoutes } from '../features/execution/routes';
 import { scheduleRoutes } from '../features/schedules/routes';
+import { verificationRoutes } from '../features/verification/routes';
 import { securityRoutes } from '../features/security/routes';
 
 @Component({
@@ -25,6 +26,7 @@ export const integratedRoutes: Routes = [
   ...employeesRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...scheduleRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...securityRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
+  ...verificationRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   { path: 'widgets', canActivate: [sessionGuard], loadChildren: () => import('../routes/widgets/routes').then(module => module.routes) },
   {
     path: 'dashboard',

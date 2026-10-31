@@ -14,7 +14,7 @@ export interface AgendaWork {
   startsAt: string;
   endsAt: string;
   priority: Priority;
-  status: 'confirmed';
+  status: 'confirmed' | 'completed';
   description: string;
   notes: string | null;
   services: Array<{ serviceId: string; serviceName: string; quantity: number; estimatedMinutes: number }>;
@@ -46,7 +46,7 @@ export interface EmployeesPage {
 export interface AgendaFilters {
   from: string;
   to: string;
-  status: 'confirmed';
+  status: 'confirmed' | 'completed';
   priority?: Priority;
   limit: number;
   offset: number;

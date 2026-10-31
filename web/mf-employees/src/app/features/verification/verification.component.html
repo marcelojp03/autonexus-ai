@@ -1,0 +1,86 @@
+<nz-page-header nzTitle="Verificación de trabajos" nzSubtitle="CU17 · jefatura de taller">
+  <nz-page-header-extra>
+    <label class="field">Desde<input nz-input type="date" id="verification-from" [(ngModel)]="from" /></label>
+    <label class="field">Hasta<input nz-input type="date" id="verification-to" [(ngModel)]="to" /></label>
+    <button nz-button type="button" id="verification-reload" (click)="load()">Actualizar</button>
+  </nz-page-header-extra>
+</nz-page-header>
+
+@if (error()) {
+  <nz-alert id="verification-error" nzType="error" nzShowIcon [nzMessage]="error()!" nzDescription="La jefatura verifica y decide; no registra avances ni evidencias en nombre del mecánico."></nz-alert>
+}
+@if (notice()) {
+  <nz-alert id="verification-notice" nzType="success" nzShowIcon [nzMessage]="notice()!"></nz-alert>
+}
+
+<nz-card nzTitle="Pendientes de verificación">
+  @if (!pending().length && !loading()) {
+    <nz-empty nzNotFoundImage="simple" nzNotFoundContent="No hay trabajos esperando verificación en este mes."></nz-empty>
+  }
+  @for (work of pending(); track work.assignmentId) {
+    <div class="item">
+      <div class="row">
+        <strong>{{ work.orderNumber }}</strong>
+        <span>{{ work.vehicle.plate }} · {{ work.vehicle.make }} {{ work.vehicle.model }}</span>
+        <span>{{ work.employee.fullName }}</span>
+        <nz-tag nzColor="gold">En revisión</nz-tag>
+      </div>
+      <button nz-button type="button" [attr.id]="'verification-open-' + work.orderNumber" (click)="select(work)">Revisar trabajo</button>
+    </div>
+  }
+</nz-card>
+
+@if (selectedWork(); as work) {
+  <nz-card nzTitle="Revisión de {{ work.orderNumber }}">
+    @if (verification(); as view) {
+      <p class="when">Estado: {{ view.execution.status }} · iniciado {{ time(view.execution.startedAt) }} · evidencias disponibles: {{ view.availableEvidence }}</p>
+
+      <h3>Actividades obligatorias</h3>
+      @if (!view.checklist.length) {
+        <nz-empty nzNotFoundImage="simple" nzNotFoundContent="Sin actividades derivadas de los ítems de la orden."></nz-empty>
+      }
+      @for (activity of view.checklist; track activity.id) {
+        <div class="row">
+          <nz-tag [nzColor]="activity.state === 'done' ? 'green' : 'red'">{{ activity.state === 'done' ? 'Realizada' : 'Pendiente' }}</nz-tag>
+          <span>{{ activity.description }} · cantidad {{ activity.quantity }}</span>
+        </div>
+      }
+
+      <h3>Historial de revisión</h3>
+      @if (!view.reviews.length) {
+        <p class="when">Sin decisiones registradas todavía.</p>
+      }
+      @for (entry of view.reviews; track $index) {
+        <div class="row">
+          <nz-tag>{{ label(entry.action) }}</nz-tag>
+          <span class="when">{{ time(entry.occurredAt) }}</span>
+          @if (entry.reason) { <span>{{ entry.reason }}</span> }
+        </div>
+      }
+
+      @if (blocked()) {
+        <nz-alert id="verification-blocked" nzType="warning" nzShowIcon [nzMessage]="blocked()!"></nz-alert>
+      }
+
+      <div class="toolbar">
+        <label class="field reason" for="verification-reason">Motivo de la devolución</label>
+        <input nz-input id="verification-reason" [ngModel]="reason()" (ngModelChange)="reason.set($event)" placeholder="Falta revisar la presión de neumáticos" />
+        <button nz-button type="button" id="verification-return" [disabled]="!canDecide()" [nzLoading]="busy()" (click)="returnToWork()">Devolver al mecánico</button>
+        <button nz-button nzType="primary" type="button" id="verification-approve" [disabled]="!canDecide() || !!blocked()" [nzLoading]="busy()" (click)="approve()">Aprobar y finalizar</button>
+      </div>
+    }
+  </nz-card>
+}
+
+<nz-card nzTitle="Historial de trabajos completados">
+  @if (!closed().length && !loading()) {
+    <nz-empty nzNotFoundImage="simple" nzNotFoundContent="Todavía no hay trabajos completados en este mes."></nz-empty>
+  }
+  @for (work of closed(); track work.assignmentId) {
+    <div class="item row">
+      <strong>{{ work.orderNumber }}</strong>
+      <span>{{ work.vehicle.plate }} · {{ work.employee.fullName }}</span>
+      <nz-tag nzColor="blue">Completado</nz-tag>
+    </div>
+  }
+</nz-card>

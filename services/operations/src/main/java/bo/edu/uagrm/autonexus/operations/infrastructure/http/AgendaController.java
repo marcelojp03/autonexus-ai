@@ -27,7 +27,7 @@ public class AgendaController {
     public Result history(JwtAuthenticationToken auth, @RequestParam MultiValueMap<String,String> query,
             @PathVariable String kind) {
         String scope=kind.equals("team") ? "team" : "self";
-        return agenda.history(auth.getToken().getTokenValue(),scope,AgendaFilter.parse(query,scope,Clock.systemUTC()));
+        return agenda.history(auth.getToken().getTokenValue(),scope,AgendaFilter.parseHistory(query,scope,Clock.systemUTC()));
     }
     @GetMapping("/{kind:me|team}/{assignmentId}")
     public Work detail(JwtAuthenticationToken auth, @PathVariable String assignmentId,

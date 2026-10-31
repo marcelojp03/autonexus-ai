@@ -13,7 +13,19 @@ public record AgendaFilter(LocalDate from, LocalDate to, String priority, UUID e
         if (value == null || !value.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) throw OperationsError.invalid();
         return UUID.fromString(value);
     }
+
+    /** Active agenda: only globally confirmed work. */
     public static AgendaFilter parse(Map<String, ? extends List<String>> query, String scope, Clock clock) {
+        return parse(query, scope, clock, Set.of("confirmed"));
+    }
+
+    /** CU17 history: only closed work. The active view keeps its own, stricter status. */
+    public static AgendaFilter parseHistory(Map<String, ? extends List<String>> query, String scope, Clock clock) {
+        return parse(query, scope, clock, Set.of("completed"));
+    }
+
+    private static AgendaFilter parse(Map<String, ? extends List<String>> query, String scope, Clock clock,
+            Set<String> allowedStatus) {
         Set<String> keys = new HashSet<>(Set.of("from", "to", "status", "priority", "limit", "offset"));
         if (scope.equals("team")) keys.add("employeeId");
         if (!keys.containsAll(query.keySet()) || query.values().stream().anyMatch(v -> v == null || v.size() != 1 || v.getFirst() == null)) throw OperationsError.invalid();
@@ -22,7 +34,7 @@ public record AgendaFilter(LocalDate from, LocalDate to, String priority, UUID e
             LocalDate from = date(q.getOrDefault("from", q.getOrDefault("to", LocalDate.now(clock.withZone(ZONE)).toString())));
             LocalDate to = date(q.getOrDefault("to", from.toString()));
             long days = ChronoUnit.DAYS.between(from, to) + 1;
-            if (days < 1 || days > 31 || (q.containsKey("status") && !q.get("status").equals("confirmed"))
+            if (days < 1 || days > 31 || (q.containsKey("status") && !allowedStatus.contains(q.get("status")))
                     || (q.containsKey("priority") && !Set.of("baja", "normal", "alta", "urgente").contains(q.get("priority")))) throw OperationsError.invalid();
             return new AgendaFilter(from, to, q.get("priority"), q.containsKey("employeeId") ? id(q.get("employeeId")) : null,
                     integer(q.getOrDefault("limit", "20"), 1, 100), integer(q.getOrDefault("offset", "0"), 0, Integer.MAX_VALUE));

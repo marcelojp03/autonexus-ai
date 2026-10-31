@@ -84,6 +84,7 @@ export class ExecutionComponent implements OnInit {
   readonly minutes = signal(30);
   readonly file = signal<File | null>(null);
   readonly evidenceState = signal<Record<string, string>>({});
+  readonly check = signal<{ status: string; version: number; mandatoryPending: number; availableEvidence: number; items: Array<{ id: string; description: string; quantity: number; state: 'pending' | 'done'; version: number }> } | null>(null);
 
   readonly canWriteSelected = computed(() => {
     return mayWriteExecution(this.selectedWork(), this.actorEmployeeId(), this.canWrite());
@@ -149,7 +150,8 @@ export class ExecutionComponent implements OnInit {
     if (!assignmentId) return;
     this.loading.set(true);
     try {
-      if (selected?.executionStatus === 'in_progress') this.execution.set(await this.api.execution(this.scope(), assignmentId));
+      if (selected?.executionStatus !== 'not_started') this.execution.set(await this.api.execution(this.scope(), assignmentId));
+      if (this.canWriteSelected()) await this.loadChecklist(assignmentId);
     } catch (failure) {
       const code = failureView(failure).code;
       // A work without execution yet is the normal starting point, not an error.
@@ -157,6 +159,45 @@ export class ExecutionComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** CU17 mandatory activities and review request for the assigned mechanic. */
+  async loadChecklist(assignmentId: string): Promise<void> {
+    try {
+      const view = await this.api.verification(assignmentId);
+      this.check.set({ status: view.execution.status, version: view.execution.version, mandatoryPending: view.mandatoryPending,
+        availableEvidence: view.availableEvidence, items: view.checklist ?? [] });
+    } catch { /* the checklist appears once the work exists */ }
+  }
+
+  async markActivity(itemId: string, expectedVersion: number): Promise<void> {
+    const assignmentId = this.selected();
+    if (!assignmentId || this.busy()) return;
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      await this.api.completeActivity(assignmentId, itemId, crypto.randomUUID(), expectedVersion);
+      await this.loadChecklist(assignmentId);
+      this.notice.set('Actividad marcada como realizada.');
+    } catch (failure) {
+      this.error.set(executionError(failureView(failure)));
+    } finally { this.busy.set(false); }
+  }
+
+  async requestReview(): Promise<void> {
+    const assignmentId = this.selected();
+    const view = this.check();
+    if (!assignmentId || !view || this.busy()) return;
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      await this.api.requestVerification(assignmentId, crypto.randomUUID(), view.version);
+      await this.loadChecklist(assignmentId);
+      this.execution.set(await this.api.execution(this.scope(), assignmentId));
+      this.notice.set('Revisión solicitada a la jefatura de taller.');
+    } catch (failure) {
+      this.error.set(executionError(failureView(failure)));
+    } finally { this.busy.set(false); }
   }
 
   async start(): Promise<void> {

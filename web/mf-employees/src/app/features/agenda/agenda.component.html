@@ -1,5 +1,5 @@
-<h2>{{ assignmentId ? 'Detalle del trabajo' : scope === 'team' ? 'Agenda del equipo' : 'Mi agenda' }}</h2>
-<p>Trabajos confirmados · Solo consulta · Horario de America/La_Paz</p>
+<h2>{{ assignmentId ? 'Detalle del trabajo' : scope === 'team' ? 'Agenda del equipo' : 'Mi agenda' }}</h2>`n@if (history()) { <p id="agenda-history-note">Historial de trabajos completados · solo lectura</p> }
+<p>Trabajos confirmados · Solo consulta · Horario de America/La_Paz</p>`n@if (history()) { <p>Trabajos completados · consulta autorizada por registro</p> }
 @if (assignmentId) {
   <a [routerLink]="base">Volver a la agenda</a>
 } @else {
@@ -33,7 +33,7 @@
         </select></label
       >
     }
-    <button nz-button nzType="primary" type="submit" [nzLoading]="loading()">Consultar</button>
+    <button nz-button nzType="primary" type="submit" [nzLoading]="loading()">Consultar</button>`n    <button nz-button type="button" id="agenda-history-toggle" (click)="history.set(!history()); load()">{{ history() ? 'Ver trabajos activos' : 'Ver historial de completados' }}</button>
   </form>
   @if (scope === 'team') {
     <details

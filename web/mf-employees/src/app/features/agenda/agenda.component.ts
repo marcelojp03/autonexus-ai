@@ -98,6 +98,8 @@ export class AgendaComponent implements OnInit {
   readonly work = signal<AgendaWork | null>(null);
   readonly staff = signal<EmployeesPage | null>(null);
   readonly loading = signal(false);
+  /** CU17: closed work lives in history, active work keeps the confirmed view. */
+  readonly history = signal(false);
   readonly staffLoading = signal(false);
   readonly error = signal<string | null>(null);
   readonly staffError = signal<string | null>(null);
@@ -200,7 +202,9 @@ export class AgendaComponent implements OnInit {
         const work = await this.api.detail(this.scope, this.assignmentId);
         if (this.current(epoch)) this.work.set(work);
       } else {
-        const page = await this.api.list(
+        const page = this.history()
+          ? await this.api.history(this.scope, { from: this.from, to: this.to, status: 'completed', ...(this.priority ? { priority: this.priority } : {}), limit: 20, offset }, this.employeeId || undefined)
+          : await this.api.list(
           this.scope,
           { from: this.from, to: this.to, status: 'confirmed', ...(this.priority ? { priority: this.priority } : {}), limit: 20, offset },
           this.employeeId || undefined

@@ -35,6 +35,29 @@
   }
 </nz-card>
 
+@if (check(); as view) {
+  <nz-card nzTitle="Actividades obligatorias y revisión">
+    <p class="hint">Estado: {{ view.status }} · evidencias disponibles: {{ view.availableEvidence }}</p>
+    @for (item of view.items; track item.id) {
+      <div class="advance">
+        <nz-tag [nzColor]="item.state === 'done' ? 'green' : 'red'">{{ item.state === 'done' ? 'Realizada' : 'Pendiente' }}</nz-tag>
+        <span class="file">{{ item.description }} · cantidad {{ item.quantity }}</span>
+        @if (item.state === 'pending' && canWriteSelected() && view.status === 'in_progress') {
+          <button nz-button type="button" [attr.id]="'activity-done-' + item.id" [disabled]="busy()" (click)="markActivity(item.id, item.version)">Marcar realizada</button>
+        }
+      </div>
+    }
+    @if (canWriteSelected() && view.status === 'in_progress') {
+      <button nz-button nzType="primary" type="button" id="execution-request-review" [disabled]="busy() || view.mandatoryPending > 0 || view.availableEvidence < 1" (click)="requestReview()">Solicitar revisión</button>
+    }
+    @if (view.status === 'pending_verification') {
+      <nz-alert nzType="info" nzShowIcon nzMessage="Trabajo en revisión: la jefatura puede aprobarlo o devolverlo. No se registran más avances."></nz-alert>
+    }
+    @if (view.status === 'completed') {
+      <nz-alert nzType="success" nzShowIcon nzMessage="Trabajo finalizado técnicamente y aprobado por la jefatura."></nz-alert>
+    }
+  </nz-card>
+}
 @if (canStart()) {
   <nz-card nzTitle="Iniciar la actividad">
     <p>El inicio se registra una sola vez y queda auditado. La orden sigue confirmada por CU15.</p>
