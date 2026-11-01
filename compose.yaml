@@ -7,7 +7,7 @@ services:
       dockerfile: "infra/local/docker/bootstrap.Dockerfile"
     environment:
       PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-4280}}"
-    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
+    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-intelligence:/config/intelligence","config-mongo:/config/mongo","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
     init: true
     command: ["init"]
   postgres:
@@ -80,6 +80,27 @@ services:
       retries: 50
       start_period: "15s"
     restart: "unless-stopped"
+  mongo:
+    # CU23 analysis store. The official entrypoint needs these capabilities to chown the data
+    # volume and drop to the `mongodb` user; everything else stays dropped. No port is published.
+    image: "mongo:7.0.45@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4"
+    entrypoint: ["/bin/sh","/infra/service-entrypoint.sh","docker-entrypoint.sh"]
+    command: ["mongod","--auth","--bind_ip_all"]
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN","SETUID","SETGID","DAC_OVERRIDE","FOWNER"]
+    volumes: ["config-mongo:/run/config:ro","mongo-data:/data/db","./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro"]
+    depends_on:
+      config-init:
+        condition: "service_completed_successfully"
+    healthcheck:
+      test: ["CMD-SHELL",". /run/config/service.env && mongosh --quiet --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 40
+      start_period: "10s"
+    restart: "unless-stopped"
   provision:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bootstrap:local"
     build:
@@ -87,7 +108,7 @@ services:
       dockerfile: "infra/local/docker/bootstrap.Dockerfile"
     environment:
       PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-4280}}"
-    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
+    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-intelligence:/config/intelligence","config-mongo:/config/mongo","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
     init: true
     command: ["provision"]
     depends_on:
@@ -224,6 +245,34 @@ services:
       retries: 50
       start_period: "15s"
     restart: "unless-stopped"
+  intelligence:
+    # CU23. The model artefact is operator-provided: it is mounted read-only, never baked into the
+    # image, so a clone without artefacts serves MODEL_NOT_READY instead of inventing scores.
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-intelligence:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/intelligence.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes:
+      - "config-intelligence:/run/config:ro"
+      - "./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro"
+      - "${INTELLIGENCE_MODEL_PATH:-./ml/artifacts/automotive-damage-mobilenetv2-v1}:/models:ro"
+    depends_on:
+      employees:
+        condition: "service_healthy"
+      operations:
+        condition: "service_healthy"
+      mongo:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD","python","/app/app/healthcheck.py"]
+      interval: "5s"
+      timeout: "6s"
+      retries: 40
+      start_period: "20s"
+    restart: "unless-stopped"
   bff:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bff:local"
     build:
@@ -240,6 +289,10 @@ services:
         condition: "service_healthy"
       finance:
         condition: "service_healthy"
+      # Started, not healthy: a missing model artefact is a valid runtime state (MODEL_NOT_READY)
+      # and must not block the gateway that reports it to the user.
+      intelligence:
+        condition: "service_started"
     healthcheck:
       test: ["CMD","node","-e","fetch('http://127.0.0.1:3004/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: "5s"
@@ -313,9 +366,12 @@ volumes:
   config-employees: {}
   config-operations: {}
   config-finance: {}
+  config-intelligence: {}
+  config-mongo: {}
   config-bff: {}
   config-public: {}
   config-demo: {}
   postgres-data: {}
   idp-postgres-data: {}
   rabbitmq-data: {}
+  mongo-data: {}

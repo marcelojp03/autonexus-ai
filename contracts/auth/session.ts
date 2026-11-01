@@ -52,7 +52,7 @@ export interface SessionPort {
 }
 export interface IntegratedProps {
   domElement: HTMLElement;
-  basePath: '/employees' | '/operations' | '/finance';
-  assetBase: '/mfs/employees/' | '/mfs/operations/' | '/mfs/finance/';
+  basePath: '/employees' | '/operations' | '/finance' | '/intelligence';
+  assetBase: '/mfs/employees/' | '/mfs/operations/' | '/mfs/finance/' | '/mfs/intelligence/';
   session: SessionPort;
 }

@@ -27,8 +27,11 @@ let diagnosticEpoch = 0;
 let permissionSubject: string | undefined;
 let navigationPermissions: readonly string[] = [];
 let permissionEpoch = 0;
-let financeAccess: 'loading' | 'allowed' | 'forbidden' | 'unavailable' = 'loading';
-const canAccess = (module: ModuleId) => canMount() && (module !== 'finance' || financeAccess === 'allowed');
+type GatedAccess = 'loading' | 'allowed' | 'forbidden' | 'unavailable';
+/** Modules whose entry needs a permission beyond "some workshop role" (CU10 quotes, CU23 analysis). */
+const MODULE_PERMISSION: Partial<Record<ModuleId, string>> = { finance: 'quotes:read', intelligence: 'intelligence:read' };
+const moduleAccess: Record<string, GatedAccess> = { finance: 'loading', intelligence: 'loading' };
+const canAccess = (module: ModuleId) => canMount() && (MODULE_PERMISSION[module] === undefined || moduleAccess[module] === 'allowed');
 async function loadModuleAccess(subject: string): Promise<void> {
   const epoch = ++permissionEpoch;
   try {
@@ -36,10 +39,14 @@ async function loadModuleAccess(subject: string): Promise<void> {
     if (permissionSubject !== subject || epoch !== permissionEpoch) return;
     const data = result.data as { securityCatalog?: { effective?: string[] } } | undefined;
     navigationPermissions = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective) ? data.securityCatalog.effective : [];
-    financeAccess = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective)
-      ? data.securityCatalog.effective.includes('quotes:read') ? 'allowed' : 'forbidden'
-      : 'unavailable';
-  } catch { if (permissionSubject !== subject || epoch !== permissionEpoch) return; financeAccess = 'unavailable'; }
+    const effective = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective) ? data.securityCatalog.effective : undefined;
+    for (const [id, permission] of Object.entries(MODULE_PERMISSION)) {
+      moduleAccess[id] = effective === undefined ? 'unavailable' : effective.includes(permission) ? 'allowed' : 'forbidden';
+    }
+  } catch {
+    if (permissionSubject !== subject || epoch !== permissionEpoch) return;
+    for (const id of Object.keys(MODULE_PERMISSION)) moduleAccess[id] = 'unavailable';
+  }
   renderNavigation();
   await triggerAppChange();
 }
@@ -48,12 +55,16 @@ function renderNavigation(): void {
   const module = moduleForPath(location.pathname);
   const snapshot = session.snapshot();
   const allowed = canMount();
-  document.title = (module === 'employees' ? 'Empleados' : module === 'operations' ? 'Operaciones' : module === 'finance' ? 'Finanzas' : 'Sesión') + ' · AutoNexus';
+  document.title = (module === 'employees' ? 'Empleados' : module === 'operations' ? 'Operaciones' : module === 'finance' ? 'Finanzas' : module === 'intelligence' ? 'Inteligencia' : 'Sesión') + ' · AutoNexus';
   document.getElementById('route-error')!.hidden = !allowed || !!module;
   for (const id of modules) hosts[id].hidden = !canAccess(id) || id !== module;
   const accessNotice = document.querySelector<HTMLElement>('#module-access')!;
-  accessNotice.hidden = !allowed || module !== 'finance' || financeAccess === 'allowed';
-  accessNotice.textContent = financeAccess === 'forbidden' ? 'Acceso insuficiente: no tenés permiso para consultar cotizaciones.' : financeAccess === 'unavailable' ? 'No se pudieron verificar los permisos de Finanzas. Recargá para reintentar.' : 'Comprobando permisos de Finanzas…';
+  const gated = module !== undefined && MODULE_PERMISSION[module] !== undefined ? module : undefined;
+  const access = gated ? moduleAccess[gated] : 'allowed';
+  const label = gated === 'finance' ? 'Finanzas' : 'Inteligencia';
+  const denied = gated === 'finance' ? 'cotizaciones.' : 'análisis de Inteligencia.';
+  accessNotice.hidden = !allowed || !gated || access === 'allowed';
+  accessNotice.textContent = access === 'forbidden' ? 'Acceso insuficiente: no tenés permiso para consultar ' + denied : access === 'unavailable' ? 'No se pudieron verificar los permisos de ' + label + '. Recargá para reintentar.' : 'Comprobando permisos de ' + label + '…';
   document.querySelector<HTMLElement>('#session-identity')!.textContent = snapshot.identity ? snapshot.identity.username + ' · ' + snapshot.identity.roles.join(', ') : '';
   document.querySelector<HTMLElement>('#session-status')!.textContent = snapshot.notice ?? (snapshot.phase === 'initializing' ? 'Comprobando sesión…' : snapshot.authenticated ? allowed ? 'Sesión iniciada.' : 'Acceso insuficiente: la cuenta no tiene un rol del taller. Cierra sesión para cambiar de cuenta.' : 'Ingresa para acceder a los módulos del taller.');
   loginButton.hidden = snapshot.authenticated || snapshot.phase === 'initializing';
@@ -70,6 +81,7 @@ function renderNavigation(): void {
     link.hidden = !allowed || module !== 'operations';
   });
   document.querySelectorAll<HTMLElement>('[data-finance-link]').forEach((link) => { link.hidden = !allowed || module !== 'finance'; });
+  document.querySelectorAll<HTMLElement>('[data-intelligence-link]').forEach((link) => { link.hidden = !allowed || module !== 'intelligence'; });
   document.querySelectorAll<HTMLAnchorElement>('[data-page]').forEach((link) => {
     link.hidden = !module || !allowed || module === 'finance';
     if (!module) return;
@@ -164,7 +176,7 @@ session.subscribe(() => {
   if (subject !== permissionSubject) {
     permissionEpoch++;
     permissionSubject = subject;
-    financeAccess = 'loading';
+    for (const id of Object.keys(MODULE_PERMISSION)) moduleAccess[id] = 'loading';
     navigationPermissions = [];
     if (subject) void loadModuleAccess(subject);
   }

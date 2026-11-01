@@ -43,11 +43,16 @@ infra/compose/secrets
 **/*.pfx
 **/.scaffold-*
 docs
-ml
 mobile
-services/intelligence
 services/sync
-web/mf-intelligence
+# CU23: the visual model toolchain and the intelligence service are built from source.
+# Datasets and trained artefacts stay out of the build context (they are operator-provided).
+ml/data
+ml/artifacts
+ml/**/*.npz
+ml/**/*.npy
+**/__pycache__
+**/.venv
 **/src/assets/tmp/demo.zip
 services/finance/storage/logs
 services/finance/storage/framework/cache

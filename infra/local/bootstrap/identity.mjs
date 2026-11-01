@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { resolve } from 'node:path';
 import { ensure, httpApi, retry, preserve, json } from '../bootstrap.mjs';
-import { coordinatorClientId, coordinatorOwner, technicalScopes, participantAudiences } from '../../keycloak/scripts/cu15-identity.mjs';
+import { coordinatorClientId, coordinatorOwner, technicalScopes, participantAudiences, apiAudiences } from '../../keycloak/scripts/cu15-identity.mjs';
 
 const internal = 'http://keycloak:8080/identity';
 const realmSpec = JSON.parse(readFileSync(new URL('../../keycloak/realm.json', import.meta.url), 'utf8'));
@@ -82,7 +82,7 @@ export async function provisionIdentity(state, configDir, initialized = false) {
       else { policy(current, { name: mapper.name, protocol: mapper.protocol, protocolMapper: mapper.protocolMapper }, 'CLIENT_MAPPER_DRIFT'); policy(current.config, mapper.config, 'CLIENT_MAPPER_DRIFT'); }
     }
   }
-  const audiences = ['autonexus-operations-api', ...participantAudiences];
+  const audiences = [...apiAudiences];
   for (const clientId of audiences) await client({ clientId, enabled: true, protocol: 'openid-connect', bearerOnly: true, publicClient: false, standardFlowEnabled: false, implicitFlowEnabled: false, directAccessGrantsEnabled: false, serviceAccountsEnabled: false });
   // Preserve the existing public-client policy so CU02 custom roles can be emitted.
   // Roles remain metadata: current owner permissions and linkage authorize every request.

@@ -4,6 +4,7 @@ import { HttpEmployeesGateway } from './application/employees-gateway.js';
 import { HttpOperationsGateway } from './application/operations-gateway.js';
 import { HttpFinanceGateway } from './application/finance-gateway.js';
 import { HttpAgendaGateway } from './application/agenda-gateway.js';
+import { HttpIntelligenceGateway } from './application/intelligence-gateway.js';
 import { AccessTokenVerifier } from './infrastructure/auth/token-verifier.js';
 import { AdministratorGuard } from './infrastructure/auth/administrator.guard.js';
 import { bffEnvironment, type BffConfiguration } from './infrastructure/config/environment.js';
@@ -38,9 +39,14 @@ const configuration = (): BffConfiguration => bffEnvironment();
     },
     {
       provide: BusinessGraphql,
-      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION', HttpAgendaGateway],
-      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration, agenda: HttpAgendaGateway) =>
-        new BusinessGraphql(employees, operations, finance, config.schemaPaths, agenda),
+      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION', HttpAgendaGateway, HttpIntelligenceGateway],
+      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration, agenda: HttpAgendaGateway, intelligence: HttpIntelligenceGateway) =>
+        new BusinessGraphql(employees, operations, finance, config.schemaPaths, agenda, intelligence),
+    },
+    {
+      provide: HttpIntelligenceGateway,
+      inject: ['BFF_CONFIGURATION'],
+      useFactory: (config: BffConfiguration) => new HttpIntelligenceGateway(config.intelligenceUrl),
     },
     {
       provide: HttpAgendaGateway,

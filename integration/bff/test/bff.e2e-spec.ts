@@ -10,6 +10,7 @@ import { HttpOperationsGateway } from '../src/application/operations-gateway.js'
 import { configureHttp } from '../src/infrastructure/http/configure-http.js';
 import { bffEnvironment } from '../src/infrastructure/config/environment.js';
 import { HttpAgendaGateway } from '../src/application/agenda-gateway.js';
+import { HttpIntelligenceGateway } from '../src/application/intelligence-gateway.js';
 import { PAGE as AGENDA_PAGE, WORK as AGENDA_WORK, EMPLOYEES_PAGE as AGENDA_EMPLOYEES, ID as ASSIGNMENT_ID, WORK_FIELDS } from './agenda-fixtures.js';
 
 const PAGE = { items: [], total: 0, limit: 20, offset: 0 };
@@ -22,6 +23,7 @@ const ALL = [
   'confirmations:read', 'confirmations:write',
   'agenda:read:self', 'agenda:read:team',
   'executions:read:self', 'executions:read:team', 'executions:write',
+  'intelligence:analyze', 'intelligence:read',
 ];
 /** Mirrors the owner resolution: realm roles plus persisted assignments. */
 const effectiveFor = (bearer: string): string[] => {
@@ -29,8 +31,8 @@ const effectiveFor = (bearer: string): string[] => {
     const payload = JSON.parse(Buffer.from(bearer.split('.')[1], 'base64url').toString()) as { realm_access?: { roles?: string[] } };
     const roles = payload.realm_access?.roles ?? [];
     if (roles.includes('administrador')) return ALL;
-    if (roles.includes('jefe_taller')) return ['schedules:read', 'schedules:write', 'confirmations:read', 'confirmations:write', 'executions:read:self', 'executions:read:team'];
-    if (roles.includes('mecanico')) return ['executions:read:self', 'executions:write'];
+    if (roles.includes('jefe_taller')) return ['schedules:read', 'schedules:write', 'confirmations:read', 'confirmations:write', 'executions:read:self', 'executions:read:team', 'intelligence:read'];
+    if (roles.includes('mecanico')) return ['executions:read:self', 'executions:write', 'intelligence:analyze', 'intelligence:read'];
     return [];
   } catch {
     return [];
@@ -44,7 +46,20 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
   let mechanic: string;
   let head: string;
   let uncachedAdmin: string;
-  const gateway = {
+  let reception: string;
+  const analysis = {
+    analysisId: '22222222-2222-4222-8222-222222222222', assignmentId: ASSIGNMENT_ID, evidenceId: EMPLOYEE_ID,
+    orderId: EMPLOYEE_ID, modelVersion: 'automotive-damage-mobilenetv2-v1', task: 'automotive-surface-damage-multilabel',
+    threshold: 0.3, insufficientData: false, imageSha256: 'a'.repeat(64), createdAt: '2026-10-31T12:00:00Z', replayed: false,
+    flagged: ['scratch'], labels: [{ name: 'scratch', score: 0.82, threshold: 0.3, flagged: true }],
+  };
+  const intelligence = {
+    model: vi.fn(async () => ({ ready: true, modelVersion: 'automotive-damage-mobilenetv2-v1', labels: ['scratch'], insufficientData: false, reason: null })),
+    analyze: vi.fn(async () => analysis),
+    analysis: vi.fn(async () => analysis),
+    assignment: vi.fn(async () => ({ assignmentId: ASSIGNMENT_ID, items: [analysis] })),
+    order: vi.fn(async () => ({ orderId: EMPLOYEE_ID, items: [analysis] })),
+  };  const gateway = {
     confirmationMechanics: vi.fn(async () => PAGE),
     confirmationAvailability: vi.fn(),
     list: vi.fn(async () => PAGE),
@@ -124,6 +139,7 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     mechanic = await token(['mecanico']);
     head = await token(['jefe_taller']);
     uncachedAdmin = await token(['administrador'], 'synthetic-admin-uncached');
+    reception = await token(['recepcionista'], 'synthetic-reception');
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AccessTokenVerifier)
       .useValue(new AccessTokenVerifier(config, createLocalJWKSet({ keys: [await exportJWK(keys.publicKey)] })))
@@ -131,6 +147,8 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
       .useValue(gateway)
       .overrideProvider(HttpOperationsGateway)
       .useValue(operations)
+      .overrideProvider(HttpIntelligenceGateway)
+      .useValue(intelligence)
       .overrideProvider(HttpAgendaGateway)
       .useValue(new HttpAgendaGateway(config.operationsUrl, config.employeesUrl, agendaTransport))
       .compile();
@@ -252,7 +270,7 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
   it('serves the CU02 catalog and enforces the security policy over HTTP', async () => {
     const own = await post({ query: '{ securityCatalog { catalog { id } effective } }' }, mechanic).expect(200);
     expect(own.body.errors).toBeUndefined();
-    expect(own.body.data.securityCatalog.effective).toEqual(['executions:read:self', 'executions:write']);
+    expect(own.body.data.securityCatalog.effective).toEqual(['executions:read:self', 'executions:write', 'intelligence:analyze', 'intelligence:read']);
 
     const denied = await post({ query: '{ securityRoles { name } }' }, head).expect(200);
     expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
@@ -363,5 +381,36 @@ describe('BFF CU03 GraphQL (synthetic RSA and explicit fake upstream)', () => {
     expect(result.body.errors[0].extensions).toEqual({ code: expected, statusCode: status });
     expect(result.body.data).toBeUndefined();
     expect(JSON.stringify(result.body)).not.toContain('private');
+  });
+
+  it('CU23 exposes model status and analysis to the permitted roles only', async () => {
+    const status = await post({ query: '{visionModel{ready modelVersion labels insufficientData}}' }, mechanic).expect(200);
+    expect(status.body.errors, JSON.stringify(status.body.errors)).toBeUndefined();
+    expect(status.body.data.visionModel.ready).toBe(true);
+
+    const analyzed = await post({ query: 'mutation{analyzeEvidence(assignmentId:"' + ASSIGNMENT_ID + '",evidenceId:"' + EMPLOYEE_ID + '"){analysisId flagged replayed labels{name score threshold flagged}}}' }, mechanic).expect(200);
+    expect(analyzed.body.errors).toBeUndefined();
+    expect(intelligence.analyze).toHaveBeenCalledWith(ASSIGNMENT_ID, EMPLOYEE_ID, mechanic);
+    expect(analyzed.body.data.analyzeEvidence.labels[0].flagged).toBe(true);
+
+    const headRead = await post({ query: '{assignmentAnalyses(assignmentId:"' + ASSIGNMENT_ID + '"){items{analysisId}}}' }, head).expect(200);
+    expect(headRead.body.errors).toBeUndefined();
+    const headWrite = await post({ query: 'mutation{analyzeEvidence(assignmentId:"' + ASSIGNMENT_ID + '",evidenceId:"' + EMPLOYEE_ID + '"){analysisId}}' }, head).expect(200);
+    expect(headWrite.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(headWrite.body.data).toBeUndefined();
+
+    const denied = await post({ query: '{visionModel{ready}}' }, reception).expect(200);
+    expect(denied.body.errors[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(intelligence.model).not.toHaveBeenCalledWith(reception);
+  });
+
+  it.each([
+    [503, 'MODEL_NOT_READY', 'MODEL_NOT_READY'], [409, 'EVIDENCE_NOT_AVAILABLE', 'EVIDENCE_NOT_AVAILABLE'],
+    [404, 'ANALYSIS_NOT_FOUND', 'ANALYSIS_NOT_FOUND'], [400, 'IMAGE_INVALID', 'IMAGE_INVALID'],
+  ] as const)('CU23 publishes %s/%s from the owner', async (status, code, expected) => {
+    intelligence.analysis.mockRejectedValueOnce(new BusinessError(status, code));
+    const response = await post({ query: '{visionAnalysis(analysisId:"' + ASSIGNMENT_ID + '"){analysisId}}' }, mechanic).expect(200);
+    expect(response.body.errors[0].extensions).toEqual({ code: expected, statusCode: status });
+    expect(JSON.stringify(response.body)).not.toContain('internal detail');
   });
 });

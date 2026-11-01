@@ -4,7 +4,8 @@ Traspaso de infraestructura: [Docker Compose local — verificado y revisado](..
 
 Traspaso de CU05: [F1/G1 corregidos, revisión visual pendiente](../handoffs/2026-10-29-cu05-review.md). CU05 no se declara cerrado; continúa pendiente la revisión visual (G2) hasta contar con un canal de píxeles reales.
 
-Traspaso más reciente: [CU16 — ejecución y evidencias cerradas contra AWS S3 real](../handoffs/2026-10-30-cu16-close.md). CU17 queda preparado en docs/compose/spec/cu17-verification.md.
+Traspaso más reciente: [CU23 — análisis visual del servidor entregado](../handoffs/2026-11-01-cu23-visual-intelligence.md). Modelo real, MongoDB, BFF, microfrontend y verificación API/navegador; la conversión web (TFJS) queda para CU22.
+Traspaso anterior: [CU16 — ejecución y evidencias cerradas contra AWS S3 real](../handoffs/2026-10-30-cu16-close.md).
 Traspaso anterior: [CU15 — Saga de confirmación entregada y publicada](../handoffs/2026-10-28-cu15-confirmation-saga.md).
 Traspaso anterior: [T21 — React, recepción, órdenes y cotizaciones](../handoffs/2026-10-28-t21-react-finance.md).
 Traspaso operativo anterior: [CU06/CU07/CU09/CU10](../handoffs/2026-10-28-operations-base.md).

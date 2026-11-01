@@ -15,6 +15,7 @@
       <a href="/employees" data-module="employees" data-shell-link>Empleados</a>
       <a href="/operations" data-module="operations" data-shell-link>Operaciones</a>
       <a href="/finance" data-module="finance" data-shell-link>Finanzas</a>
+      <a href="/intelligence" data-module="intelligence" data-shell-link>Inteligencia</a>
     </nav>
   </header>
   <aside class="demo-banner"><strong>Páginas de ejemplo del template</strong> · La sesión es real; los gráficos no representan operaciones del taller.</aside>
@@ -42,7 +43,8 @@
     <a href="/employees/list" data-employee-link data-permission="employees:read" data-shell-link>Empleados (CU03)</a>
     <a href="/employees/new" data-employee-link data-permission="employees:write" data-shell-link>Registrar empleado</a>
     <a href="/employees/schedules" data-employee-link data-permission="schedules:read" data-shell-link>Horarios</a>
-    <a href="/employees/security" data-employee-link data-permission="security:read" data-shell-link>Seguridad</a>`n    <a href="/employees/verification" data-employee-link data-permission="executions:verify" data-shell-link>Verificación</a>
+    <a href="/employees/security" data-employee-link data-permission="security:read" data-shell-link>Seguridad</a>
+    <a href="/employees/verification" data-employee-link data-permission="executions:verify" data-shell-link>Verificación</a>
     <a href="/operations/appointments" data-operations-link data-shell-link>Citas</a>
     <a href="/operations/customers" data-operations-link data-shell-link>Clientes</a>
     <a href="/operations/vehicles" data-operations-link data-shell-link>Vehículos</a>
@@ -51,16 +53,18 @@
     <a href="/operations/orders" data-operations-link data-shell-link>Órdenes</a>
     <a href="/operations/confirmations" data-operations-link data-shell-link id="shell-confirm-service">Confirmar servicio</a>
     <a href="/finance" data-finance-link data-shell-link>Cotizaciones</a>
+    <a href="/intelligence" data-intelligence-link data-permission="intelligence:read" data-shell-link>Análisis visual</a>
     <a href="/employees/widgets" data-page="widgets" data-shell-link>Widgets</a>
     <a href="/employees/dashboard/v1" data-page="dashboard/v1" data-shell-link>Panel demo</a>
   </nav>
   <main id="main" tabindex="-1">
     <p id="load-status" role="status" aria-live="polite"></p>
-    <section id="route-error" hidden><h1>Ruta no encontrada</h1><p>Selecciona Empleados, Operaciones o Finanzas para continuar.</p></section>
+    <section id="route-error" hidden><h1>Ruta no encontrada</h1><p>Selecciona Empleados, Operaciones, Finanzas o Inteligencia para continuar.</p></section>
     <p id="module-access" role="status" hidden></p>
     <section id="mf-employees" aria-label="Empleados" hidden></section>
     <section id="mf-operations" aria-label="Demostración de Operaciones" hidden></section>
     <section id="mf-finance" aria-label="Finanzas" hidden></section>
+    <section id="mf-intelligence" aria-label="Inteligencia" hidden></section>
   </main>
   <script src="/runtime-config.js"></script>
   <script type="module" src="/src/main.ts"></script>

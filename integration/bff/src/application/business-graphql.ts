@@ -16,6 +16,7 @@ import type { CommandInput, EmployeePageQuery, EmployeeQuery, EmployeesGateway, 
 import type { OperationsCommand, OperationsGateway, OperationsPageQuery } from './operations-gateway.js';
 import type { FinanceGateway, QuoteCommand, QuoteQuery } from './finance-gateway.js';
 import type { AgendaGateway, AgendaQuery, AgendaEmployeesQuery } from './agenda-gateway.js';
+import type { IntelligenceGateway } from './intelligence-gateway.js';
 
 /** Closed permission catalog published by the Employees owner. */
 type Permission =
@@ -31,7 +32,8 @@ type Permission =
   | 'quotes:read' | 'quotes:write' | 'quotes:decide'
   | 'confirmations:read' | 'confirmations:write'
   | 'agenda:read:self' | 'agenda:read:team'
-  | 'executions:read:self' | 'executions:read:team' | 'executions:write' | 'executions:verify';
+  | 'executions:read:self' | 'executions:read:team' | 'executions:write' | 'executions:verify'
+  | 'intelligence:analyze' | 'intelligence:read';
 
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
@@ -58,6 +60,11 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.fre
   requestVerification: 'executions:write',
   approveExecution: 'executions:verify',
   returnExecution: 'executions:verify',
+  visionModel: 'intelligence:read',
+  assignmentAnalyses: 'intelligence:read',
+  orderAnalyses: 'intelligence:read',
+  visionAnalysis: 'intelligence:read',
+  analyzeEvidence: 'intelligence:analyze',
   myAgendaHistory: 'agenda:read:self',
   teamAgendaHistory: 'agenda:read:team',
   confirmationSaga: 'confirmations:read',
@@ -158,6 +165,7 @@ export class BusinessGraphql {
     private readonly finance: FinanceGateway,
     schemaPaths: readonly string[],
     private readonly agenda: AgendaGateway,
+    private readonly intelligence: IntelligenceGateway,
   ) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
   }
@@ -295,6 +303,11 @@ export class BusinessGraphql {
         this.operations.approveExecution(args.assignmentId, args.input, token),
       returnExecution: (args: { assignmentId: string; input: OperationsCommand }) =>
         this.operations.returnExecution(args.assignmentId, args.input, token),
+      visionModel: () => this.intelligence.model(token),
+      assignmentAnalyses: (args: { assignmentId: string }) => this.intelligence.assignment(args.assignmentId, token),
+      orderAnalyses: (args: { orderId: string; assignmentId: string }) => this.intelligence.order(args.orderId, args.assignmentId, token),
+      visionAnalysis: (args: { analysisId: string }) => this.intelligence.analysis(args.analysisId, token),
+      analyzeEvidence: (args: { assignmentId: string; evidenceId: string }) => this.intelligence.analyze(args.assignmentId, args.evidenceId, token),
       myAgendaHistory: (args: AgendaQuery) => this.agenda.history('self', args, token),
       teamAgendaHistory: (args: AgendaQuery) => this.agenda.history('team', args, token),
       retryEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>

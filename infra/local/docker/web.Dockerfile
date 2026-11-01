@@ -27,6 +27,11 @@ COPY web/mf-finance/vite.config.js /app/web/mf-finance/vite.config.js
 COPY web/mf-finance/src /app/web/mf-finance/src
 COPY web/mf-finance/public /app/web/mf-finance/public
 RUN pnpm --dir /app/web/mf-finance run build:integrated
+COPY web/mf-intelligence/package.json web/mf-intelligence/pnpm-lock.yaml /app/web/mf-intelligence/
+RUN pnpm --dir /app/web/mf-intelligence install --frozen-lockfile
+COPY web/mf-intelligence/vite.config.js web/mf-intelligence/index.html /app/web/mf-intelligence/
+COPY web/mf-intelligence/src /app/web/mf-intelligence/src
+RUN pnpm --dir /app/web/mf-intelligence run build:integrated
 COPY web/shell/package.json web/shell/pnpm-lock.yaml /app/web/shell/
 RUN pnpm --dir /app/web/shell install --frozen-lockfile
 COPY web/shell/tsconfig.json web/shell/vite.config.ts web/shell/index.html /app/web/shell/
@@ -38,7 +43,8 @@ RUN pnpm run stage:mfs && pnpm run build \
     && test -f dist/index.html \
     && test -f dist/mfs/employees/main.js && test -f dist/mfs/employees/styles.css \
     && test -f dist/mfs/operations/main.js && test -f dist/mfs/operations/styles.css \
-    && test -f dist/mfs/finance/main.js
+    && test -f dist/mfs/finance/main.js \
+    && test -f dist/mfs/intelligence/main.js
 
 FROM nginx:1.30.6-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949 AS runtime
 RUN addgroup -g 1000 app && adduser -D -u 1000 -G app app \

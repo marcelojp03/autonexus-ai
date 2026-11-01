@@ -15,6 +15,13 @@ const entries = [
     destination: new URL('../public/mfs/finance/', import.meta.url),
     required: ['main.js'],
   },
+  {
+    // CU23 React microfrontend, same integrated layout as finance.
+    app: 'intelligence',
+    source: new URL('../../mf-intelligence/dist/integrated/', import.meta.url),
+    destination: new URL('../public/mfs/intelligence/', import.meta.url),
+    required: ['main.js'],
+  },
 ];
 for (const { app, source, required } of entries) {
   for (const file of required) {

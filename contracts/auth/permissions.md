@@ -34,6 +34,8 @@ Contrato aprobado en `docs/compose/spec/cu02-security.md` y ampliado en `docs/co
 | `executions:read:self` | Ejecuciones | read:self | Avances y evidencias del trabajo asignado al empleado vigente (CU16) |
 | `executions:read:team` | Ejecuciones | read:team | Avances y evidencias de los trabajos del taller y su descarga temporal (CU16) |
 | `executions:write` | Ejecuciones | write | Iniciar ejecución, registrar avances y solicitar/confirmar evidencias del trabajo propio (CU16) |
+| `intelligence:analyze` | Inteligencia | analyze | Analizar una evidencia de un trabajo propio o del equipo (CU23) |
+| `intelligence:read` | Inteligencia | read | Consultar los análisis visuales guardados de un trabajo (CU23) |
 
 Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, en minúsculas ASCII; conjunto cerrado, sin herencia por prefijo. Un permiso desconocido produce VALIDATION_ERROR. El catálogo se publica por GET /security/permissions y securityCatalog. CU05 añade solo dos permisos de lectura acotada, no acceso general a órdenes, clientes, documentos o cotizaciones.
 
@@ -41,10 +43,10 @@ Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, e
 
 | Rol | Permisos | Motivo |
 | --- | --- | --- |
-| `administrador` | los veintiocho del catálogo CU16 | Autoridad completa; CU05/CU16 requieren vínculo laboral activo por registro |
-| `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team | Planificación, catálogo, órdenes, decisión financiera y confirmación CU15 |
+| `administrador` | los treinta y uno del catálogo CU23 | Autoridad completa; CU05/CU16/CU23 requieren vínculo laboral activo por registro |
+| `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team, executions:read:self/team, executions:verify, intelligence:read | Planificación, catálogo, órdenes, decisión financiera, confirmación CU15, verificación CU17 y consulta de análisis CU23 |
 | `recepcionista` | customers:read/write, vehicles:read/write, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes y decisión del cliente; no elabora cotizaciones |
-| `mecanico` | receptions:read/write, agenda:read:self, executions:read:self/write | Recepción CU11, agenda propia CU05 y ejecución de sus trabajos CU16; sin CRUD general ni agenda del equipo |
+| `mecanico` | receptions:read/write, agenda:read:self, executions:read:self/write, intelligence:analyze/read | Recepción CU11, agenda propia CU05, ejecución de sus trabajos CU16 y análisis visual de sus evidencias CU23; sin CRUD general ni agenda del equipo |
 | `responsable_financiero` | orders:read, quotes:read/write/decide | Cotizaciones y decisiones CU13/CU14; aprobar no confirma el servicio |
 
 Los roles iniciales son `system=true`: no se renombran y no se borran. Sus permisos sí pueden editarse, con las restricciones de último administrador. Un rol nuevo requiere nombre `^[a-z][a-z0-9_]{2,63}$`, distinto de cualquier otro, y al menos un permiso del catálogo.
@@ -111,3 +113,15 @@ Resolución: el subject debe resolver un empleado activo con identidad vigente y
 Escritura acotada al asignado: solo el mecánico cuya asignación vigente corresponde al trabajo inicia, registra avances y confirma evidencias. Jefe de taller y administrador no escriben en nombre de otro; si la misma persona tiene asignación y permisos, actúa sobre su propio trabajo. Lectura acotada por registro: `read:self` solo el trabajo propio, `read:team` cualquier trabajo del taller. Ajeno o inexistente responde404 indistinguible; sin vínculo/actividad/permiso responde403 seguro.
 
 Jefatura consulta avances y evidencias del taller y solicita descarga temporal autorizada; no recibe datos personales, financieros ni técnicos internos. Verificar y finalizar son CU17 y no se habilitan por anticipado. El catálogo de la agenda publica además el estado de ejecución, que no sustituye la confirmación de CU15.
+
+## CU23 análisis visual — autorización por permiso y por registro
+
+Contrato: [intelligence REST](../rest/intelligence.md) y [intelligence GraphQL](../graphql/intelligence.graphql). El catálogo pasa a treinta y un permisos con `intelligence:analyze` e `intelligence:read`; la migración `1793800800000` los añade de forma aditiva a `administrador`, `jefe_taller` (solo lectura) y `mecanico`, y no toca `recepcionista` ni `responsable_financiero`.
+
+Quién resuelve: MS04 Inteligencia valida el token por `iss`/`aud` (`autonexus-intelligence-api`) y pide los permisos efectivos a Empleados en cada petición, con caché de 30 s y fallo cerrado (`503 SERVICE_UNAVAILABLE`). No hay excepción de cuentas de infraestructura no vinculadas. El BFF declara el permiso de cada campo raíz (`FIELD_PERMISSION`) y oculta el campo no autorizado; el servicio propietario vuelve a decidir.
+
+Permiso por registro: analizar exige el permiso **y** que el actor alcance esa asignación en Operaciones (`GET /executions/me|team/:assignmentId` con su token), y la evidencia debe estar `available`. Consultar un análisis revalida la asignación guardada en el documento, no el identificador que envía el cliente. Trabajo ajeno o inexistente responde `404` indistinguible; sin permiso, `403`.
+
+Alcance de escritura: `intelligence:analyze` no permite analizar evidencias de un trabajo ajeno sin `executions:read:team`; el mecánico solo analiza sus propias evidencias. La imagen se descarga con la URL prefirmada que Operaciones emite para ese actor y se procesa en memoria: el servicio no acepta bytes ni URLs del cliente y no persiste la imagen, solo etiquetas, puntajes y el hash.
+
+Límites: el resultado es una señal para revisión humana, nunca un diagnóstico ni una medición; `MODEL_NOT_READY` es un estado válido del despliegue y no acredita la capacidad de IA.

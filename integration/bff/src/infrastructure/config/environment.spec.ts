@@ -20,12 +20,13 @@ describe('finance standalone origin', () => {
   });
 });
 
-describe('CU05 seventh schema without transport-policy changes', () => {
-  it('loads eight schemas, keeping agenda seventh and executions last', () => {
+describe('CU05 seventh schema and CU23 ninth schema without transport-policy changes', () => {
+  it('loads nine schemas, keeping agenda seventh, executions eighth and intelligence last', () => {
     const paths = bffEnvironment({}).schemaPaths;
-    expect(paths).toHaveLength(8);
+    expect(paths).toHaveLength(9);
     expect(paths[6]).toBe(resolve('../../contracts/graphql/agenda.graphql'));
     expect(paths[7]).toBe(resolve('../../contracts/graphql/executions.graphql'));
+    expect(paths[8]).toBe(resolve('../../contracts/graphql/intelligence.graphql'));
     const schema = buildSchema(paths.map(path => readFileSync(path, 'utf8')).join('\n'));
     expect(Object.keys(schema.getQueryType()!.getFields()).filter(name => /agenda/i.test(name)).sort()).toEqual(
       ['myAgenda', 'myAgendaWork', 'teamAgenda', 'teamAgendaWork', 'agendaTeamEmployees', 'myAgendaHistory', 'teamAgendaHistory'].sort());
@@ -39,7 +40,7 @@ describe('CU05 seventh schema without transport-policy changes', () => {
     }
   });
   it('rejects unsafe owners, invalid issuer/audience and port', () => {
-    for (const key of ['EMPLOYEES_API_URL', 'OPERATIONS_API_URL', 'FINANCE_API_URL']) {
+    for (const key of ['EMPLOYEES_API_URL', 'OPERATIONS_API_URL', 'FINANCE_API_URL', 'INTELLIGENCE_API_URL']) {
       expect(() => bffEnvironment({ [key]: 'http://u:p@localhost:3002' })).toThrow(key);
     }
     expect(() => bffEnvironment({ OIDC_ISSUER_URI: 'invalid' })).toThrow('OIDC_ISSUER_URI');

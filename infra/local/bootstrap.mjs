@@ -6,7 +6,11 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { provisionIdentity } from './bootstrap/identity.mjs';
 import { exchange, deadExchange, vhost, queues, permissions, topicPermissions, queueArguments } from '../rabbitmq/scripts/topology.mjs';
 
-export const consumers = ['postgres', 'idp-postgres', 'keycloak', 'rabbitmq', 'employees', 'operations', 'finance', 'bff', 'public', 'demo'];
+export const consumers = ['postgres', 'idp-postgres', 'keycloak', 'rabbitmq', 'employees', 'operations', 'finance', 'intelligence', 'mongo', 'bff', 'public', 'demo'];
+/** Secrets added after the first bootstrap version; an existing state gains them additively. */
+export const additiveSecrets = ['mongo'];
+export const requiredSecrets = ['postgres', 'idpAdmin', 'idpPostgres', 'keycloak', 'rabbitmq', 'employeesClient', 'coordinatorClient', ...['employees', 'operations', 'finance'].flatMap(owner => [owner + 'Db', owner + 'Rabbit'])];
+export const allSecrets = [...requiredSecrets, ...additiveSecrets];
 export const ensure = (condition, code) => { if (!condition) throw new Error(code); };
 export const json = value => JSON.stringify(value, null, 2) + '\n';
 export function origin(value) {
@@ -35,7 +39,19 @@ export function configuration(state) {
     'idp-postgres': { POSTGRES_USER: 'idp_database_admin', POSTGRES_DB: 'postgres', POSTGRES_PASSWORD: s.idpAdmin, IDP_DB_PASSWORD: s.idpPostgres },
     keycloak: { KC_DB: 'postgres', KC_DB_URL: 'jdbc:postgresql://idp-postgres:5432/autonexus_idp', KC_DB_USERNAME: 'autonexus_idp', KC_DB_PASSWORD: s.idpPostgres, KC_BOOTSTRAP_ADMIN_USERNAME: 'bootstrap', KC_BOOTSTRAP_ADMIN_PASSWORD: s.keycloak, KC_HOSTNAME: publicOrigin + '/identity', KC_HTTP_RELATIVE_PATH: '/identity', KC_HTTP_MANAGEMENT_RELATIVE_PATH: '/', KC_PROXY_HEADERS: 'xforwarded', KC_HTTP_ENABLED: 'true', KC_HEALTH_ENABLED: 'true' },
     rabbitmq: { RABBITMQ_DEFAULT_USER: 'autonexus_setup', RABBITMQ_DEFAULT_PASS: s.rabbitmq },
-    bff: { ...auth, HTTP_HOST: '0.0.0.0', PORT: 3004, EMPLOYEES_API_URL: 'http://employees:3002', OPERATIONS_API_URL: 'http://operations:8081', FINANCE_API_URL: 'http://finance:8000' },
+    mongo: { MONGO_INITDB_ROOT_USERNAME: 'autonexus', MONGO_INITDB_ROOT_PASSWORD: s.mongo, MONGO_INITDB_DATABASE: 'autonexus_intelligence' },
+    intelligence: {
+      ...auth,
+      OIDC_AUDIENCE: 'autonexus-intelligence-api',
+      HTTP_HOST: '0.0.0.0',
+      PORT: 8000,
+      MONGO_URL: 'mongodb://autonexus:' + s.mongo + '@mongo:27017/?authSource=admin',
+      MONGO_DB: 'autonexus_intelligence',
+      EMPLOYEES_API_URL: 'http://employees:3002',
+      OPERATIONS_API_URL: 'http://operations:8081',
+      INTELLIGENCE_MODEL_DIR: '/models',
+    },
+    bff: { ...auth, HTTP_HOST: '0.0.0.0', PORT: 3004, EMPLOYEES_API_URL: 'http://employees:3002', OPERATIONS_API_URL: 'http://operations:8081', FINANCE_API_URL: 'http://finance:8000', INTELLIGENCE_API_URL: 'http://intelligence:8000' },
     public: { PUBLIC_ORIGIN: publicOrigin }, demo: { PUBLIC_ORIGIN: publicOrigin, OIDC_ISSUER_URI: issuer },
   };
   for (const owner of ['employees', 'operations', 'finance']) {
@@ -60,25 +76,35 @@ export function init({ stateDir = '/state', configDir = '/config', publicOrigin 
       const directory = resolve(configDir, consumer);
       ensure(!existsSync(directory) || readdirSync(directory).length === 0, 'STATE_MISSING_CONFIG_EXISTS');
     }
-    const secrets = Object.fromEntries(['postgres', 'idpAdmin', 'idpPostgres', 'keycloak', 'rabbitmq', 'employeesClient', 'coordinatorClient', ...['employees', 'operations', 'finance'].flatMap(owner => [owner + 'Db', owner + 'Rabbit'])].map(key => [key, randomBytes(32).toString('hex')]));
+    const secrets = Object.fromEntries(allSecrets.map(key => [key, randomBytes(32).toString('hex')]));
     secrets.appKey = 'base64:' + randomBytes(32).toString('base64');
     state = { version: 1, publicOrigin: origin(publicOrigin), secrets, admin: { username: 'admin_' + randomBytes(8).toString('hex'), password: randomBytes(32).toString('hex'), roles: ['administrador'] } };
     preserve(file, json(state));
   }
-  for (const key of ['postgres', 'idpAdmin', 'idpPostgres', 'keycloak', 'rabbitmq', 'employeesClient', 'coordinatorClient', ...['employees', 'operations', 'finance'].flatMap(owner => [owner + 'Db', owner + 'Rabbit'])]) ensure(/^[a-f0-9]{64}$/.test(state.secrets[key]), 'STATE_INVALID');
+  // Additive migration: a state created before CU23 gains the Mongo secret and nothing else is
+  // rewritten, so existing credentials, volumes and identities keep working untouched.
+  const missing = additiveSecrets.filter(key => state.secrets[key] === undefined);
+  if (missing.length) {
+    for (const key of missing) state.secrets[key] = randomBytes(32).toString('hex');
+    const temporary = resolve(stateDir, '.state-' + randomBytes(8).toString('hex') + '.json');
+    writeFileSync(temporary, json(state), { flag: 'wx', mode: 0o600 });
+    renameSync(temporary, file);
+  }
+  for (const key of allSecrets) ensure(/^[a-f0-9]{64}$/.test(state.secrets[key]), 'STATE_INVALID');
   ensure(/^base64:[A-Za-z0-9+/]{43}=$/.test(state.secrets.appKey) && /^[a-f0-9]{64}$/.test(state.admin.password), 'STATE_INVALID');
   const configs = configuration(state);
   for (const consumer of consumers) {
     const directory = resolve(configDir, consumer);
     mkdirSync(directory, { recursive: true, mode: 0o755 }); chmodSync(directory, 0o755);
-    if (consumer === 'finance') {
+    if (consumer === 'finance' || consumer === 'bff') {
       const target = resolve(directory, 'service.env');
-      const legacy = { ...configs.finance }; delete legacy.EMPLOYEES_API_URL;
-      // One exact generated predecessor may gain this non-secret endpoint atomically.
-      // Any other drift still fails; no credentials or business records are rewritten.
+      const legacy = { ...configs[consumer] };
+      // One exact generated predecessor may gain this non-secret endpoint atomically. Any other
+      // drift still fails; no credentials or business records are rewritten.
+      delete legacy[consumer === 'finance' ? 'EMPLOYEES_API_URL' : 'INTELLIGENCE_API_URL'];
       if (existsSync(target) && readFileSync(target, 'utf8') === shellEnv(legacy)) {
         const temporary = resolve(directory, '.transport-' + randomBytes(8).toString('hex') + '.env');
-        writeFileSync(temporary, shellEnv(configs.finance), { flag: 'wx', mode: 0o444 });
+        writeFileSync(temporary, shellEnv(configs[consumer]), { flag: 'wx', mode: 0o444 });
         renameSync(temporary, target);
       }
     }

@@ -1,0 +1,64 @@
+# ml — modelo visual de CU23
+
+Cadena reproducible que produce el artefacto que consume MS04 Inteligencia. Nada de esto se
+versiona: `ml/data/`, `ml/artifacts/` y los ficheros `.npy`/`.npz` están ignorados; lo que se
+versiona es el **manifiesto** y este documento.
+
+## Tarea y modelo
+
+Clasificación multi-etiqueta de daño visible en fotografías de vehículo, con seis etiquetas
+publicadas por el manifiesto (`crack`, `dent`, `glass_shatter`, `lamp_broken`, `scratch`,
+`tire_flat`). Extractor **MobileNetV2** de Keras Applications con pesos ImageNet (licencia
+Apache-2.0) congelado y cabeza lineal propia entrenada sobre las anotaciones del dataset. La salida
+es una **señal para revisión humana**: no mide, no diagnostica y no estima reparaciones.
+
+## Dataset
+
+`tugberkkalay/autodamageiq-vehicle-damage-dataset` (Hugging Face), declarado **CC BY 4.0**,
+formato YOLO de detección sobre una agregación de CarDD, VehiDE y etiquetado humano en el bucle
+(GPT-4o). Las cajas se colapsan a etiquetas por imagen porque la capacidad entregada es una señal
+por fotografía, no una medición por región.
+
+Dos límites del conjunto que **se declaran y se respetan**:
+
+1. El dataset renombra parte de sus imágenes con una base numérica distinta a la de sus ficheros de
+   anotación (`existing_damage_01000.jpg` no tiene `existing_damage_01000.txt`). Por eso el
+   emparejamiento se hace **sólo por nombre exacto** (`ml/training/collect_pairs.mjs`) y las
+   imágenes sin anotación homónima quedan excluidas. Emparejar por posición o por un desplazamiento
+   adivinado adjuntaría anotaciones equivocadas y no se hace.
+2. No publica la identidad del vehículo, así que la partición de evaluación no puede garantizarse
+   disjunta por vehículo. Se declara como limitación en el manifiesto.
+
+## Comandos comprobados (Docker, CPU)
+
+```sh
+# 1. Imagen de entrenamiento (desde la raíz del repositorio)
+docker build -f ml/Dockerfile -t autonexus-ml:local .
+
+# 2. Descarga del dataset (imágenes) y de las anotaciones emparejadas
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/download_dataset.py
+node ml/training/collect_pairs.mjs --root ml/data --download
+
+# 3. Índice de particiones (train 85 % / validation 15 % del split de entrenamiento; test = split val)
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/prepare_dataset.py
+
+# 4. Entrenamiento, umbrales por etiqueta y evaluación en el split de test
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/train.py --epochs 40
+
+# 5. Exportación para CU22 (web TensorFlow.js / móvil LiteRT) y comprobación de equivalencia
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/export_model.py
+```
+
+Resultado: `ml/artifacts/<modelVersion>/` con `model.keras`, `manifest.json` y `metrics.json`. La
+carpeta se monta de sólo lectura en el contenedor de Inteligencia
+(`INTELLIGENCE_MODEL_PATH`, por defecto `./ml/artifacts/automotive-damage-mobilenetv2-v1`). Sin
+artefacto el servicio responde `503 MODEL_NOT_READY` y **no** inventa puntajes.
+
+## Honestidad de las cifras
+
+- Las métricas del manifiesto provienen de una única ejecución de este pipeline sobre el split de
+  test, que no participa del ajuste ni de la elección de umbrales.
+- Un etiqueta con menos de 40 imágenes positivas en test marca `insufficientData` en la respuesta;
+  el resultado se sigue sirviendo, pero no se presenta como capacidad medida.
+- No hay reentrenamiento automático: volver a entrenar es una ampliación controlada y cambia
+  `modelVersion`.

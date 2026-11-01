@@ -40,7 +40,7 @@ Lectura, no comando de negocio: sin `operationId` ni mutaciones. Exige el permis
 | POST /executions/:assignmentId/advances/:advanceId/evidences | executions:write | Solicita autorización de carga de una evidencia |
 | POST /executions/:assignmentId/evidences/:evidenceId/confirm | executions:write | Confirma y verifica la carga |
 | POST /executions/:assignmentId/evidences/:evidenceId/retry | executions:write | Abre un intento nuevo sobre una evidencia fallida |
-| GET /executions/:assignmentId/evidences/:evidenceId/download | executions:read:self o executions:read:team | Acceso temporal de descarga |
+| GET /executions/:scope/me|team/:assignmentId/evidences/:evidenceId/download | executions:read:self o executions:read:team | Acceso temporal de descarga |
 
 Las rutas de lectura se separan por alcance, igual que la agenda: `me` exige pertenencia, `team` exige el permiso de equipo. El detalle se revalida en cada petición y no confía en una lectura previa.
 

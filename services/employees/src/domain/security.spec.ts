@@ -35,11 +35,13 @@ describe('permission catalog', () => {
     expect(INITIAL_ROLES[0].permissions).toEqual([...PERMISSIONS]);
     expect(INITIAL_ROLES[1].permissions).toContain('orders:write');
     expect(INITIAL_ROLES[1].permissions).not.toContain('quotes:write');
+    expect(INITIAL_ROLES[1].permissions).toContain('intelligence:read');
+    expect(INITIAL_ROLES[1].permissions).not.toContain('intelligence:analyze');
     expect(INITIAL_ROLES[2].permissions).toContain('receptions:write');
     expect(INITIAL_ROLES[2].permissions).toContain('quotes:decide');
-    expect(INITIAL_ROLES[3].permissions).toEqual(['receptions:read', 'receptions:write', 'agenda:read:self', 'executions:read:self', 'executions:write']);
+    expect(INITIAL_ROLES[3].permissions).toEqual(['receptions:read', 'receptions:write', 'agenda:read:self', 'executions:read:self', 'executions:write', 'intelligence:analyze', 'intelligence:read']);
     expect(INITIAL_ROLES[4].permissions).toEqual(['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide']);
-    expect(PERMISSIONS.length).toBe(29);
+    expect(PERMISSIONS.length).toBe(31);
     expect(INITIAL_ROLES[1].permissions).toContain('confirmations:write');
     expect(INITIAL_ROLES[1].permissions).toContain('executions:verify');
     expect(INITIAL_ROLES[3].permissions).not.toContain('executions:verify');

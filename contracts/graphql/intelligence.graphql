@@ -1,0 +1,82 @@
+# CU23 — Inteligencia visual del servidor (GraphQL)
+# Diseño: docs/compose/spec/cu23-visual-intelligence.md
+#
+# Cada campo raíz declara su permiso en el BFF (`FIELD_PERMISSION`); ocultar el campo no es la
+# autorización: MS04 revalida permiso y registro en cada petición. La consulta de resultados
+# conserva el permiso por registro porque el servicio vuelve a comprobar la asignación en
+# Operaciones con el token del actor.
+#
+# El resultado es una señal para revisión humana. No es un diagnóstico, una medición ni un
+# presupuesto, y `modelVersion` + `insufficientData` acompañan siempre a los puntajes.
+
+"Un puntaje del modelo para una etiqueta concreta."
+type VisionLabel {
+  "Etiqueta publicada por el manifiesto del modelo."
+  name: String!
+  "Puntaje 0..1 devuelto por el modelo."
+  score: Float!
+  "Umbral con el que se decidió `flagged`."
+  threshold: Float!
+  "`score >= threshold` para esta etiqueta."
+  flagged: Boolean!
+}
+
+"Estado del artefacto del modelo cargado por MS04."
+type VisionModelStatus {
+  "Verdadero sólo si el artefacto está cargado y sirve inferencia."
+  ready: Boolean!
+  "Versión declarada por el manifiesto (`null` si no hay modelo)."
+  modelVersion: String
+  "Etiquetas que el modelo puede devolver."
+  labels: [String!]!
+  "Verdadero cuando la evaluación no alcanza el mínimo declarado por etiqueta."
+  insufficientData: Boolean!
+  "Motivo técnico cuando `ready` es falso; nunca incluye rutas ni trazas."
+  reason: String
+}
+
+"Resultado persistido de analizar una evidencia."
+type VisionAnalysis {
+  analysisId: ID!
+  assignmentId: ID!
+  evidenceId: ID!
+  orderId: ID!
+  modelVersion: String!
+  task: String!
+  labels: [VisionLabel!]!
+  "Etiquetas cuyo puntaje superó su umbral."
+  flagged: [String!]!
+  "Umbral mínimo aplicado (resumen informativo)."
+  threshold: Float!
+  "Verdadero cuando la evaluación del modelo es insuficiente para la etiqueta."
+  insufficientData: Boolean!
+  "SHA-256 de los bytes analizados; la imagen no se persiste."
+  imageSha256: String!
+  "Instante del análisis en ISO-8601 UTC."
+  createdAt: String!
+  "Verdadero cuando el análisis ya existía para la misma evidencia, modelo y bytes."
+  replayed: Boolean!
+}
+
+"Lista de análisis de un trabajo."
+type VisionAnalyses {
+  assignmentId: ID
+  orderId: ID
+  items: [VisionAnalysis!]!
+}
+
+extend type Query {
+  "Estado del modelo visual. Requiere `intelligence:read`."
+  visionModel: VisionModelStatus!
+  "Análisis de un trabajo. Requiere `intelligence:read` y acceso al registro."
+  assignmentAnalyses(assignmentId: ID!): VisionAnalyses!
+  "Análisis de una orden; `assignmentId` acota la autorización al registro. Requiere `intelligence:read`."
+  orderAnalyses(orderId: ID!, assignmentId: ID!): VisionAnalyses!
+  "Análisis concreto. Requiere `intelligence:read` y acceso al registro."
+  visionAnalysis(analysisId: ID!): VisionAnalysis!
+}
+
+extend type Mutation {
+  "Analiza una evidencia `available` de una ejecución propia o del equipo. Requiere `intelligence:analyze`."
+  analyzeEvidence(assignmentId: ID!, evidenceId: ID!): VisionAnalysis!
+}

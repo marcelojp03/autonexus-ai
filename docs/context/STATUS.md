@@ -1,5 +1,27 @@
 # Estado comprobado
 
+## CU23 — análisis visual del servidor: infraestructura y capacidad verificadas (2026-11-01)
+
+MS04 Inteligencia (FastAPI + MongoDB) analiza una evidencia de CU16 con un modelo real y persiste el resultado; el recorrido se observó desde la interfaz. Dos entregables separados, como se pidió: **infraestructura funcional** y **capacidad visual**.
+
+| Comprobación observada | Resultado |
+| --- | --- |
+| Dataset y emparejamiento | `tugberkkalay/autodamageiq-vehicle-damage-dataset` (CC BY 4.0, revisión `b5abbf54`), 12.094 imágenes; emparejadas por nombre exacto 11.093 (1.000 imágenes sin anotación homónima excluidas, no emparejadas por posición) |
+| Entrenamiento | MobileNetV2/ImageNet congelado (Apache-2.0, SHA-256 verificado) + cabeza `Dropout(0.2)→Dense(4, sigmoid)`; semilla 20.261.101, 34 épocas con early stopping; 7.913/1.087/2.093 imágenes |
+| Métricas en test (única evaluación) | F1 macro 0,6954 (precisión 0,641 / exhaustividad 0,7631); `scratch` 0,815 · `glass_shatter` 0,7649 · `dent` 0,7438 · `crack` 0,4580; F1 «algún daño» 0,9954 |
+| Etiquetas descartadas | `lamp_broken` y `tire_flat`: 0 positivos en test → excluidas del artefacto en lugar de publicar una capacidad no medida |
+| Exportación móvil | `model.tflite` float32 equivalente al modelo Keras (diferencia máxima 3e-06, tolerancia 1e-3 sobre 20 imágenes); `model-fp16.tflite` **no** equivalente (0,0118) y así se declara; TFJS queda pendiente de verificación en CU22 |
+| Servicio | `services/intelligence` FastAPI 0.115 + `tensorflow-cpu` 2.16 en `python:3.11-slim`; `/health/ready` exige Mongo y modelo; `MODEL_NOT_READY` honesto sin artefacto |
+| MongoDB | Servicio propio `mongo:7.0.45` fijado por digest, `--auth`, sin puerto publicado, `cap_drop: ALL` + cinco capacidades mínimas; colección `vision_analyses` con índices único por `(evidenceId, modelVersion, imageSha256)` y por orden/asignación |
+| Autorización | Permisos `intelligence:analyze`/`intelligence:read` (catálogo a 31, migración `1793800800000`); el servicio resuelve permisos en Empleados con caché de 30 s y fallo cerrado, y **revalida el registro** en Operaciones con el token del actor |
+| API real | `output/cu23/vision-real.json`: **14 etapas PASS** — permiso por rol, descarga autorizada, inferencia real sobre una imagen de 56.888 bytes subida por el flujo CU16, persistencia, replay idempotente, consulta tras recarga y por identificador, `FORBIDDEN` sin permiso, jefatura lee y no analiza, otro mecánico no alcanza el trabajo ajeno, `ANALYSIS_NOT_FOUND` |
+| Navegador real | `output/cu23/vision-web.json`: **7 etapas PASS**, 0 errores de consola/página/5xx — PKCE, montaje del microfrontend con el aviso «señal para revisión humana», enlace profundo desde la ejecución, análisis desde la interfaz, etiquetas con puntaje y versión del modelo, y **tras recargar** el historial persistido |
+| Pruebas | Empleados: migración aplicada y permisos por rol comprobados en la base real; BFF: 144 unitarias + 40 HTTP (incluye política CU23 por campo y códigos publicados); mf-intelligence: 6 pruebas; shell integrado con `mfs/intelligence/main.js` verificado dentro de la imagen |
+
+Correcciones del plan durante la ejecución: el dataset publicado usa bases numéricas distintas para imágenes y anotaciones de `existing_damage_*`, así que se empareja sólo por nombre; el artefacto se guarda como grafo funcional de inferencia (la cabeza compilada con pérdida propia no se serializa) para que la carga en el servicio no dependa de una función custom; la ruta de descarga de Operaciones lleva el segmento de alcance (`/executions/me|team/...`) y se corrigió el contrato.
+
+Límites declarados: el resultado es una señal para revisión humana, no un diagnóstico ni una medición; el dataset no publica identidad de vehículo, por lo que la partición de test no es disjunta por vehículo; óxido, desgaste y fugas **no** están cubiertos; la imagen no se persiste (sólo etiquetas, puntajes y hash); la conversión web (TFJS) no está verificada.
+
 ## CU17 — verificación técnica entregada, integrada y publicada (2026-10-31)
 
 Backend y BFF de CU17 implementados: estados `in_progress → pending_verification → completed`, devolución con motivo, checklist obligatorio derivado de los ítems de la orden, permiso `executions:verify`, autoaprobación prohibida por identidad e historial de revisiones append-only. Migración `V11` aplicada en el stack real y migración de Empleados `1793714400000` ejecutada.

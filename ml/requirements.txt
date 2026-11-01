@@ -1,0 +1,8 @@
+# Pinned toolchain for reproducible training. Checked on python:3.11-slim-bookworm.
+# tensorflow-cpu 2.16.2 is the last line that ships a CPU wheel for CPython 3.11 together
+# with a Keras 2 compatible converter path (tensorflowjs) needed by the web/mobile export.
+tensorflow-cpu==2.16.2
+numpy==1.26.4
+pillow==10.4.0
+huggingface_hub==0.25.2
+scikit-learn==1.5.2
