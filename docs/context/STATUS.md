@@ -43,8 +43,9 @@ Correcciones del plan: IA+offline+MCP son **41 puntos**; la referencia del 70 % 
 | Entorno de conversión aislado | `ml/Dockerfile.tfjs` (TF-CPU 2.15.1 + `tensorflowjs` 4.20.0 + protobuf 4.25.9): el conversor importa y convierte. El bloqueo anterior era la combinación 2.16/4.22, no «subir de versión» |
 | Equivalencia en Node | `@tensorflow/tfjs` 4.20.0 (CPU): diferencia máxima **3e-06** frente a Keras sobre 20 imágenes preprocesadas idénticas |
 | Ejecución en navegador | Chromium real, backend **WebGL**: diferencia máxima **2e-06**, 0 errores de consola (`output/cu23/tfjs-browser.json`) |
-| Android | App Flutter en `mobile/autonexus_app` con LiteRT: `flutter analyze` sin hallazgos y **APK construido**; la inferencia en dispositivo queda **pendiente** (teléfono sin autorizar, emulador no llega a `online`) |
-| Límite declarado | Compilar no es ejecutar; la equivalencia del artefacto es numérica, no una prueba de calidad del modelo, que sigue experimental |
+| Android **ejecutado en dispositivo** | Mi A3 (Android 16, arm64, `ff77c09b1c12`), recorrido completo desde la foto original: diferencia máxima **0,0130**, latencia 1076 ms en frío y **648 ms en caliente**; `flutter test integration_test/inference_test.dart -d …` PASS |
+| Web, recorrido completo desde la foto original | Chromium real con tfjs 4.20.0 (WebGL): decodificación, orientación EXIF, redimensionado con antialias, normalización e inferencia; diferencia máxima **0,0070** frente al servidor |
+| Límite declarado | Ejecución local y equivalencia numérica no acreditan calidad del modelo (sigue experimental) ni distribución autorizada |
 
 ### Candidato con licencia verificable (SYNDCAR, CC BY 4.0)
 

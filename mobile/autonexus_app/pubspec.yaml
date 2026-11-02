@@ -65,6 +65,7 @@ flutter:
     - assets/models/model.tflite
     - assets/models/manifest.json
     - assets/samples/sample.jpg
+    - assets/samples/reference.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

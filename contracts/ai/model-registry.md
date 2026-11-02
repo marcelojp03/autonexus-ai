@@ -74,6 +74,10 @@ produjeron, así que un resultado antiguo nunca se atribuye a un modelo nuevo.
 
 Lectura: el mismo modelo que acierta casi perfecto en el dispositivo de validación cae a 0,47 al
 cambiar de dispositivo de captura. Es el tipo de comparación que un split aleatorio habría ocultado.
+**Estas cifras no son comparables con las del agregado**: distinto conjunto de etiquetas (4 clases de
+daño frente a 4 distintas), dominio sintético frente a fotografías reales, y partición por
+dispositivo frente a partición por hash de ruta. Sirven para decidir si vale la pena seguir por esta
+vía, no para decir «mejor» o «peor» que el artefacto servido.
 Además el conjunto es **sintético** y no trae clase «sin daño»: 14 imágenes sin caja se reportan
 aparte (14/14 marcadas, IC95 0,78–1,00) porque en un set sintético la ausencia de cajas puede ser una
 anotación faltante, no un vehículo sano. No se integra: no supera al artefacto actual en el uso real
@@ -90,3 +94,21 @@ y no hay negativos fiables.
 Artefacto: `tfjs/model.json` + 3 fragmentos de pesos, generado desde el `SavedModel` de la corrida
 servida. Scripts: `scripts/cu22/verify-tfjs.mjs` y `scripts/cu22/verify-tfjs-cu22-browser.mjs`
 (referencia y entradas fijas en `tfjs-check/`).
+## Recorrido completo desde la fotografía original (2026-11-02)
+
+La equivalencia anterior comparaba tensores ya preprocesados. Estas dos ejecuciones cubren el camino
+completo: **decodificación → orientación EXIF → redimensionado con antialias → normalización →
+inferencia**, contra la referencia del servidor calculada sobre los mismos bytes.
+
+| Plataforma | Dispositivo / runtime | `runId` | Diferencia máxima | Latencia | Resultado |
+| --- | --- | --- | --- | --- | --- |
+| Android | **Mi A3, Android 16 (API 36), arm64** (`ff77c09b1c12`), LiteRT con 4 hilos | `20261101T-with-negatives` | **0,0130** (crack 0,0060 · dent 0,0130 · glass_shatter 0,0007 · scratch 0,0001) | 1076 ms en frío · **648 ms en caliente** | PASS |
+| Web | Chromium real, `@tensorflow/tfjs` 4.20.0 backend **WebGL** | `20261101T-with-negatives` | **0,0070** (crack 0,0063 · dent 0,0070 · glass_shatter 0,0002 · scratch 0,0002) | — | PASS |
+
+Hallazgo por el camino: el redimensionado del paquete `image` (`linear` y luego `average`) desviaba
+la puntuación de `scratch` hasta 0,084 porque su soporte no escala con el factor de reducción. Se
+implementó en Dart y en JS el mismo filtro triangular con soporte proporcional que usa
+`tf.image.resize(antialias=True)`, y la desviación bajó a 0,013 / 0,007. Sin eso, «funciona en el
+dispositivo» habría sido una afirmación falsa: daba números distintos a los del servidor.
+
+Evidencia: `output/cu23/device-inference.json`, `output/cu23/tfjs-photo-browser.json`.

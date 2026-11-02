@@ -30,7 +30,13 @@ void main() {
 
     final data = await rootBundle.load('assets/samples/sample.jpg');
     final bytes = Uint8List.view(data.buffer);
+    final cold = await classifier.analyse(bytes);
+    // ignore: avoid_print
+    print('CU22 device cold=${cold.latencyMs.toStringAsFixed(1)}ms');
+    // ignore: avoid_print
     final result = await classifier.analyse(bytes);
+    // ignore: avoid_print
+    print('CU22 device cold=ms warm=ms');
 
     expect(result.scores.length, expected.length);
     final deltas = <String, double>{};

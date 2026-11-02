@@ -10,6 +10,9 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
 const root = resolve('output/cu23/browser-check');
+const pageName = process.env.CU22_PAGE ?? 'index.html';
+const resultKey = pageName === 'photo.html' ? '__cu22photo' : '__cu22';
+const outputFile = pageName === 'photo.html' ? 'output/cu23/tfjs-photo-browser.json' : 'output/cu23/tfjs-browser.json';
 const port = Number(process.env.CU22_PORT ?? 4291);
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.bin': 'application/octet-stream' };
 
@@ -35,16 +38,16 @@ try {
   const page = await browser.newPage();
   const consoleErrors = [];
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200)); });
-  await page.goto(report.origin + '/index.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => Boolean(window.__cu22), null, { timeout: 180000 });
-  const result = await page.evaluate(() => window.__cu22);
+  await page.goto(report.origin + '/' + pageName, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(key => Boolean(window[key]), resultKey, { timeout: 180000 });
+  const result = await page.evaluate(key => window[key], resultKey);
   report.result = result;
   report.consoleErrors = consoleErrors;
   report.pass = Boolean(result?.equivalent) && consoleErrors.length === 0;
 } catch (error) {
   report.error = String(error?.message ?? error).slice(0, 300);
 } finally {
-  writeFileSync(resolve('output/cu23/tfjs-browser.json'), JSON.stringify(report, null, 2));
+  writeFileSync(resolve(outputFile), JSON.stringify(report, null, 2));
   await browser?.close();
   server.close();
   console.log(JSON.stringify({ pass: report.pass, maxAbsDelta: report.result?.maxAbsDelta, backend: report.result?.runtime, error: report.error }));

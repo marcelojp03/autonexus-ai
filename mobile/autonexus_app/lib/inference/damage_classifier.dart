@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as img;
+
+import 'antialias_resize.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 /// CU22 — on-device inference with the LiteRT artefact produced by CU23.
@@ -30,36 +32,18 @@ class DamageClassifier {
   }) async {
     final interpreter = await Interpreter.fromAsset(
       asset,
-      options: InterpreterOptions()..threads = 2,
+      options: InterpreterOptions()..threads = 4,
     );
     final manifestRaw = await rootBundle.loadString(manifestAsset);
     return DamageClassifier._(interpreter, ManifestData.parse(manifestRaw));
   }
 
-  /// Preprocessed tensor, exposed so the device test can compare it with the training pipeline.
+  /// Decode, apply the EXIF orientation, downscale with the same antialiased kernel as training and
+  /// normalize. Exposed so the device test compares the whole pipeline, not only the interpreter.
   List<List<List<List<double>>>> preprocess(Uint8List bytes) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) throw const FormatException('La imagen no se pudo decodificar');
-    final rgb = decoded.convert(numChannels: 3);
-    final resized = img.copyResize(
-      rgb,
-      width: inputSize,
-      height: inputSize,
-      interpolation: img.Interpolation.linear,
-      maintainAspect: false,
-    );
-    return [
-      List.generate(inputSize, (y) {
-        return List.generate(inputSize, (x) {
-          final pixel = resized.getPixel(x, y);
-          return [
-            (pixel.r.toDouble() / 127.5) - 1.0,
-            (pixel.g.toDouble() / 127.5) - 1.0,
-            (pixel.b.toDouble() / 127.5) - 1.0,
-          ];
-        });
-      }),
-    ];
+    return [AntialiasResize.run(decoded, inputSize)];
   }
 
   /// Runs inference on the given tensor and reports scores plus elapsed milliseconds.
