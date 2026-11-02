@@ -73,3 +73,6 @@ id_ed25519
 
 # Verificación CU03 web (artefactos locales regerables)
 /output-cu03web/
+
+# Incrementales de compilación de MS05
+services/sync/*.tsbuildinfo
