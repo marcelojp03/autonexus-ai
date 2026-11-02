@@ -1,0 +1,9 @@
+# Experimental: export-only toolchain for CU22 (TensorFlow.js).
+# AUTONEXUS STATE: the conversion is currently BLOCKED. `tensorflowjs==4.22.0` depends on
+# yggdrasil-decision-forests, whose generated protobuf code requires a newer protobuf runtime than
+# TensorFlow 2.16 pins; importing the converter raises
+#   VersionError: gencode 6.31.1 runtime 5.29.6
+# Pinning protobuf 6.31.1 was reverted by the resolver. The plan is a separate image on a newer
+# TensorFlow (2.17+) where tfjs converter, TF and protobuf agree, then verify equivalence in Node.
+FROM autonexus-ml:local
+RUN python -m pip install --no-cache-dir "tensorflowjs==4.22.0"

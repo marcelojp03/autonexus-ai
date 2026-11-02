@@ -40,6 +40,7 @@ Correcciones del plan: IA+offline+MCP son **41 puntos**; la referencia del 70 % 
 | Identidad de artefactos | Antes una corrida sobrescribía a la anterior | Cada corrida tiene `runId` propio, directorio propio (`exist_ok=False`), `artifact.sha256` y `preprocessingFingerprint`; el servicio publica `runId`; registro en `contracts/ai/model-registry.md` |
 | Licencia | CarDD exige formulario y autorización; el CC BY 4.0 del agregado no la cubre | Borrador de solicitud en `docs/legal/cardd-authorization-request.md` (**no enviado**); pesos no declarados distribuibles |
 | Re-verificación | Artefacto nuevo y servicio reiniciado | API real **14 etapas PASS**; navegador real **7 etapas PASS**, 0 errores |
+| CU22 · TensorFlow.js | La conversión falla al importar el conversor: `VersionError` protobuf gencode 6.31.1 vs runtime 5.29.6 (`tensorflowjs` arrastra yggdrasil-decision-forests) | **No** se produce artefacto web ni se acredita equivalencia en navegador; LiteRT float32 sí está verificado (3e-06). Plan: imagen separada con TF 2.17+ y verificación en Node con `@tensorflow/tfjs` |
 ### Correcciones tras la revisión de datos y modelos (2026-11-01)
 
 | Punto revisado | Hallazgo | Acción |

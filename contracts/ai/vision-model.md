@@ -125,3 +125,27 @@ CU22 con un runtime JS.
   localiza el daño: para recuadros o áreas hace falta un detector/segmentador.
 - Sin `manifest.json` y `model.keras`, MS04 responde `503 MODEL_NOT_READY`; nunca sustituye la
   inferencia por un clasificador genérico.
+## Estado de la conversión a TensorFlow.js (CU22) — bloqueada, no acreditada
+
+Intento ejecutado con `tensorflowjs==4.22.0` sobre el `SavedModel` del artefacto servido. La
+importación del conversor falla antes de convertir:
+
+```
+google.protobuf.runtime_version.VersionError: Detected incompatible Protobuf Gencode/Runtime
+versions when loading yggdrasil_decision_forests/dataset/data_spec.proto: gencode 6.31.1
+runtime 5.29.6.
+```
+
+Causa: `tensorflowjs` arrastra `yggdrasil-decision-forests`, cuyo código generado exige un runtime de
+protobuf más nuevo que el que fija TensorFlow 2.16; fijar `protobuf==6.31.1` en la imagen de
+exportación no se sostiene (el resolvedor vuelve a 5.29.6).
+
+Consecuencias declaradas:
+
+- **No** se produce artefacto web y **no** se acredita equivalencia en navegador.
+- El camino verificado hoy para reutilización es **móvil/LiteRT**: `model.tflite` float32 con
+  diferencia máxima 3,0e-06 (tolerancia 1e-3).
+- Plan concreto: imagen de conversión separada sobre TensorFlow 2.17+ (donde conversor, TF y
+  protobuf son compatibles), convertir desde el `SavedModel`, y verificar equivalencia en Node con
+  `@tensorflow/tfjs` sobre un lote fijo de imágenes ya preprocesadas.
+- Sin esa verificación, CU22 **no** puede declarar funcionamiento offline en web.
