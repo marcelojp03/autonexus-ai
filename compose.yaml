@@ -7,7 +7,7 @@ services:
       dockerfile: "infra/local/docker/bootstrap.Dockerfile"
     environment:
       PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-4280}}"
-    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-intelligence:/config/intelligence","config-mongo:/config/mongo","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
+    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-intelligence:/config/intelligence","config-mongo:/config/mongo","config-sync:/config/sync","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
     init: true
     command: ["init"]
   postgres:
@@ -108,7 +108,7 @@ services:
       dockerfile: "infra/local/docker/bootstrap.Dockerfile"
     environment:
       PUBLIC_ORIGIN: "${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-4280}}"
-    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-intelligence:/config/intelligence","config-mongo:/config/mongo","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
+    volumes: ["bootstrap-state:/state","config-postgres:/config/postgres","config-idp-postgres:/config/idp-postgres","config-keycloak:/config/keycloak","config-rabbitmq:/config/rabbitmq","config-employees:/config/employees","config-operations:/config/operations","config-finance:/config/finance","config-intelligence:/config/intelligence","config-mongo:/config/mongo","config-sync:/config/sync","config-bff:/config/bff","config-public:/config/public","config-demo:/config/demo"]
     init: true
     command: ["provision"]
     depends_on:
@@ -273,6 +273,46 @@ services:
       retries: 40
       start_period: "20s"
     restart: "unless-stopped"
+  dynamodb:
+    # DynamoDB Local: test database for MS05. It does NOT prove an AWS deployment, and this compose
+    # file creates no cloud resource.
+    image: "amazon/dynamodb-local:2.5.2"
+    command: ["-jar","DynamoDBLocal.jar","-inMemory","-sharedDb"]
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    healthcheck:
+      test: ["CMD-SHELL","exec 3<>/dev/tcp/127.0.0.1/8000"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 30
+      start_period: "5s"
+    restart: "unless-stopped"
+  sync:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-sync:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/sync.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-sync:/run/config:ro"]
+    depends_on:
+      dynamodb:
+        condition: "service_healthy"
+      employees:
+        condition: "service_healthy"
+      operations:
+        condition: "service_healthy"
+      intelligence:
+        condition: "service_started"
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:3005/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 30
+      start_period: "10s"
+    restart: "unless-stopped"
   bff:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bff:local"
     build:
@@ -368,6 +408,7 @@ volumes:
   config-finance: {}
   config-intelligence: {}
   config-mongo: {}
+  config-sync: {}
   config-bff: {}
   config-public: {}
   config-demo: {}

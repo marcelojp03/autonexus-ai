@@ -6,7 +6,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { provisionIdentity } from './bootstrap/identity.mjs';
 import { exchange, deadExchange, vhost, queues, permissions, topicPermissions, queueArguments } from '../rabbitmq/scripts/topology.mjs';
 
-export const consumers = ['postgres', 'idp-postgres', 'keycloak', 'rabbitmq', 'employees', 'operations', 'finance', 'intelligence', 'mongo', 'bff', 'public', 'demo'];
+export const consumers = ['postgres', 'idp-postgres', 'keycloak', 'rabbitmq', 'employees', 'operations', 'finance', 'intelligence', 'mongo', 'sync', 'bff', 'public', 'demo'];
 /** Secrets added after the first bootstrap version; an existing state gains them additively. */
 export const additiveSecrets = ['mongo'];
 export const requiredSecrets = ['postgres', 'idpAdmin', 'idpPostgres', 'keycloak', 'rabbitmq', 'employeesClient', 'coordinatorClient', ...['employees', 'operations', 'finance'].flatMap(owner => [owner + 'Db', owner + 'Rabbit'])];
@@ -51,7 +51,17 @@ export function configuration(state) {
       OPERATIONS_API_URL: 'http://operations:8081',
       INTELLIGENCE_MODEL_DIR: '/models',
     },
-    bff: { ...auth, HTTP_HOST: '0.0.0.0', PORT: 3004, EMPLOYEES_API_URL: 'http://employees:3002', OPERATIONS_API_URL: 'http://operations:8081', FINANCE_API_URL: 'http://finance:8000', INTELLIGENCE_API_URL: 'http://intelligence:8000' },
+    sync: {
+      ...auth,
+      HTTP_HOST: '0.0.0.0',
+      PORT: 3005,
+      OIDC_AUDIENCES: ['autonexus-operations-api', 'autonexus-employees-api', 'autonexus-intelligence-api'].join(','),
+      SYNC_TABLE: 'sync_overlays',
+      AWS_REGION: 'us-east-1',
+      DYNAMODB_ENDPOINT: 'http://dynamodb:8000',
+      OPERATIONS_API_URL: 'http://operations:8081',
+      INTELLIGENCE_API_URL: 'http://intelligence:8000',
+    },    bff: { ...auth, HTTP_HOST: '0.0.0.0', PORT: 3004, EMPLOYEES_API_URL: 'http://employees:3002', OPERATIONS_API_URL: 'http://operations:8081', FINANCE_API_URL: 'http://finance:8000', INTELLIGENCE_API_URL: 'http://intelligence:8000' },
     public: { PUBLIC_ORIGIN: publicOrigin }, demo: { PUBLIC_ORIGIN: publicOrigin, OIDC_ISSUER_URI: issuer },
   };
   for (const owner of ['employees', 'operations', 'finance']) {

@@ -44,7 +44,6 @@ infra/compose/secrets
 **/.scaffold-*
 docs
 mobile
-services/sync
 # CU23: the visual model toolchain and the intelligence service are built from source.
 # Datasets and trained artefacts stay out of the build context (they are operator-provided).
 ml/data
