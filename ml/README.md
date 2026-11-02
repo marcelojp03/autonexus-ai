@@ -62,3 +62,22 @@ artefacto el servicio responde `503 MODEL_NOT_READY` y **no** inventa puntajes.
   el resultado se sigue sirviendo, pero no se presenta como capacidad medida.
 - No hay reentrenamiento automático: volver a entrenar es una ampliación controlada y cambia
   `modelVersion`.
+## Auditoría y comparación (antes de creer en un número)
+
+```sh
+# Duplicados exactos/casi duplicados, solapamiento de sesión de captura y negativos
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/audit_dataset.py
+# Reevaluación del artefacto servido sobre el test que sobrevive a la auditoría
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/reeval_clean.py
+# Equivalencia entrenamiento <-> servicio (monta el código del servicio real)
+docker run --rm -v "$PWD/ml:/work" -v "$PWD/services/intelligence/app:/app/app:ro" \
+  autonexus-ml:local training/check_preprocessing.py --service-app /app/app
+# Comparación de backbones: mismo protocolo, se elige por validación
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/compare_models.py --subset 4000
+```
+
+Resultados medidos (2026-11-01): 70 duplicados exactos entre splits, 105 casi duplicados en test,
+315 solapamientos de sesión, **0 imágenes sin daño**; macro F1 0,6927 en test completo y 0,6920 en
+test limpio. MobileNetV2 congelado gana la comparación (0,6631 de validación) frente a ajuste de
+últimas capas (0,6560), V3-Small (0,4994) y V3-Large (0,5181). Detalle en
+[`contracts/ai/vision-model.md`](../contracts/ai/vision-model.md).

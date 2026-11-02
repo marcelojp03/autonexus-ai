@@ -31,6 +31,20 @@ Verificado con ejecución real sobre dos trabajos sintéticos: checklist incompl
 El historial quedó resuelto: la proyección SQL fijaba `execution_status` en `in_progress`, el mapeo compartido reaplicaba la puerta de compensación de la vista activa y los enums GraphQL no aceptaban los estados de revisión. Historia usa ahora una proyección de trabajo cerrado y la vista activa conserva sus comprobaciones. Revisión independiente del bloque resuelta: detectó que la agenda activa rechazaba `pending_verification` (la cola de jefatura fallaba en revisión) y que un trabajo completado perdía su detalle; ambos corregidos con regresión unitaria. Entrega integrada por fast-forward y publicada; `main` y `work/marcelo` en `6f954a7`. Interfaz de jefatura y de historial incluidas. Regresión focalizada del crítico ejecutada sobre escenarios **nuevos sembrados por las APIs reales** (dos ejecuciones de la siembra, 5 empleados y 2 trabajos confirmados cada una, sin forzar estados por SQL): **19/19 PASS**, incluida la cola de jefatura con el trabajo en revisión, el detalle de un trabajo en revisión, el detalle de un trabajo completado, el ciclo completo mecanico→devolución→reenvío→aprobación y el historial posterior.
 
 Correcciones del plan: IA+offline+MCP son **41 puntos**; la referencia del 70 % es **72**; los 102 puntos son estimación interna del reparto, no puntaje oficial; el modelo de duración (CU24) no acredita visión y el reutilizable web/móvil es el modelo visual (CU22/CU23); MCP y n8n no dependen de cobros ni indicadores.
+### Correcciones tras la revisión de datos y modelos (2026-11-01)
+
+| Punto revisado | Hallazgo | Acción |
+| --- | --- | --- |
+| Licencia del dataset | El agregado declara CC BY 4.0, pero CarDD exige formulario y autorización para entregar sus datos | Se retira «licencia verificada»; queda como referencia técnica **restringida** (`contracts/ai/dataset-provenance.md`). Las imágenes y los pesos no se versionan ni se declaran distribuibles |
+| Preprocesamiento entrenamiento ↔ servicio | Pillow en el servicio vs TensorFlow en el entrenamiento: diferencia máxima de puntaje **0,293** | Unificado en una sola implementación (ops TF en el servicio); medición actual **0,000** sobre 20 imágenes |
+| Duplicados y sesiones | 70 duplicados exactos entre splits, 105 casi duplicados en test, 315 solapamientos de sesión de captura | Reevaluado sobre el test limpio (1.694 de 2.093): macro F1 **0,6927 → 0,6920**, la fuga no explicaba el resultado |
+| Fotografías sin daño | **0** en los tres splits | Se retira toda métrica de «algún daño»; no se puede estimar tasa de falsas alarmas |
+| Comparación de modelos | V2 congelado 0,6631 · V2 ajuste últimas 40 capas 0,6560 · V3-Small 0,4994 · V3-Large 0,5181 (validación, mismo protocolo) | Se mantiene MobileNetV2 congelado; cambiar de modelo es cambiar el artefacto, no la plataforma |
+| Métricas finales del artefacto servido | `scratch` F1 0,821 · `glass_shatter` 0,757 · `dent` 0,742 · `crack` 0,451; macro **0,6927** | Publicadas con test completo y test limpio en `contracts/ai/vision-model.md` |
+| Export móvil | TFLite float32 equivalente (3e-06); fp16 **no** (0,0117); TFJS no producido | Declarado; la equivalencia web queda para CU22 |
+
+Re-verificación tras los cambios: API real **14 etapas PASS** y navegador real **7 etapas PASS**
+(0 errores de consola, página o 5xx) con el artefacto reentrenado y el preprocesamiento unificado.
 ## CU16 — ejecución y evidencias verificadas contra AWS S3 real (2026-10-30)
 
 En work/marcelo quedó implementado el estado de ejecución separado de la confirmación CU15: la orden conserva confirmed y el agregado de ejecución queda in_progress hasta CU17. El mecánico activo y asignado es el único que inicia y registra avances/evidencias; jefatura consulta y descarga sin escribir. La agenda CU05 muestra estado y progreso, y el detalle enlaza al trabajo ya seleccionado en CU16. El BFF autoriza cada campo GraphQL por permiso; los bytes van por PUT directo a una URL prefirmada sin JWT.

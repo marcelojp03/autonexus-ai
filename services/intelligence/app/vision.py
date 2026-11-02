@@ -7,7 +7,6 @@ answer with scores - it never substitutes a generic ImageNet classifier or a heu
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -148,7 +147,7 @@ class VisionModel:
     def analyze(self, payload: bytes, declared_content_type: str | None = None) -> Prediction:
         if self._model is None:
             raise InteligenciaError("MODEL_NOT_READY", 503)
-        content_type, width, height, array = self._decode(payload, declared_content_type)
+        content_type, width, height, array = self._prepare(payload, declared_content_type)
         scores = self._model.predict(array, verbose=0)[0]
         labels = tuple(
             LabelScore(
@@ -172,7 +171,17 @@ class VisionModel:
             content_type=content_type,
         )
 
-    def _decode(self, payload: bytes, declared_content_type: str | None) -> tuple[str, int, int, "object"]:
+    def preview(self, payload: bytes, declared_content_type: str | None = None) -> "object":
+        """Preprocessed tensor for the equivalence check (same code path as `analyze`)."""
+        return self._prepare(payload, declared_content_type)[3][0]
+
+    def _prepare(self, payload: bytes, declared_content_type: str | None) -> tuple[str, int, int, "object"]:
+        """Decode, resize and scale with the *same* TensorFlow ops used for training.
+
+        The first implementation used Pillow here and TensorFlow in training; the measured score
+        delta was 0.29, so the two pipelines were not interchangeable. Keeping one implementation
+        removes the whole class of drift and is verified by ml/training/check_preprocessing.py.
+        """
         if not payload:
             raise InteligenciaError("IMAGE_INVALID", 400)
         content_type = next((value for magic, value in MAGIC.items() if payload.startswith(magic)), None)
@@ -182,23 +191,20 @@ class VisionModel:
             raise InteligenciaError("IMAGE_INVALID", 400)
 
         import numpy as np
-        from PIL import Image, UnidentifiedImageError
+        import tensorflow as tf
 
-        Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+        size = int(self._manifest["preprocessing"]["inputSize"][0])  # type: ignore[index]
         try:
-            with Image.open(io.BytesIO(payload)) as image:
-                image.load()
-                rgb = image.convert("RGB")
-                width, height = rgb.size
-                if width < 32 or height < 32:
-                    raise InteligenciaError("IMAGE_INVALID", 400)
-                size = int(self._manifest["preprocessing"]["inputSize"][0])  # type: ignore[index]
-                resized = rgb.resize((size, size), Image.BILINEAR)
-                values = np.asarray(resized, dtype="float32")
+            decoded = tf.io.decode_image(payload, channels=3, expand_animations=False)
+            height = int(decoded.shape[0])
+            width = int(decoded.shape[1])
+            if width < 32 or height < 32 or width * height > MAX_PIXELS:
+                raise InteligenciaError("IMAGE_INVALID", 400)
+            resized = tf.image.resize(decoded, (size, size), method="bilinear", antialias=True)
+            values = tf.keras.applications.mobilenet_v2.preprocess_input(tf.cast(resized, tf.float32))
+            normalized = values.numpy()
         except InteligenciaError:
             raise
-        except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as error:
+        except Exception as error:  # noqa: BLE001 - any decode failure is an invalid image
             raise InteligenciaError("IMAGE_INVALID", 400, cause=error) from error
-        # Identical to keras.applications.mobilenet_v2.preprocess_input for RGB uint8 input.
-        normalized = values / 127.5 - 1.0
         return content_type, width, height, np.expand_dims(normalized, axis=0)

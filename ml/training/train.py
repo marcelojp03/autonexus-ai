@@ -57,7 +57,9 @@ def preprocess(image_path) -> np.ndarray:
 
     raw = tf.io.read_file(image_path)
     image = tf.io.decode_jpeg(raw, channels=3)
-    image = tf.image.resize(image, (IMAGE_SIZE, IMAGE_SIZE), method="bilinear")
+    # antialias=True matches the service downscale (Pillow BILINEAR antialiases); without it the
+    # served scores drifted by up to 0.30 from the trained pipeline (see preprocessing.json).
+    image = tf.image.resize(image, (IMAGE_SIZE, IMAGE_SIZE), method="bilinear", antialias=True)
     return tf.keras.applications.mobilenet_v2.preprocess_input(tf.cast(image, tf.float32))
 
 
