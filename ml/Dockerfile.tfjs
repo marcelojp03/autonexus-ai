@@ -1,0 +1,13 @@
+# Isolated, reproducible TensorFlow.js conversion environment for CU22.
+#
+# The main training image is pinned to TensorFlow 2.16 for the service artefacts. Converting to
+# TensorFlow.js needs a *different* dependency set, so it lives here instead of touching the runtime:
+# TF 2.15 + tfjs 4.20 is the pair whose tensorflow-decision-forests dependency still agrees with the
+# protobuf runtime TF pins (2.16 + tfjs 4.22 fails with "gencode 6.31.1 / runtime 5.29.6").
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 TF_CPP_MIN_LOG_LEVEL=2
+RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN python -m pip install --no-cache-dir "tensorflow-cpu==2.15.1" "tensorflowjs==4.20.0" "numpy==1.26.4" "pillow==10.4.0"
+WORKDIR /work
+ENTRYPOINT ["python"]

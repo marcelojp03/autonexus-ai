@@ -1,0 +1,18 @@
+{
+  "modelVersion": "automotive-damage-mobilenetv2-v1",
+  "runId": "20261101T-with-negatives",
+  "labels": [
+    "crack",
+    "dent",
+    "glass_shatter",
+    "scratch"
+  ],
+  "scores": [
+    0.204181,
+    0.725457,
+    0.013713,
+    0.474346
+  ],
+  "imageSha256": "b15ca66bb50b581f3db4e735041907132be962b7183d1f1215f8b640f1b8847d",
+  "bytes": 39808
+}

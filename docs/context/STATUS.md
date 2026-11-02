@@ -36,6 +36,22 @@ Verificado con ejecución real sobre dos trabajos sintéticos: checklist incompl
 El historial quedó resuelto: la proyección SQL fijaba `execution_status` en `in_progress`, el mapeo compartido reaplicaba la puerta de compensación de la vista activa y los enums GraphQL no aceptaban los estados de revisión. Historia usa ahora una proyección de trabajo cerrado y la vista activa conserva sus comprobaciones. Revisión independiente del bloque resuelta: detectó que la agenda activa rechazaba `pending_verification` (la cola de jefatura fallaba en revisión) y que un trabajo completado perdía su detalle; ambos corregidos con regresión unitaria. Entrega integrada por fast-forward y publicada; `main` y `work/marcelo` en `6f954a7`. Interfaz de jefatura y de historial incluidas. Regresión focalizada del crítico ejecutada sobre escenarios **nuevos sembrados por las APIs reales** (dos ejecuciones de la siembra, 5 empleados y 2 trabajos confirmados cada una, sin forzar estados por SQL): **19/19 PASS**, incluida la cola de jefatura con el trabajo en revisión, el detalle de un trabajo en revisión, el detalle de un trabajo completado, el ciclo completo mecanico→devolución→reenvío→aprobación y el historial posterior.
 
 Correcciones del plan: IA+offline+MCP son **41 puntos**; la referencia del 70 % es **72**; los 102 puntos son estimación interna del reparto, no puntaje oficial; el modelo de duración (CU24) no acredita visión y el reutilizable web/móvil es el modelo visual (CU22/CU23); MCP y n8n no dependen de cobros ni indicadores.
+### CU22 — reutilización del modelo en web y Android, con evidencia ejecutada (2026-11-02)
+
+| Comprobación | Resultado observado |
+| --- | --- |
+| Entorno de conversión aislado | `ml/Dockerfile.tfjs` (TF-CPU 2.15.1 + `tensorflowjs` 4.20.0 + protobuf 4.25.9): el conversor importa y convierte. El bloqueo anterior era la combinación 2.16/4.22, no «subir de versión» |
+| Equivalencia en Node | `@tensorflow/tfjs` 4.20.0 (CPU): diferencia máxima **3e-06** frente a Keras sobre 20 imágenes preprocesadas idénticas |
+| Ejecución en navegador | Chromium real, backend **WebGL**: diferencia máxima **2e-06**, 0 errores de consola (`output/cu23/tfjs-browser.json`) |
+| Android | App Flutter en `mobile/autonexus_app` con LiteRT: `flutter analyze` sin hallazgos y **APK construido**; la inferencia en dispositivo queda **pendiente** (teléfono sin autorizar, emulador no llega a `online`) |
+| Límite declarado | Compilar no es ejecutar; la equivalencia del artefacto es numérica, no una prueba de calidad del modelo, que sigue experimental |
+
+### Candidato con licencia verificable (SYNDCAR, CC BY 4.0)
+
+Descargado el ZIP público (3 GB) desde Mendeley con navegador automatizado. Entrenado desde pesos
+ImageNet con cabeza nueva y **split por dispositivo de captura**: validación 0,9836 · test 0,4747
+(21 imágenes). La caída al cambiar de dispositivo muestra por qué un split aleatorio habría engañado.
+No se integra: es sintético, no tiene clase «sin daño» y no supera al artefacto servido.
 ### Negativos, identidad de artefactos y autorización (2026-11-01)
 
 | Punto | Resultado medido | Acción |

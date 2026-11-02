@@ -66,3 +66,27 @@ docker run --rm -v "$PWD/ml:/work" autonexus-ml:local -c "import json,hashlib,pa
 Copiar el directorio de la corrida anterior a `INTELLIGENCE_MODEL_PATH` y reiniciar el servicio. No
 hay migración de datos: los análisis guardados conservan el `modelVersion`/`runId` con el que se
 produjeron, así que un resultado antiguo nunca se atribuye a un modelo nuevo.
+## Candidato entrenado sólo con datos de licencia verificable (2026-11-02)
+
+| `runId` | Dataset | Split | Macro F1 validación | Macro F1 test | Estado |
+| --- | --- | --- | --- | --- | --- |
+| `20261102T-syndcar-device-split` | SYNDCAR (CC BY 4.0, sintético, 245 imágenes) | **por dispositivo de captura**: ID1 entrena (177), ID2 valida (47), ID3–ID5 test (21) | 0,9836 | **0,4747** | Candidato documentado; **no** servido |
+
+Lectura: el mismo modelo que acierta casi perfecto en el dispositivo de validación cae a 0,47 al
+cambiar de dispositivo de captura. Es el tipo de comparación que un split aleatorio habría ocultado.
+Además el conjunto es **sintético** y no trae clase «sin daño»: 14 imágenes sin caja se reportan
+aparte (14/14 marcadas, IC95 0,78–1,00) porque en un set sintético la ausencia de cajas puede ser una
+anotación faltante, no un vehículo sano. No se integra: no supera al artefacto actual en el uso real
+y no hay negativos fiables.
+
+## Conversión TensorFlow.js — desbloqueada y verificada (2026-11-02)
+
+| Comprobación | Resultado |
+| --- | --- |
+| Entorno aislado (`ml/Dockerfile.tfjs`) | TF-CPU 2.15.1 + `tensorflowjs` 4.20.0 + protobuf 4.25.9: el conversor **importa** y convierte (el conflicto de 2.16/4.22 era la combinación, no la versión de TF sola) |
+| Equivalencia en Node (`@tensorflow/tfjs` 4.20.0, CPU) | Diferencia máxima **3e-06** sobre 20 imágenes, tolerancia 1e-2 |
+| Equivalencia en navegador (Chromium, backend WebGL) | Diferencia máxima **2e-06**, 0 errores de consola |
+
+Artefacto: `tfjs/model.json` + 3 fragmentos de pesos, generado desde el `SavedModel` de la corrida
+servida. Scripts: `scripts/cu22/verify-tfjs.mjs` y `scripts/cu22/verify-tfjs-cu22-browser.mjs`
+(referencia y entradas fijas en `tfjs-check/`).
