@@ -33,6 +33,7 @@ class LabelScore:
 class Prediction:
     labels: tuple[LabelScore, ...]
     model_version: str
+    run_id: str | None
     task: str
     threshold: float
     insufficient_data: bool
@@ -44,6 +45,7 @@ class Prediction:
     def as_dict(self) -> dict[str, object]:
         return {
             "modelVersion": self.model_version,
+            "runId": self.run_id,
             "task": self.task,
             "threshold": self.threshold,
             "insufficientData": self.insufficient_data,
@@ -58,6 +60,7 @@ class Prediction:
 class ModelStatus:
     ready: bool
     model_version: str | None
+    run_id: str | None
     labels: tuple[str, ...]
     reason: str | None
     insufficient_data: bool
@@ -66,6 +69,7 @@ class ModelStatus:
         return {
             "ready": self.ready,
             "modelVersion": self.model_version,
+            "runId": self.run_id,
             "labels": list(self.labels),
             "insufficientData": self.insufficient_data,
             "reason": self.reason,
@@ -133,6 +137,7 @@ class VisionModel:
         return ModelStatus(
             ready=self._model is not None,
             model_version=manifest.get("modelVersion"),
+            run_id=manifest.get("runId"),
             labels=self._labels,
             reason=self._reason,
             insufficient_data=insufficient,
@@ -162,6 +167,7 @@ class VisionModel:
         return Prediction(
             labels=labels,
             model_version=str(self._manifest["modelVersion"]),
+            run_id=self._manifest.get("runId"),
             task=str(self._manifest.get("task", "automotive-surface-damage-multilabel")),
             threshold=min(self._thresholds.values()),
             insufficient_data=status.insufficient_data,

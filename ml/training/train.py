@@ -41,13 +41,14 @@ def sha256_of(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def load_rows(index: Path, split: str, raw: Path) -> tuple[list[Path], np.ndarray]:
+def load_rows(index: Path, split: str, raw: Path, root: Path) -> tuple[list[Path], np.ndarray]:
     paths: list[Path] = []
     targets: list[list[int]] = []
     with (index / f"{split}.jsonl").open(encoding="utf-8") as handle:
         for line in handle:
             row = json.loads(line)
-            paths.append(raw / row["image"])
+            # Licensed negatives live under the data root, not inside the dataset snapshot.
+            paths.append(root / row["image"] if row["image"].startswith("negatives/") else raw / row["image"])
             targets.append(row["labels"])
     return paths, np.asarray(targets, dtype=np.int8)
 
@@ -150,6 +151,7 @@ def main() -> int:
     parser.add_argument("--artifacts", default="/work/artifacts")
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch", type=int, default=32)
+    parser.add_argument("--run-id", default="", help="explicit run identifier; defaults to a UTC timestamp")
     args = parser.parse_args()
 
     import tensorflow as tf
@@ -164,7 +166,7 @@ def main() -> int:
     if not raw.exists():
         raw = root / "raw" / dataset["name"].replace("/", "__")
 
-    splits = {split: load_rows(index, split, raw) for split in ("train", "validation", "test")}
+    splits = {split: load_rows(index, split, raw, root) for split in ("train", "validation", "test")}
 
     # Keep only labels the evaluation split can support; the rest are reported, not shipped.
     test_positives = splits["test"][1].sum(axis=0)
@@ -180,7 +182,7 @@ def main() -> int:
     base_sha = sha256_of(weights_file)
 
     features = {
-        split: extract_features(base, paths, root / "features" / f"{MODEL_VERSION}-{split}.npz", args.batch)
+        split: extract_features(base, paths, root / "features" / f"{MODEL_VERSION}-{split}-{len(paths)}.npz", args.batch)
         for split, (paths, _) in splits.items()
     }
 
@@ -236,23 +238,30 @@ def main() -> int:
     model.get_layer("damage_labels").set_weights(head.get_layer("damage_labels").get_weights())
     model.trainable = False
 
-    artifacts = Path(args.artifacts) / MODEL_VERSION
-    artifacts.mkdir(parents=True, exist_ok=True)
+    # Each run gets its own directory: a retrain must never overwrite the identity - or the
+    # metrics - of a previous run. The service points at one concrete run directory.
+    run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    artifacts = Path(args.artifacts) / MODEL_VERSION / run_id
+    artifacts.mkdir(parents=True, exist_ok=False)
     model_path = artifacts / "model.keras"
     model.save(model_path)
+    preprocessing = {
+        "inputSize": [IMAGE_SIZE, IMAGE_SIZE],
+        "colorMode": "RGB",
+        "resize": "tf.image.resize bilinear, antialias=True (identical in training and in the service)",
+        "scale": "keras.applications.mobilenet_v2.preprocess_input ([-1, 1])",
+        "decoder": "tf.io.decode_image (JPEG/PNG)",
+    }
 
     manifest = {
         "modelVersion": MODEL_VERSION,
+        "runId": run_id,
+        "artifact": {"file": "model.keras", "sha256": sha256_of(model_path), "bytes": model_path.stat().st_size},
+        "preprocessingFingerprint": hashlib.sha256(json.dumps(preprocessing, sort_keys=True).encode()).hexdigest(),
         "task": "automotive-surface-damage-multilabel",
         "labels": labels,
         "thresholds": thresholds,
-        "preprocessing": {
-            "inputSize": [IMAGE_SIZE, IMAGE_SIZE],
-            "colorMode": "RGB",
-            "resize": "bilinear",
-            "scale": "keras.applications.mobilenet_v2.preprocess_input ([-1, 1])",
-            "decoder": "JPEG/PNG via Pillow or tf.io.decode_image",
-        },
+        "preprocessing": preprocessing,
         "architecture": {
             "base": "MobileNetV2 (include_top=False, pooling=avg, alpha=1.0)",
             "baseWeights": "imagenet",

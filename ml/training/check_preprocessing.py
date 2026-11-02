@@ -43,6 +43,7 @@ def main() -> int:
     parser.add_argument("--root", default="/work/data")
     parser.add_argument("--training", default="/work/training")
     parser.add_argument("--artifacts", default="/work/artifacts")
+    parser.add_argument("--run-dir", default="", help="concrete run directory; defaults to the newest")
     parser.add_argument("--service-app", default="/app/app")
     parser.add_argument("--tolerance", type=float, default=TOLERANCE)
     args = parser.parse_args()
@@ -54,8 +55,8 @@ def main() -> int:
     raw = Path(dataset["localPath"])
     if not raw.exists():
         raw = root / "raw" / dataset["name"].replace("/", "__")
-    versions = sorted(path for path in Path(args.artifacts).glob("*/manifest.json"))
-    directory = versions[-1].parent
+    versions = sorted(path for path in Path(args.artifacts).glob("**/manifest.json"))
+    directory = Path(args.run_dir) if args.run_dir else versions[-1].parent
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     model = tf.keras.models.load_model(directory / "model.keras", compile=False)
 

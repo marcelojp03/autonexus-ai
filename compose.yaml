@@ -258,7 +258,7 @@ services:
     volumes:
       - "config-intelligence:/run/config:ro"
       - "./infra/local/service-entrypoint.sh:/infra/service-entrypoint.sh:ro"
-      - "${INTELLIGENCE_MODEL_PATH:-./ml/artifacts/automotive-damage-mobilenetv2-v1}:/models:ro"
+      - "${INTELLIGENCE_MODEL_PATH:-./ml/artifacts/automotive-damage-mobilenetv2-v1/20261101T-with-negatives}:/models:ro"
     depends_on:
       employees:
         condition: "service_healthy"

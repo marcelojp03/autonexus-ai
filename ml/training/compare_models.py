@@ -40,13 +40,14 @@ CANDIDATES = {
 }
 
 
-def load_rows(index: Path, split: str, raw: Path, subset: int) -> tuple[list[Path], np.ndarray]:
+def load_rows(index: Path, split: str, raw: Path, subset: int, root: Path) -> tuple[list[Path], np.ndarray]:
     paths: list[Path] = []
     targets: list[list[int]] = []
     with (index / f"{split}.jsonl").open(encoding="utf-8") as handle:
         for line in handle:
             row = json.loads(line)
-            paths.append(raw / row["image"])
+            # Licensed negatives live under the data root, not inside the dataset snapshot.
+            paths.append(root / row["image"] if row["image"].startswith("negatives/") else raw / row["image"])
             targets.append(row["labels"])
     kept = [CLASSES.index(key) for key in KEYS]
     paths = paths[:]
@@ -206,7 +207,7 @@ def main() -> int:
         raw = root / "raw" / dataset["name"].replace("/", "__")
     index = root / "index"
 
-    splits = {split: load_rows(index, split, raw, args.subset) for split in ("train", "validation", "test")}
+    splits = {split: load_rows(index, split, raw, args.subset, root) for split in ("train", "validation", "test")}
     report_path = Path(args.artifacts) / "comparison.json"
     report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {"subset": args.subset, "protocol": "same images, same head, same loss; winner by validation only", "candidates": {}}
     report["subset"] = args.subset
@@ -240,7 +241,7 @@ def main() -> int:
             head = None
         else:
             base = make_base(spec)
-            cache = root / "features" / f"cmp-{name}-{args.subset}.npz"
+            cache = root / "features" / f"cmp-{name}-{args.subset}-{len(splits['train'][0])}.npz"
             train_features = features_for(base, splits["train"][0], cache, args.batch)
             validation_features = features_for(base, splits["validation"][0], root / "features" / f"cmp-{name}-validation-{args.subset}.npz", args.batch)
             head = train_head(train_features, splits["train"][1], (validation_features, splits["validation"][1]), args.epochs)
@@ -284,7 +285,7 @@ def main() -> int:
             report["final"] = {"candidate": name, "status": "skipped", "reason": "fine-tuned candidate requires the image pipeline; run --final after retraining with train.py settings"}
         else:
             base = make_base(spec)
-            cache = root / "features" / f"cmp-{name}-{args.subset}.npz"
+            cache = root / "features" / f"cmp-{name}-{args.subset}-{len(splits['train'][0])}.npz"
             train_features = features_for(base, splits["train"][0], cache, args.batch)
             head = train_head(train_features, splits["train"][1], (features_for(base, splits["validation"][0], root / "features" / f"cmp-{name}-validation-{args.subset}.npz", args.batch), splits["validation"][1]), args.epochs)
             test_features = features_for(base, splits["test"][0], root / "features" / f"cmp-{name}-test-{args.subset}.npz", args.batch)

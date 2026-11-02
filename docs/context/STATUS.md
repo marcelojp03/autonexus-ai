@@ -31,6 +31,15 @@ Verificado con ejecución real sobre dos trabajos sintéticos: checklist incompl
 El historial quedó resuelto: la proyección SQL fijaba `execution_status` en `in_progress`, el mapeo compartido reaplicaba la puerta de compensación de la vista activa y los enums GraphQL no aceptaban los estados de revisión. Historia usa ahora una proyección de trabajo cerrado y la vista activa conserva sus comprobaciones. Revisión independiente del bloque resuelta: detectó que la agenda activa rechazaba `pending_verification` (la cola de jefatura fallaba en revisión) y que un trabajo completado perdía su detalle; ambos corregidos con regresión unitaria. Entrega integrada por fast-forward y publicada; `main` y `work/marcelo` en `6f954a7`. Interfaz de jefatura y de historial incluidas. Regresión focalizada del crítico ejecutada sobre escenarios **nuevos sembrados por las APIs reales** (dos ejecuciones de la siembra, 5 empleados y 2 trabajos confirmados cada una, sin forzar estados por SQL): **19/19 PASS**, incluida la cola de jefatura con el trabajo en revisión, el detalle de un trabajo en revisión, el detalle de un trabajo completado, el ciclo completo mecanico→devolución→reenvío→aprobación y el historial posterior.
 
 Correcciones del plan: IA+offline+MCP son **41 puntos**; la referencia del 70 % es **72**; los 102 puntos son estimación interna del reparto, no puntaje oficial; el modelo de duración (CU24) no acredita visión y el reutilizable web/móvil es el modelo visual (CU22/CU23); MCP y n8n no dependen de cobros ni indicadores.
+### Negativos, identidad de artefactos y autorización (2026-11-01)
+
+| Punto | Resultado medido | Acción |
+| --- | --- | --- |
+| Falsas alarmas (no se medían) | Sobre 20 imágenes con licencia retenidas: **10/10 autos sin daño** y **10/10 fuera de dominio** marcados por el artefacto anterior | Se incorporaron 60 negativos con licencia (Wikimedia, licencia por imagen) al entrenamiento: bajan a **6/10** y **5/10**, con −0,7 puntos de F1 (0,6846 test limpio) |
+| Puerta de calidad | 6 de cada 10 autos sanos siguen marcados | El artefacto servido es `20261101T-with-negatives`; la capacidad visual se declara **no validada para uso** aunque la plataforma funciona |
+| Identidad de artefactos | Antes una corrida sobrescribía a la anterior | Cada corrida tiene `runId` propio, directorio propio (`exist_ok=False`), `artifact.sha256` y `preprocessingFingerprint`; el servicio publica `runId`; registro en `contracts/ai/model-registry.md` |
+| Licencia | CarDD exige formulario y autorización; el CC BY 4.0 del agregado no la cubre | Borrador de solicitud en `docs/legal/cardd-authorization-request.md` (**no enviado**); pesos no declarados distribuibles |
+| Re-verificación | Artefacto nuevo y servicio reiniciado | API real **14 etapas PASS**; navegador real **7 etapas PASS**, 0 errores |
 ### Correcciones tras la revisión de datos y modelos (2026-11-01)
 
 | Punto revisado | Hallazgo | Acción |

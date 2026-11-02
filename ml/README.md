@@ -81,3 +81,18 @@ Resultados medidos (2026-11-01): 70 duplicados exactos entre splits, 105 casi du
 test limpio. MobileNetV2 congelado gana la comparación (0,6631 de validación) frente a ajuste de
 últimas capas (0,6560), V3-Small (0,4994) y V3-Large (0,5181). Detalle en
 [`contracts/ai/vision-model.md`](../contracts/ai/vision-model.md).
+## Negativos con licencia (la métrica que faltaba)
+
+```sh
+# Descarga 80 imágenes de Wikimedia Commons con licencia y autor registrados (CC0/PD/CC BY(-SA))
+node ml/training/fetch_negatives.mjs --per-group 40 --root ml/data
+# Reescribe el índice: 60 negativos al ajuste, 20 retenidos para medir falsas alarmas
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/prepare_dataset.py
+# Tasa de falsas alarmas sobre los 20 retenidos
+docker run --rm -v "$PWD/ml:/work" autonexus-ml:local training/evaluate_negatives.py
+```
+
+Medido: sin negativos en entrenamiento, el modelo marcaba 10/10 autos sin daño y 10/10 imágenes
+fuera de dominio; con 60 negativos baja a 6/10 y 5/10 (macro F1 en test limpio 0,6846). Sigue sin
+pasar una puerta razonable de uso: el artefacto se sirve porque es el mejor disponible, no porque
+esté validado.

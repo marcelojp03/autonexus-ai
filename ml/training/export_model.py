@@ -41,6 +41,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default="/work/data")
     parser.add_argument("--artifacts", default="/work/artifacts")
+    parser.add_argument("--run-dir", default="", help="concrete run directory; defaults to the newest")
     args = parser.parse_args()
 
     import tensorflow as tf
@@ -51,10 +52,10 @@ def main() -> int:
     if not raw.exists():
         raw = root / "raw" / dataset["name"].replace("/", "__")
 
-    versions = sorted(path for path in Path(args.artifacts).glob("*/manifest.json"))
+    versions = sorted(path for path in Path(args.artifacts).glob("**/manifest.json"))
     if not versions:
         raise SystemExit("no trained artefact found")
-    directory = versions[-1].parent
+    directory = Path(args.run_dir) if args.run_dir else versions[-1].parent
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     size = int(manifest["preprocessing"]["inputSize"][0])
     labels = manifest["labels"]

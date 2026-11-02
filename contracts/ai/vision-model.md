@@ -40,21 +40,46 @@ Consecuencias que se aceptan y se declaran:
    publicar un F1 de «algún daño». La versión anterior de este documento citaba ese 0,99; era un
    artefacto del conjunto, no una capacidad.
 
+## Negativos y puerta de calidad (lo que faltaba medir)
+
+El dataset no tiene fotografías sin daño, así que el modelo nunca aprendió cómo se ve un vehículo
+sano: sobre una muestra con licencia verificable de Wikimedia Commons (20 imágenes retenidas, fuera
+del entrenamiento) marcaba **10/10 autos sin daño** y **10/10 imágenes fuera de dominio**. Se
+incorporaron 60 negativos con licencia al entrenamiento (75 % train / 25 % validación) y se volvió a
+medir:
+
+| Artefacto | Falsas alarmas en autos sin daño | Falsas alarmas fuera de dominio | Macro F1 test limpio |
+| --- | --- | --- | --- |
+| `20261101T-aligned-antialias` | 1,00 (10/10) | 1,00 (10/10) | 0,6920 |
+| `20261101T-with-negatives` (**servido**) | **0,60 (6/10)** | **0,50 (5/10)** | 0,6846 |
+
+Lectura honesta: los negativos reducen las falsas alarmas a la mitad y cuestan 0,7 puntos de F1,
+pero **6 de cada 10 autos sin daño siguen marcados**. El modelo no es utilizable como señal de
+revisión todavía; hace falta un conjunto equilibrado (miles de negativos, idealmente unidades con y
+sin daño de la misma sesión). La plataforma funciona; la capacidad visual queda **no validada para
+uso**.
+
 ## Resultados en test (umbrales fijados en validación, una sola evaluación)
 
 Test completo (2.093) y test limpio de duplicados/sesiones (1.694):
 
-| Etiqueta | Precisión | Exhaustividad | F1 | ROC-AUC | Positivos | F1 en test limpio |
-| --- | --- | --- | --- | --- | --- | --- |
-| `crack` (grieta) | 0,3659 | 0,5881 | 0,4511 | 0,7820 | 318 | 0,4549 |
-| `dent` (golpe) | 0,6899 | 0,8035 | 0,7424 | 0,8054 | 1.033 | 0,7334 |
-| `glass_shatter` (cristal roto) | 0,7478 | 0,7660 | 0,7568 | 0,9500 | 329 | 0,7495 |
-| `scratch` (rayón) | 0,7517 | 0,9038 | 0,8207 | 0,7821 | 1.383 | 0,8301 |
+Artefacto servido `20261101T-with-negatives` (umbrales 0,25 / 0,35 / 0,40 / 0,50):
 
-Macro F1: **0,6927** en test completo y **0,6920** en test limpio. Es decir, la fuga detectada
-(70 duplicados exactos, 105 casi duplicados, 315 solapamientos de sesión) apenas inflaba el
-resultado en 0,0007: el número no dependía de ella, y ahora está medido en vez de supuesto.
+| Etiqueta | F1 (test completo) | F1 (test limpio) | Positivos en test |
+| --- | --- | --- | --- |
+| `crack` (grieta) | 0,4303 | 0,4429 | 318 |
+| `dent` (golpe) | 0,7444 | 0,7330 | 1.033 |
+| `glass_shatter` (cristal roto) | 0,7548 | 0,7436 | 329 |
+| `scratch` (rayón) | 0,8125 | 0,8190 | 1.383 |
 
+Macro F1: **0,6855** en test completo y **0,6846** en test limpio. La corrida anterior
+(`20261101T-aligned-antialias`, sin negativos) daba 0,6927 / 0,6920; se conserva para volver atrás.
+Detalle por etiqueta con precisión y exhaustividad en `metrics.json` y `clean-evaluation.json` de la
+corrida.
+
+La fuga detectada en el artefacto sin negativos (70 duplicados exactos, 105 casi duplicados, 315
+solapamientos de sesión) apenas inflaba el resultado en 0,0007: el número no dependía de ella, y
+ahora está medido en vez de supuesto.
 Etiquetas descartadas: `lamp_broken` y `tire_flat` no tienen positivos en test (0 y 0) y se
 excluyeron del artefacto en lugar de publicar una capacidad no medida.
 

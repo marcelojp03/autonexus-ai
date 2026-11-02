@@ -76,6 +76,27 @@ def main() -> int:
             raise SystemExit(f"paired {paired} images but {used} label files are present in {split}")
 
     index = root / "index"
+    # Licensed negatives: the training collection has no damage-free photograph, so the head never
+    # learns what "nothing wrong" looks like. These come from Wikimedia Commons with the licence
+    # recorded per image; 75 % go to training, 25 % to validation and a fixed 20-image slice is held
+    # out as an independent false-alarm set (never used to fit thresholds).
+    negatives_manifest = root / "negatives" / "manifest.json"
+    if negatives_manifest.exists():
+        sample = json.loads(negatives_manifest.read_text(encoding="utf-8"))
+        entries = []
+        for group, payload in sample["groups"].items():
+            for item in payload["files"]:
+                entries.append({"image": "negatives/" + item["file"], "group": group, "license": item["license"], "page": item["page"]})
+        entries.sort(key=lambda entry: entry["image"])
+        held_out = [entry for position, entry in enumerate(entries) if position % 4 == 0]
+        fitted_negatives = [entry for position, entry in enumerate(entries) if position % 4 != 0]
+        with (index / "negatives-test.jsonl").open("w", encoding="utf-8") as handle:
+            for entry in held_out:
+                handle.write(json.dumps({"image": entry["image"], "labels": [0] * len(CLASSES), "boxes": 0, "sourceSplit": "commons", "group": entry["group"]}) + "\n")
+        for entry in fitted_negatives:
+            bucket_split = bucket(entry["image"], train_mod=75)
+            rows[bucket_split].append({"image": entry["image"], "labels": [0] * len(CLASSES), "boxes": 0, "sourceSplit": "commons", "group": entry["group"]})
+        print(json.dumps({"negatives": {"fitted": len(fitted_negatives), "heldOut": len(held_out)}}))
     index.mkdir(parents=True, exist_ok=True)
     stats = {"classes": CLASSES, "splits": {}, "dataset": manifest["name"], "revision": manifest["revision"]}
     for split, split_rows in rows.items():

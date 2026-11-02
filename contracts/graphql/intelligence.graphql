@@ -27,6 +27,8 @@ type VisionModelStatus {
   ready: Boolean!
   "Versión declarada por el manifiesto (`null` si no hay modelo)."
   modelVersion: String
+  "Identificador de la corrida de entrenamiento que produjo los pesos."
+  runId: String
   "Etiquetas que el modelo puede devolver."
   labels: [String!]!
   "Verdadero cuando la evaluación no alcanza el mínimo declarado por etiqueta."
@@ -42,6 +44,8 @@ type VisionAnalysis {
   evidenceId: ID!
   orderId: ID!
   modelVersion: String!
+  "Corrida de entrenamiento que produjo el artefacto usado en este análisis."
+  runId: String
   task: String!
   labels: [VisionLabel!]!
   "Etiquetas cuyo puntaje superó su umbral."
