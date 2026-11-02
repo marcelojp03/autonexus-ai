@@ -29,8 +29,17 @@ export class HttpIntelligenceGateway implements IntelligenceGateway {
   async model(token: string): Promise<unknown> {
     // The owner publishes the model status inside a richer self-diagnostic body; the contract
     // field is the status itself.
-    const body = (await this.request('/vision/model', token)) as { model?: unknown } | null;
-    return body?.model ?? body;
+    const body = (await this.request('/vision/model', token)) as { model?: Record<string, unknown> } | null;
+    const model = body?.model ?? (body as Record<string, unknown> | null);
+    if (!model) return model;
+    // The owner publishes the gate as a nested object; the contract exposes it as two flat strings so
+    // the UI can always render it next to the run identifier.
+    const quality = (model as { quality?: { status?: unknown; note?: unknown } | null }).quality;
+    return {
+      ...model,
+      qualityStatus: typeof quality?.status === "string" ? quality.status : "unknown",
+      qualityNote: typeof quality?.note === "string" ? quality.note : null,
+    };
   }
 
   analyze(assignmentId: string, evidenceId: string, token: string): Promise<unknown> {

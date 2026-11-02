@@ -1,8 +1,13 @@
 # Estado comprobado
 
-## CU23 — análisis visual del servidor: infraestructura y capacidad verificadas (2026-11-01)
+## CU23 — infraestructura e inferencia integradas; capacidad visual EXPERIMENTAL, no validada (2026-11-01)
+> **Cobertura: no cuenta como requisito de IA completamente cubierto.** El servicio, MongoDB, los
+> permisos y la interfaz funcionan y están verificados; el modelo servido **no** pasa los criterios de
+> aceptación (`contracts/ai/cu23-acceptance-criteria.md`). La interfaz lo muestra junto al `runId` con
+> un banner de "Capacidad visual NO validada".
 
-MS04 Inteligencia (FastAPI + MongoDB) analiza una evidencia de CU16 con un modelo real y persiste el resultado; el recorrido se observó desde la interfaz. Dos entregables separados, como se pidió: **infraestructura funcional** y **capacidad visual**.
+
+MS04 Inteligencia (FastAPI + MongoDB) analiza una evidencia de CU16 con un modelo real y persiste el resultado; el recorrido se observó desde la interfaz. Dos entregables separados: **infraestructura funcional** (integrada y verificada) y **capacidad visual** (experimental: 6 de 10 vehículos sin daño en plano abierto y 5 de 10 imágenes fuera de dominio quedan marcados).
 
 | Comprobación observada | Resultado |
 | --- | --- |

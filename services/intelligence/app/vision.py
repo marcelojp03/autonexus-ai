@@ -64,6 +64,7 @@ class ModelStatus:
     labels: tuple[str, ...]
     reason: str | None
     insufficient_data: bool
+    quality: dict | None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -73,6 +74,7 @@ class ModelStatus:
             "labels": list(self.labels),
             "insufficientData": self.insufficient_data,
             "reason": self.reason,
+            "quality": self.quality,
         }
 
 
@@ -87,6 +89,7 @@ class VisionModel:
         self._labels: tuple[str, ...] = ()
         self._thresholds: dict[str, float] = {}
         self._reason: str | None = "not-loaded"
+        self._quality: dict | None = None
 
     # -- lifecycle ---------------------------------------------------------------------------
     def load(self) -> ModelStatus:
@@ -122,12 +125,31 @@ class VisionModel:
             self._reason = f"load-failed:{type(error).__name__}"
             return self.status()
 
+        self._quality = self._read_quality()
         self._model = model
         self._manifest = manifest
         self._labels = labels
         self._thresholds = thresholds
         self._reason = None
         return self.status()
+
+    def _read_quality(self) -> dict | None:
+        """Operator-provided declaration of what the artefact has actually proven.
+
+        The manifest says what the model *is*; this file says how far it has been validated. Without
+        it the service reports `unknown` instead of implying the model is fit for use.
+        """
+        path = self._dir / "quality.json"
+        if not path.is_file():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"status": "unknown", "note": "quality.json is not readable"}
+        status = str(payload.get("status", "unknown"))
+        if status not in {"experimental", "validated", "deprecated"}:
+            status = "unknown"
+        return {"status": status, "note": payload.get("note"), "acceptance": payload.get("acceptance"), "measured": payload.get("measured")}
 
     def status(self) -> ModelStatus:
         manifest = self._manifest or {}
@@ -141,6 +163,7 @@ class VisionModel:
             labels=self._labels,
             reason=self._reason,
             insufficient_data=insufficient,
+            quality=self._quality,
         )
 
     def manifest(self) -> dict:

@@ -3,7 +3,7 @@
 export const PERMISSIONS = 'query SecurityPermissions { securityCatalog { effective } }';
 
 export const MODEL = `query VisionModel {
-  visionModel { ready modelVersion labels insufficientData reason }
+  visionModel { ready modelVersion runId qualityStatus qualityNote labels insufficientData reason }
 }`;
 
 export const WORKS = `query VisionWorks($from: Date, $to: Date, $limit: Int) {

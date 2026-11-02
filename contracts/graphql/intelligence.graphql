@@ -29,6 +29,10 @@ type VisionModelStatus {
   modelVersion: String
   "Identificador de la corrida de entrenamiento que produjo los pesos."
   runId: String
+  "Grado de validación declarado por el operador: validated | experimental | deprecated | unknown."
+  qualityStatus: String
+  "Motivo legible del estado de calidad; debe mostrarse al usuario junto al runId."
+  qualityNote: String
   "Etiquetas que el modelo puede devolver."
   labels: [String!]!
   "Verdadero cuando la evaluación no alcanza el mínimo declarado por etiqueta."

@@ -27,7 +27,7 @@ function AnalysisCard({ analysis, title }) {
       </Paragraph>
       <LabelTable analysis={analysis} />
       <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-        Modelo {analysis.modelVersion} · {new Date(analysis.createdAt).toLocaleString('es-BO')}
+        Modelo {analysis.modelVersion}{analysis.runId ? ' · corrida ' + analysis.runId : ''} · {new Date(analysis.createdAt).toLocaleString('es-BO')}
         {analysis.replayed ? ' · resultado ya guardado para esta imagen' : ''}
         {analysis.insufficientData ? ' · datos de evaluación insuficientes para la etiqueta' : ''}
       </Paragraph>
@@ -142,6 +142,25 @@ export default function IntelligenceApp({ session }) {
         Analiza las fotografías que el mecánico adjuntó a un avance y devuelve las etiquetas que el modelo reconoce. {SIGNAL_NOTICE}
       </Paragraph>
 
+      {model?.ready ? (
+        <Alert
+          type={model.qualityStatus === 'validated' ? 'success' : 'error'}
+          showIcon
+          style={{ marginBottom: 16 }}
+          data-testid="model-quality"
+          message={
+            (model.qualityStatus === 'validated'
+              ? 'Capacidad visual validada para el uso previsto'
+              : 'Capacidad visual NO validada: resultado experimental') +
+            (model.runId ? ' · corrida ' + model.runId : '')
+          }
+          description={
+            (model.qualityNote ??
+              'El operador no declaró el grado de validación de este artefacto; tratalo como experimental.') +
+            ' No uses este resultado como diagnóstico ni como decisión de reparación.'
+          }
+        />
+      ) : null}
       {model && !model.ready ? (
         <Alert
           type="warning"
