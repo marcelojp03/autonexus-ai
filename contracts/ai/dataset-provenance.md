@@ -43,3 +43,23 @@ un tercero no puede conceder derechos que el titular original no otorgó.
 - La calidad del modelo se mide y se documenta (incluido lo que no funciona: `crack` F1 0,458).
 - La plataforma funciona igual con otro artefacto: `INTELLIGENCE_MODEL_PATH` y `modelVersion` son
   configuración, no código.
+## Verificación visual de la correspondencia imagen–etiqueta (muestra de 3)
+
+Revisión directa de tres imágenes de test con una sola etiqueta cada una. Las imágenes **no** se
+versionan; estas son las observaciones:
+
+| Imagen (test) | Etiqueta | Qué se ve |
+| --- | --- | --- |
+| `vehide_01102020_094657image929398.jpg` | `dent` | Parte trasera de una camioneta con abolladura visible en parachoques/compuerta: **anotación plausible**. La matrícula es legible: el conjunto **no está redactado** |
+| `vehide_01022020_104459image894113.jpg` | `scratch` | Planchas metálicas de **maquinaria/equipo pesado** con recubrimiento desgastado y marcas de inspección: la etiqueta es defendible, pero el dominio **no es un automóvil** |
+| `vehide_01022020_153342image229797.jpg` | `glass_shatter` | Carrocería desmontada en taller, **sin parabrisas**: la etiqueta es ambigua para «cristal roto» y el contenido real es un frontal desguazado |
+
+Conclusiones que se incorporan al alcance del modelo:
+
+1. El agregado mezcla **automóviles (CarDD) y equipo pesado (VehiDE)**: no es un dataset
+   exclusivamente de carrocería de automóvil.
+2. La calidad de anotación es heterogénea; `glass_shatter` incluye casos ambiguos. Un muestreo de
+   tres imágenes no certifica el resto: es evidencia de que la etiqueta no se puede dar por buena,
+   no una auditoría completa de las 11.093.
+3. Hay **matrículas legibles** y marcas de agua de origen: no se publican imágenes del conjunto en
+   documentación, capturas ni repositorio.

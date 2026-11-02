@@ -93,6 +93,9 @@ CU22 con un runtime JS.
 - Señal para revisión humana: no mide, no diagnostica y no estima reparaciones.
 - `crack` es la etiqueta más débil (F1 0,45): no se presenta como detector fiable de grietas.
 - Sin fotografías sin daño, no hay tasa de falsas alarmas que reportar.
+- El agregado mezcla automóviles y equipo pesado, y la anotación es heterogénea (ver la muestra
+  visual en dataset-provenance.md): «vehículo» en este modelo incluye maquinaria.
+- Las imágenes del conjunto no se publican: hay matrículas legibles y marcas de agua de origen.
 - El modelo no reconoce óxido, desgaste, fugas ni condiciones fuera de las cuatro publicadas, y no
   localiza el daño: para recuadros o áreas hace falta un detector/segmentador.
 - Sin `manifest.json` y `model.keras`, MS04 responde `503 MODEL_NOT_READY`; nunca sustituye la
