@@ -85,6 +85,8 @@ export class DynamoOverlayRepository implements OverlayRepository {
   }
 
   async save(overlay: Overlay, expiresAt: number): Promise<{ replayed: boolean; replayedOperations: string[] }> {
+    // A restarted emulator can come back without the table; create it once instead of failing.
+    await this.ensureTable();
     const existing = await this.byId(overlay.subject, overlay.overlayId);
     if (existing) return { replayed: true, replayedOperations: [] };
     // An operation is global to the subject: a second overlay that declares the same operationId is

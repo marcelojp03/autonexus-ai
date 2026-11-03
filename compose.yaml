@@ -282,11 +282,12 @@ services:
       # DynamoDB only: the emulator must not start other AWS services.
       SERVICES: "dynamodb"
       PERSISTENCE: "1"
-      DATA_DIR: "/var/lib/localstack/data"
+      DATA_DIR: "/var/lib/localstack/state"
     init: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
-    volumes: ["dynamodb-data:/var/lib/localstack/data","/var/run/docker.sock:/var/run/docker.sock"]
+    # LocalStack persists its state (DynamoDB included) under /var/lib/localstack/state.
+    volumes: ["dynamodb-data:/var/lib/localstack/state","/var/run/docker.sock:/var/run/docker.sock"]
     healthcheck:
       test: ["CMD-SHELL","curl -sf http://127.0.0.1:4566/_localstack/health >/dev/null || exit 1"]
       interval: "5s"

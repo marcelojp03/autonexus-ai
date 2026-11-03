@@ -188,7 +188,7 @@ export function classify(status: number, code: string): SyncState {
   if (status === 401) return 'pending';
   if (status === 503) return 'pending';
   if (code === 'VERSION_CONFLICT' || code === 'IDEMPOTENCY_CONFLICT') return 'conflict';
-  if (code === 'EVIDENCE_UPLOAD_EXPIRED' || code === 'EVIDENCE_NOT_PENDING') return 'needs-reupload';
+  if (code === 'EVIDENCE_UPLOAD_EXPIRED' || code === 'EVIDENCE_NOT_PENDING' || code === 'EVIDENCE_OBJECT_MISSING') return 'needs-reupload';
   if (status === 403 || status === 404) return 'rejected';
   if (status === 409) return 'conflict';
   if (status >= 400) return 'rejected';

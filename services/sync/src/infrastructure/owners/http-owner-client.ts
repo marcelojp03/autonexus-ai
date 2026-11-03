@@ -46,6 +46,12 @@ export class HttpOwnerClient implements OwnerClient {
     }
     const body = await this.payload(response);
     const code = typeof (body as { code?: unknown })?.code === 'string' ? String((body as { code: string }).code) : `HTTP_${response.status}`;
+    // The owner answers 200 for a confirmation its own verification rejected (for example the object
+    // is missing because the upload URL expired). A 200 is not an applied change.
+    const evidence = (body as { evidence?: { state?: unknown; failureCode?: unknown } } | null)?.evidence;
+    if (evidence && evidence.state === 'failed') {
+      return { status: 409, code: typeof evidence.failureCode === 'string' ? evidence.failureCode : 'EVIDENCE_STATE_CONFLICT', body };
+    }
     return { status: response.status, code, body };
   }
 

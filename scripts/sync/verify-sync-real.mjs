@@ -29,7 +29,7 @@ const accounts = JSON.parse(readFileSync(resolve(accountsFile), 'utf8')).account
 const issuer = origin + '/identity/realms/autonexus';
 
 mkdirSync('output/sync', { recursive: true });
-const report = { syncUrl, origin, assignmentId, stages: [], pass: false };
+const report = { syncUrl, origin, assignmentId, overlays: {}, stages: [], pass: false };
 const pass = (name, detail) => report.stages.push({ name, status: 'PASS', ...(detail ? { detail } : {}) });
 
 const token = async key => (await authorize({ ...accounts[key], enabled: true }, false, { issuer, redirect: origin + '/auth/callback' })).access_token;
@@ -80,6 +80,7 @@ try {
   assert.equal(created.status, 201);
   assert.equal(created.body.replayed, false);
   const overlayId = created.body.overlay.overlayId;
+  report.overlays.applied = overlayId;
   assert.equal(created.body.overlay.operations[0].state, 'pending');
   pass('sobre registrado con la operación en pending');
 
