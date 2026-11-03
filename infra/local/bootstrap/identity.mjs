@@ -89,6 +89,11 @@ export async function provisionIdentity(state, configDir, initialized = false) {
   const shell = await client({ clientId: 'autonexus-shell', enabled: true, protocol: 'openid-connect', publicClient: true, standardFlowEnabled: true, implicitFlowEnabled: false, directAccessGrantsEnabled: false, serviceAccountsEnabled: false, fullScopeAllowed: true, defaultClientScopes: ['basic', 'profile', 'roles'], optionalClientScopes: [], redirectUris: [state.publicOrigin + '/auth/callback'], webOrigins: [state.publicOrigin], attributes: { 'pkce.code.challenge.method': 'S256', 'post.logout.redirect.uris': state.publicOrigin + '/' } });
   await scopes(shell, ['basic', 'profile', 'roles']);
   await mappers(shell, audiences.map(audienceMapper));
+  // Public mobile client: Authorization Code + PKCE with an explicit custom-scheme redirect. No
+  // client secret, no password grant; tokens are held in memory by the app.
+  const mobile = await client({ clientId: 'autonexus-mobile', enabled: true, protocol: 'openid-connect', publicClient: true, standardFlowEnabled: true, implicitFlowEnabled: false, directAccessGrantsEnabled: false, serviceAccountsEnabled: false, fullScopeAllowed: true, defaultClientScopes: ['basic', 'profile', 'roles'], optionalClientScopes: [], redirectUris: ['bo.edu.uagrm.autonexus://auth/callback'], webOrigins: [], attributes: { 'pkce.code.challenge.method': 'S256' } });
+  await scopes(mobile, ['basic', 'profile', 'roles']);
+  await mappers(mobile, audiences.map(audienceMapper));
   const workshopRoles = await Promise.all(roles.realm.map(role => api('/roles/' + role.name)));
   const assignedScope = await api('/clients/' + shell.id + '/scope-mappings/realm');
   ensure(assignedScope.every(role => workshopRoles.some(item => item.id === role.id)), 'SHELL_ROLE_SCOPE_DRIFT');

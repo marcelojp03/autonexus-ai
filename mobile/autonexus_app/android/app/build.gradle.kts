@@ -27,6 +27,9 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // The same custom scheme the realm registers as redirect URI: the authorization response is
+        // handed back to the app by the system browser, never captured by a WebView.
+        manifestPlaceholders["appAuthRedirectScheme"] = "bo.edu.uagrm.autonexus"
     }
 
     buildTypes {

@@ -6,12 +6,15 @@
 ///  * closing the session wipes the previous user's rows (data and queue), which is what the
 ///    "cuenta distinta" behaviour requires;
 ///  * photographs live in the app's private documents directory; the database only stores the path.
+library;
+
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'offline_models.dart';
+import '../session/pending_authorization.dart';
 
 class OfflineStore {
   OfflineStore._(this._database, this._photos);
@@ -19,7 +22,7 @@ class OfflineStore {
   final Database _database;
   final Directory _photos;
 
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 3;
 
   /// Opens the store. `directory` lets tests use an in-memory database and a temp photo folder.
   static Future<OfflineStore> open({String? path, Directory? photoDirectory}) async {
@@ -60,6 +63,22 @@ class OfflineStore {
           )''');
         await db.execute('CREATE INDEX queue_subject ON queue(subject, created_at)');
         await db.execute('CREATE INDEX works_subject ON works(subject)');
+        await db.execute('CREATE TABLE local_state(key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL)');
+        await db.execute('CREATE TABLE auth_state(state TEXT NOT NULL PRIMARY KEY, code_verifier TEXT NOT NULL, nonce TEXT NOT NULL, redirect_url TEXT NOT NULL, created_at TEXT NOT NULL)');
+      },
+      onUpgrade: (db, from, to) async {
+        // Version 2 remembers which subject owns the local copy so the app can reopen the prepared
+        // work without a session. It is not a credential: it only scopes local rows.
+        if (from < 2) {
+          await db.execute('CREATE TABLE IF NOT EXISTS local_state(key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL)');
+        }
+        // Version 3 persists the pending PKCE state: the flow has to survive the system restarting the
+        // app while the browser is in the foreground.
+        if (from < 3) {
+          await db.execute(
+            'CREATE TABLE IF NOT EXISTS auth_state(state TEXT NOT NULL PRIMARY KEY, code_verifier TEXT NOT NULL, nonce TEXT NOT NULL, redirect_url TEXT NOT NULL, created_at TEXT NOT NULL)',
+          );
+        }
       },
     );
     final photos = photoDirectory ?? Directory('${(await getApplicationDocumentsDirectory()).path}/evidence');
@@ -115,8 +134,16 @@ class OfflineStore {
     );
   }
 
-  Future<int> pendingCount(String subject) async {
-    final result = await _database.rawQuery(
+  /// An operation left in `sending` when the app was killed is not lost and is not applied twice: it
+  /// goes back to `pending` and the next push reuses its own `operationId`.
+  Future<int> recoverInterrupted(String subject) async {
+    final rows = await _database.query('queue', where: 'subject = ? AND state = ?', whereArgs: [subject, QueueState.sending.wire], columns: ['operation_id']);
+    if (rows.isEmpty) return 0;
+    await _database.update('queue', {'state': QueueState.pending.wire}, where: 'subject = ? AND state = ?', whereArgs: [subject, QueueState.sending.wire]);
+    return rows.length;
+  }
+
+  Future<int> pendingCount(String subject) async {    final result = await _database.rawQuery(
       'SELECT COUNT(*) AS total FROM queue WHERE subject = ? AND state IN (?, ?, ?)',
       [subject, QueueState.pending.wire, QueueState.sending.wire, QueueState.needsReupload.wire],
     );
@@ -129,6 +156,31 @@ class OfflineStore {
     final file = File('${_photos.path}/$operationId.$extension');
     await file.writeAsBytes(bytes, flush: true);
     return file;
+  }
+
+  /// Saves the pending PKCE state before the browser opens, so a restart mid-flow can still redeem the
+  /// code. The verifier is not a token: it is worthless without the authorization code.
+  Future<void> savePendingAuthorization(PendingAuthorization pending) async {
+    await _database.insert('auth_state', pending.toRow(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<PendingAuthorization?> pendingAuthorization(String state) async {
+    final rows = await _database.query('auth_state', where: 'state = ?', whereArgs: [state], limit: 1);
+    return rows.isEmpty ? null : PendingAuthorization.fromRow(rows.first);
+  }
+
+  Future<void> clearPendingAuthorization(String state) async {
+    await _database.delete('auth_state', where: 'state = ?', whereArgs: [state]);
+  }
+
+  /// Remembers which subject owns the local copy. It is only a scope, never a credential.
+  Future<void> setLocalSubject(String subject) async {
+    await _database.insert('local_state', {'key': 'last_subject', 'value': subject}, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<String?> localSubject() async {
+    final rows = await _database.query('local_state', where: 'key = ?', whereArgs: ['last_subject'], limit: 1);
+    return rows.isEmpty ? null : rows.first['value'] as String?;
   }
 
   /// Closing a session removes that user's prepared works and queue, keeping other users intact.

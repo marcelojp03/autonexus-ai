@@ -101,11 +101,15 @@ void main() {
 Future<int> _executionVersion(String origin, String assignmentId, String token) async {
   final response = await _graphql(origin, token, 'query(!){myExecution(assignmentId:){version}}', {'id': assignmentId});
   expect(response['data'], isNotNull, reason: 'graphql body: ' + _jsonEncode(response));
+  final data = response['data'] as Map<String, dynamic>;
+  return ((data['myExecution'] as Map<String, dynamic>)['version'] as num).toInt();
 }
 
 Future<int> _advanceCount(String origin, String assignmentId, String token) async {
   final response = await _graphql(origin, token, 'query(!){myExecution(assignmentId:){advances{id}}}', {'id': assignmentId});
   expect(response['data'], isNotNull, reason: 'graphql body: ' + _jsonEncode(response));
+  final data = response['data'] as Map<String, dynamic>;
+  return ((data['myExecution'] as Map<String, dynamic>)['advances'] as List).length;
 }
 
 Future<Map<String, dynamic>> _graphql(String origin, String token, String query, Map<String, Object?> variables) async {

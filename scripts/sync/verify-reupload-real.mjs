@@ -88,25 +88,19 @@ try {
     { operationId: authorizeOperation2, entity: 'evidence-authorize', target: { assignmentId, advanceId }, baseVersion: afterAdvance.myExecution.version, dependsOn: [], payload: { operationId: authorizeOperation2, fileName: 'evidencia.jpg', contentType: 'image/jpeg', sizeBytes: image.length, checksumSha256: sha256 } },
   ]));
   const authorized = await sync('POST', `/sync/overlays/${secondOverlay.body.overlay.overlayId}/push`);
-  console.error('AUTHORIZE' + JSON.stringify(authorized.body).slice(0, 400));
   assert.deepEqual(authorized.body.applied, [authorizeOperation2]);
   const issued = authorized.body.results[0].body;
   const evidenceId = issued.evidence.id;
   assert.ok(issued.upload?.url, 'the owner must return the presigned upload');
   pass('autorización de carga emitida con URL prefirmada real', { evidenceId });
 
-  // 2) Do not upload; let the authorisation expire.
+  // 2) Let the authorization expire and use it: S3 must reject the expired signature itself.
   await new Promise(done => setTimeout(done, waitSeconds * 1000));
-
-  const confirmOperation = randomUUID();
-  const expiredOverlay = await sync('POST', '/sync/overlays', overlay([
-    { operationId: confirmOperation, entity: 'evidence-confirm', target: { assignmentId, evidenceId }, baseVersion: 1, dependsOn: [], payload: { operationId: confirmOperation, expectedVersion: 1 } },
-  ]));
-  const expiredPush = await sync('POST', `/sync/overlays/${expiredOverlay.body.overlay.overlayId}/push`);
-  console.error('EXPIRED' + JSON.stringify(expiredPush.body).slice(0, 400));
-  const expiredState = expiredPush.body.failed[0]?.state ?? (expiredPush.body.applied.length ? 'applied' : 'pending');
-  assert.notEqual(expiredState, 'applied', 'a confirm without upload must not apply');
-  pass('confirmar sin carga no se aplica', { state: expiredState, code: expiredPush.body.failed[0]?.code });
+  const expiredUpload = await fetch(issued.upload.url, { method: issued.upload.method ?? 'PUT', headers: issued.upload.headers, body: image });
+  const expiredBody = (await expiredUpload.text()).slice(0, 160);
+  assert.ok(expiredUpload.status === 403 || expiredUpload.status === 400, 'an expired upload URL must be rejected, got ' + expiredUpload.status);
+  assert.match(expiredBody, /expired|Expired|Request has expired|SignatureDoesNotMatch|AuthorizationQueryParametersError/, 'the rejection must come from the signature, not from a missing object: ' + expiredBody);
+  pass('la URL vencida es rechazada por S3 en la carga', { status: expiredUpload.status });
 
   // 3) Re-authorise the same evidence (attempt+1), upload and confirm.
   const reauthorizeOperation = randomUUID();

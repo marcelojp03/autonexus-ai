@@ -1,5 +1,51 @@
 # Estado comprobado
 
+## CU27 — cliente Flutter offline: implementado y probado en unitarias; recorrido en dispositivo BLOQUEADO (2026-11-03)
+
+Rama `work/marcelo`. Implementado y compilado, **sin** recorrido real en dispositivo todavía; no se
+declara CU27 entregado.
+
+Implementado:
+
+- **Sesión propia con Authorization Code + PKCE** (`lib/session/keycloak_session.dart`): cliente público
+  `autonexus-mobile`, sin secreto, redirección `bo.edu.uagrm.autonexus://auth/callback`, navegador del
+  sistema (`url_launcher`), tokens **solo en memoria** y renovación con `refresh_token`. El estado
+  pendiente (`state`, `code_verifier`, `nonce`) se **persiste en SQLite antes de abrir el navegador**, así
+  el canje sobrevive a que el sistema reinicie la app mientras el navegador está al frente.
+- **Cliente REST del propietario** (`lib/api/owner_api.dart`): `GET /agenda/me` y
+  `GET /executions/me/:assignmentId` con el token del usuario; errores con el código del propietario
+  (`AGENDA_*`, `EXECUTION_*`, `*_UNAVAILABLE`) y mensaje público.
+- **Interfaz del recorrido** (`lib/app/`): sesión, descarga y preparación de un trabajo autorizado,
+  consulta del trabajo preparado, avance pendiente (descripción y minutos), cola con estados
+  (`pending`/`sending`/`applied`/`conflict`/`rejected`/`needs-reupload`) y reintento de operaciones que
+  quedaron en `sending` al cerrarse la app (vuelven a `pending` y conservan su `operationId`).
+- **Almacén local** (`lib/offline/offline_store.dart`, esquema 3): `works`, `queue`, `local_state`
+  (último `subject` para consultar la copia sin sesión) y `auth_state`. Todo por `subject`; cerrar sesión
+  borra trabajos, cola y fotos del usuario anterior.
+- **Sincronización por MS05** (`lib/offline/sync_service.dart`): sobre con `operationId` por avance;
+  401 o respuesta perdida dejan la operación `pending`; `conflict` y `rejected` son terminales y visibles.
+- **Compose**: Operaciones publica `127.0.0.1:8081` para que el cliente móvil use REST (el móvil no usa
+  GraphQL/BFF); se alcanza desde el dispositivo con `adb reverse tcp:8081 tcp:8081`.
+- **Pruebas**: `flutter test` ⇒ **16/16** (almacén, sincronización y sesión: estado persistido antes de
+  abrir el navegador, canje desde una instancia nueva que simula el reinicio del proceso, `state`
+  desconocido rechazado sin petición, autorización denegada, renovación por `refresh_token`).
+  `flutter analyze` sin errores. APK debug compilado e instalado en el Mi A3.
+
+Bloqueo observado (no es del código del recorrido):
+
+1. `flutter_appauth` 13 no persistió **ningún** estado (`shared_prefs` inexistente) y el sistema reinició
+   el proceso de la app mientras el navegador estaba al frente; el callback llegaba con
+   `AppAuth: No stored state`. Se sustituyó por el flujo propio con estado en SQLite (arriba).
+2. Con el flujo propio el navegador abre y autentica (Keycloak responde `302` con `code` y `state`
+   correctos), pero Chrome 156 sobre MIUI no entrega de forma fiable la redirección al esquema propio y
+   la inyección de texto por `adb` sobre el formulario pierde caracteres (contraseña de 69 caracteres).
+   El relleno por el canal de depuración del navegador sí acierta los 69 y 45 caracteres, y el `POST`
+   llega a `302`; falta el paso de entrega al app en ese entorno.
+
+Siguiente: repetir el recorrido textual con el teléfono desbloqueado y el navegador en primer plano
+(intervención física: aceptar el formulario y volver a la app), o validar en un dispositivo sin
+restricciones de MIUI; después fotografía privada + inferencia local y la PWA equivalente.
+
 ## CU23 — infraestructura e inferencia integradas; capacidad visual EXPERIMENTAL, no validada (2026-11-01)
 > **Cobertura: no cuenta como requisito de IA completamente cubierto.** El servicio, MongoDB, los
 > permisos y la interfaz funcionan y están verificados; el modelo servido **no** pasa los criterios de

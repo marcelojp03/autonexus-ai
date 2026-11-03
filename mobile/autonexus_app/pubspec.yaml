@@ -39,6 +39,10 @@ dependencies:
   sqflite: ^2.4.5
   path_provider: ^2.1.6
   http: ^1.6.0
+  image_picker: ^1.2.4
+  crypto: ^3.0.8
+  url_launcher: ^6.3.3
+  app_links: ^7.2.2
 
 dev_dependencies:
   flutter_test:

@@ -225,6 +225,9 @@ services:
     build:
       context: "."
       dockerfile: "infra/local/docker/operations.Dockerfile"
+    # The mobile client speaks REST to its owner, so the API is published on the host loopback and
+    # reached from the device through `adb reverse`. It is the same port the contract documents.
+    ports: ["127.0.0.1:${OPERATIONS_PORT:-8081}:8081"]
     init: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
