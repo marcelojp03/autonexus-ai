@@ -133,6 +133,19 @@ try {
   assert.equal(foreignRead.status, 404);
   pass('otro usuario no alcanza el sobre ajeno (404)');
 
+  // Client inference: MS05 forwards it to Inteligencia, which stores it as client provenance.
+  const inferenceOperation = randomUUID();
+  const inferenceOverlay = randomUUID();
+  const clientInference = { runId: '20261101T-with-negatives', modelVersion: 'automotive-damage-mobilenetv2-v1', imageSha256: 'b'.repeat(64), labels: [{ name: 'scratch', score: 0.47 }] };
+  await call(mechanic, '/sync/overlays', 'POST', overlayBody([{ operationId: inferenceOperation, entity: 'client-inference', target: { assignmentId }, baseVersion: 1, dependsOn: [], payload: { assignmentId, runId: clientInference.runId, modelVersion: clientInference.modelVersion, imageSha256: clientInference.imageSha256, labels: clientInference.labels }, clientInference }], inferenceOverlay));
+  const inferencePush = await call(mechanic, '/sync/overlays/' + inferenceOverlay + '/push', 'POST');
+  assert.deepEqual(inferencePush.body.applied, [inferenceOperation]);
+  const storedInference = inferencePush.body.results.find(item => item.operationId === inferenceOperation)?.body;
+  assert.equal(storedInference.origin, 'client');
+  assert.equal(storedInference.verifiedByServer, false);
+  assert.equal(storedInference.runId, clientInference.runId);
+  pass('la inferencia del cliente se guarda con procedencia de cliente, sin presentarla como del servidor');
+
   // The coordinator never stores the bearer or a signed URL.
   const stored = await call(mechanic, `/sync/operations/${operationId}`);
   const serialized = JSON.stringify(stored.body);

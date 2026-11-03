@@ -1,6 +1,6 @@
 /** Domain types and validation for the offline overlay contract (contracts/sync/overlay.md). */
 
-export const ENTITIES = ['advance', 'evidence-authorize', 'evidence-confirm', 'client-inference'] as const;
+export const ENTITIES = ['advance', 'evidence-authorize', 'evidence-reauthorize', 'evidence-confirm', 'client-inference'] as const;
 export type Entity = (typeof ENTITIES)[number];
 
 export const STATES = ['pending', 'sending', 'applied', 'needs-reupload', 'conflict', 'rejected'] as const;

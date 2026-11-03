@@ -61,6 +61,24 @@ def _view(document: dict[str, Any], *, replayed: bool = False) -> dict[str, Any]
     }
 
 
+def _client_view(document: dict[str, Any], *, replayed: bool = False) -> dict[str, Any]:
+    created = document["createdAt"]
+    if isinstance(created, datetime):
+        created = created.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {
+        "analysisId": document["analysisId"],
+        "origin": "client",
+        "assignmentId": document["assignmentId"],
+        "evidenceId": document.get("evidenceId"),
+        "runId": document["runId"],
+        "modelVersion": document["modelVersion"],
+        "imageSha256": document["imageSha256"],
+        "labels": document["labels"],
+        "createdAt": created,
+        "replayed": replayed,
+        "verifiedByServer": False,
+    }
+
 class AnalysisRepository:
     def __init__(self, url: str, database: str, *, client: AsyncIOMotorClient | None = None) -> None:
         self._client = client or AsyncIOMotorClient(url, serverSelectionTimeoutMS=3000, connectTimeoutMS=3000, tz_aware=True)
@@ -77,6 +95,7 @@ class AnalysisRepository:
             await self._collection.create_index([("evidenceId", ASCENDING), ("modelVersion", ASCENDING), ("imageSha256", ASCENDING)], unique=True, name="evidence_model_image")
             await self._collection.create_index([("orderId", ASCENDING), ("createdAt", DESCENDING)], name="order_created")
             await self._collection.create_index([("assignmentId", ASCENDING), ("createdAt", DESCENDING)], name="assignment_created")
+            await self._collection.create_index([("origin", ASCENDING), ("imageSha256", ASCENDING), ("runId", ASCENDING), ("modelVersion", ASCENDING)], unique=True, partialFilterExpression={"origin": "client"}, name="client_unique")
         except PyMongoError as error:
             raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503, cause=error) from error
 
@@ -113,6 +132,37 @@ class AnalysisRepository:
         except PyMongoError as error:
             raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503, cause=error) from error
 
+    async def save_client_analysis(self, client: dict[str, Any]) -> dict[str, Any]:
+        """Stores an inference that ran on the client.
+
+        It is deliberately a different document shape from a server analysis: `origin` is `client`,
+        the service did not compute anything, and the record keeps the `runId`, `modelVersion` and
+        image hash the device reported so nobody can mistake it for a server verification.
+        """
+        document = {
+            "analysisId": str(uuid.uuid4()),
+            "origin": "client",
+            "assignmentId": client["assignmentId"],
+            "evidenceId": client.get("evidenceId"),
+            "runId": client["runId"],
+            "modelVersion": client["modelVersion"],
+            "imageSha256": client["imageSha256"],
+            "labels": client["labels"],
+            "actor": {"subject": client["subject"], "roles": list(client["roles"])},
+            "createdAt": datetime.now(timezone.utc),
+        }
+        try:
+            await self._collection.insert_one(document)
+        except DuplicateKeyError:
+            existing = await self._collection.find_one(
+                {"origin": "client", "imageSha256": client["imageSha256"], "runId": client["runId"], "modelVersion": client["modelVersion"]}
+            )
+            if existing is None:
+                raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503)
+            return _client_view(existing, replayed=True)
+        except PyMongoError as error:
+            raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503, cause=error) from error
+        return _client_view(document, replayed=False)
     async def by_id(self, analysis_id: str) -> dict[str, Any]:
         try:
             document = await self._collection.find_one({"analysisId": analysis_id})

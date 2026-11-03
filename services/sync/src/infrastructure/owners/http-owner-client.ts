@@ -58,6 +58,11 @@ export class HttpOwnerClient implements OwnerClient {
         const advanceId = encodeURIComponent(operation.target.advanceId ?? '');
         return { base: this.endpoints.operationsUrl, path: `/executions/${assignmentId}/advances/${advanceId}/evidences` };
       }
+      case 'evidence-reauthorize': {
+        // A new signed URL for the *same* evidence (attempt+1): recovery, not a duplicate advance.
+        const evidenceId = encodeURIComponent(operation.target.evidenceId ?? '');
+        return { base: this.endpoints.operationsUrl, path: `/executions/${assignmentId}/evidences/${evidenceId}/retry` };
+      }
       case 'evidence-confirm': {
         const evidenceId = encodeURIComponent(operation.target.evidenceId ?? '');
         return { base: this.endpoints.operationsUrl, path: `/executions/${assignmentId}/evidences/${evidenceId}/confirm` };

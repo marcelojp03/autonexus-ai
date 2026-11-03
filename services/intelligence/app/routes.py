@@ -47,6 +47,21 @@ class AnalyzeRequest(BaseModel):
     evidenceId: str = Field(min_length=1, max_length=64)
 
 
+class ClientLabel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=40)
+    score: float = Field(ge=0.0, le=1.0)
+
+
+class ClientAnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    assignmentId: str = Field(min_length=1, max_length=64)
+    evidenceId: str | None = Field(default=None, max_length=64)
+    runId: str = Field(min_length=1, max_length=64)
+    modelVersion: str = Field(min_length=1, max_length=80)
+    imageSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    labels: list[ClientLabel] = Field(min_length=1, max_length=32)
+
 async def _identity(services: Services, authorization: str | None) -> Identity:
     return await services.verifier.verify(authorization)
 
@@ -122,6 +137,30 @@ def build_router(services: Services) -> APIRouter:
             actor_roles=identity.roles,
         )
 
+    @router.post("/vision/client-analyses")
+    async def client_analysis(payload: ClientAnalysisRequest, authorization: Annotated[str | None, Header()] = None) -> dict[str, Any]:
+        """Records an inference that ran on the device.
+
+        This service does not compute anything here: it stores what the client reported, keeps the
+        provenance (`origin: client`, runId, modelVersion, image hash) and says explicitly that the
+        server did not verify it. The record feeds the history next to the server analyses without
+        ever being presented as one.
+        """
+        identity = await _identity(services, authorization)
+        permissions = await _grant(services, identity, ANALYZE)
+        await services.executions.execution(identity, payload.assignmentId, ExecutionsClient.scope_for(permissions))
+        return await services.repository.save_client_analysis(
+            {
+                "assignmentId": payload.assignmentId,
+                "evidenceId": payload.evidenceId,
+                "runId": payload.runId,
+                "modelVersion": payload.modelVersion,
+                "imageSha256": payload.imageSha256,
+                "labels": [label.model_dump() for label in payload.labels],
+                "subject": identity.subject,
+                "roles": identity.roles,
+            }
+        )
     @router.get("/vision/analyses/{analysis_id}")
     async def analysis(analysis_id: str, authorization: Annotated[str | None, Header()] = None) -> dict[str, Any]:
         identity = await _identity(services, authorization)
