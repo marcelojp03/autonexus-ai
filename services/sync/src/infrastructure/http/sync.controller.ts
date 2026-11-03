@@ -35,9 +35,9 @@ export class SyncController {
     const identity = await this.verifier.verify(authorization);
     const overlay = parseOverlay(body, identity.subject);
     const expiresAt = Math.floor(Date.now() / 1000) + TTL_DAYS * 86400;
-    const { replayed } = await this.repository.save(overlay, expiresAt);
+    const { replayed, replayedOperations } = await this.repository.save(overlay, expiresAt);
     const stored = await this.repository.byId(identity.subject, overlay.overlayId);
-    return { overlay: this.view(stored!), replayed };
+    return { overlay: this.view(stored!), replayed, replayedOperations };
   }
 
   @Get('overlays/:overlayId')

@@ -58,7 +58,7 @@ export function configuration(state) {
       OIDC_AUDIENCES: ['autonexus-operations-api', 'autonexus-employees-api', 'autonexus-intelligence-api'].join(','),
       SYNC_TABLE: 'sync_overlays',
       AWS_REGION: 'us-east-1',
-      DYNAMODB_ENDPOINT: 'http://dynamodb:8000',
+      DYNAMODB_ENDPOINT: 'http://dynamodb:4566',
       OPERATIONS_API_URL: 'http://operations:8081',
       INTELLIGENCE_API_URL: 'http://intelligence:8000',
     },    bff: { ...auth, HTTP_HOST: '0.0.0.0', PORT: 3004, EMPLOYEES_API_URL: 'http://employees:3002', OPERATIONS_API_URL: 'http://operations:8081', FINANCE_API_URL: 'http://finance:8000', INTELLIGENCE_API_URL: 'http://intelligence:8000' },
@@ -106,6 +106,21 @@ export function init({ stateDir = '/state', configDir = '/config', publicOrigin 
   for (const consumer of consumers) {
     const directory = resolve(configDir, consumer);
     mkdirSync(directory, { recursive: true, mode: 0o755 }); chmodSync(directory, 0o755);
+    // Non-secret endpoint migrations already generated once may be rewritten atomically; any other
+    // drift still fails and no credential or business record is touched.
+    const endpointMigrations = {
+      sync: [{ key: 'DYNAMODB_ENDPOINT', previous: 'http://dynamodb:8000' }],
+    };
+    if (endpointMigrations[consumer]) {
+      const target = resolve(directory, 'service.env');
+      const legacy = { ...configs[consumer] };
+      for (const migration of endpointMigrations[consumer]) legacy[migration.key] = migration.previous;
+      if (existsSync(target) && readFileSync(target, 'utf8') === shellEnv(legacy)) {
+        const temporary = resolve(directory, '.endpoint-' + randomBytes(8).toString('hex') + '.env');
+        writeFileSync(temporary, shellEnv(configs[consumer]), { flag: 'wx', mode: 0o444 });
+        renameSync(temporary, target);
+      }
+    }
     if (consumer === 'finance' || consumer === 'bff') {
       const target = resolve(directory, 'service.env');
       const legacy = { ...configs[consumer] };

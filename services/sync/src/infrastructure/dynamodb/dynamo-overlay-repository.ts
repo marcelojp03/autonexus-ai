@@ -26,10 +26,16 @@ export class DynamoOverlayRepository implements OverlayRepository {
       DynamoDBDocumentClient.from(
         new DynamoDBClient({
           region: configuration.region,
+          maxAttempts: 3,
+          requestHandler: { requestTimeout: 4000, connectionTimeout: 3000 },
           ...(configuration.endpoint ? { endpoint: configuration.endpoint } : {}),
-          ...(configuration.accessKeyId && configuration.secretAccessKey
-            ? { credentials: { accessKeyId: configuration.accessKeyId, secretAccessKey: configuration.secretAccessKey } }
-            : {}),
+          // A local emulator ignores the signature but the SDK still needs credentials; without them
+          // it falls back to the default provider chain.
+          credentials: configuration.endpoint
+            ? { accessKeyId: configuration.accessKeyId ?? 'local', secretAccessKey: configuration.secretAccessKey ?? 'local' }
+            : configuration.accessKeyId && configuration.secretAccessKey
+              ? { accessKeyId: configuration.accessKeyId, secretAccessKey: configuration.secretAccessKey }
+              : undefined,
         }),
       );
   }
@@ -39,6 +45,7 @@ export class DynamoOverlayRepository implements OverlayRepository {
       await this.client.send(new GetCommand({ TableName: this.configuration.table, Key: { PK: 'HEALTH#probe', SK: 'probe' } }));
       return true;
     } catch (error) {
+      // A missing table still means the store answered.
       return (error as { name?: string }).name === 'ResourceNotFoundException';
     }
   }
@@ -46,9 +53,15 @@ export class DynamoOverlayRepository implements OverlayRepository {
   /** Creates the table when it does not exist (DynamoDB Local has no migrations). */
   async ensureTable(): Promise<void> {
     const { CreateTableCommand, DescribeTableCommand } = await import('@aws-sdk/client-dynamodb');
-    const raw = this.client.config.endpoint
-      ? new DynamoDBClient({ region: this.configuration.region, endpoint: this.configuration.endpoint, credentials: { accessKeyId: 'local', secretAccessKey: 'local' } })
-      : new DynamoDBClient({ region: this.configuration.region });
+    const raw = new DynamoDBClient({
+      region: this.configuration.region,
+      maxAttempts: 3,
+      requestHandler: { requestTimeout: 4000, connectionTimeout: 3000 },
+      ...(this.configuration.endpoint ? { endpoint: this.configuration.endpoint } : {}),
+      ...(this.configuration.endpoint
+        ? { credentials: { accessKeyId: this.configuration.accessKeyId ?? 'local', secretAccessKey: this.configuration.secretAccessKey ?? 'local' } }
+        : {}),
+    });
     try {
       await raw.send(new DescribeTableCommand({ TableName: this.configuration.table }));
       return;
@@ -71,9 +84,19 @@ export class DynamoOverlayRepository implements OverlayRepository {
     );
   }
 
-  async save(overlay: Overlay, expiresAt: number): Promise<{ replayed: boolean }> {
+  async save(overlay: Overlay, expiresAt: number): Promise<{ replayed: boolean; replayedOperations: string[] }> {
     const existing = await this.byId(overlay.subject, overlay.overlayId);
-    if (existing) return { replayed: true };
+    if (existing) return { replayed: true, replayedOperations: [] };
+    // An operation is global to the subject: a second overlay that declares the same operationId is
+    // a replay of that operation, so the coordinator keeps the original record instead of writing a
+    // duplicate row (the table key is OP#<operationId>).
+    const replayedOperations: string[] = [];
+    const fresh = [];
+    for (const operation of overlay.operations) {
+      const known = await this.operation(overlay.subject, operation.operationId);
+      if (known) replayedOperations.push(operation.operationId);
+      else fresh.push(operation);
+    }
     const pk = this.partition(overlay.subject);
     await this.client.send(
       new PutCommand({
@@ -83,7 +106,7 @@ export class DynamoOverlayRepository implements OverlayRepository {
       }),
     );
     await Promise.all(
-      overlay.operations.map(operation =>
+      fresh.map(operation =>
         this.client.send(
           new PutCommand({
             TableName: this.configuration.table,
@@ -93,7 +116,7 @@ export class DynamoOverlayRepository implements OverlayRepository {
         ),
       ),
     );
-    return { replayed: false };
+    return { replayed: false, replayedOperations };
   }
 
   async byId(subject: string, overlayId: string): Promise<{ overlay: Overlay; operations: StoredOperation[] } | undefined> {

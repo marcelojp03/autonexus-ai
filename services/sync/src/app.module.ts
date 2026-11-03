@@ -23,8 +23,6 @@ export const configuration = () => ({
     table: process.env['SYNC_TABLE'] ?? 'sync_overlays',
     region: process.env['AWS_REGION'] ?? 'us-east-1',
     ...(process.env['DYNAMODB_ENDPOINT'] ? { endpoint: process.env['DYNAMODB_ENDPOINT'] } : {}),
-    ...(process.env['AWS_ACCESS_KEY_ID'] ? { accessKeyId: process.env['AWS_ACCESS_KEY_ID'] } : {}),
-    ...(process.env['AWS_SECRET_ACCESS_KEY'] ? { secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'] } : {}),
   } satisfies DynamoConfiguration,
   owners: { operationsUrl: required('OPERATIONS_API_URL'), intelligenceUrl: required('INTELLIGENCE_API_URL') },
 });

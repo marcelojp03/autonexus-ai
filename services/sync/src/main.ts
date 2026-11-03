@@ -1,4 +1,9 @@
 import 'reflect-metadata';
+import { setDefaultResultOrder } from 'node:dns';
+
+// The AWS SDK resolves the DynamoDB endpoint with the default result order; inside the container
+// the IPv6 candidate never answers, so the request hangs instead of falling back. Prefer IPv4.
+setDefaultResultOrder('ipv4first');
 
 import { NestFactory } from '@nestjs/core';
 

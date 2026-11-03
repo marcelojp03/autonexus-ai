@@ -19,7 +19,7 @@ export interface OverlayRepository {
   /** Creates the table when it does not exist (DynamoDB Local has no migrations). */
   ensureTable(): Promise<void>;
   /** Stores the overlay; returns `replayed: true` when the overlayId already existed for this subject. */
-  save(overlay: Overlay, expiresAt: number): Promise<{ replayed: boolean }>;
+  save(overlay: Overlay, expiresAt: number): Promise<{ replayed: boolean; replayedOperations: string[] }>;
   byId(subject: string, overlayId: string): Promise<{ overlay: Overlay; operations: StoredOperation[] } | undefined>;
   operationsByOverlay(subject: string, overlayId: string): Promise<StoredOperation[]>;
   operation(subject: string, operationId: string): Promise<StoredOperation | undefined>;

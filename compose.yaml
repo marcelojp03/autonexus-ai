@@ -276,13 +276,19 @@ services:
   dynamodb:
     # DynamoDB Local: test database for MS05. It does NOT prove an AWS deployment, and this compose
     # file creates no cloud resource.
-    image: "amazon/dynamodb-local:2.5.2"
-    command: ["-jar","DynamoDBLocal.jar","-inMemory","-sharedDb"]
+    image: "localstack/localstack:4.0"
+    # Disk-backed: recreating the container must not lose overlays. Still local development, not AWS.
+    environment:
+      # DynamoDB only: the emulator must not start other AWS services.
+      SERVICES: "dynamodb"
+      PERSISTENCE: "1"
+      DATA_DIR: "/var/lib/localstack/data"
     init: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
+    volumes: ["dynamodb-data:/var/lib/localstack/data","/var/run/docker.sock:/var/run/docker.sock"]
     healthcheck:
-      test: ["CMD-SHELL","exec 3<>/dev/tcp/127.0.0.1/8000"]
+      test: ["CMD-SHELL","curl -sf http://127.0.0.1:4566/_localstack/health >/dev/null || exit 1"]
       interval: "5s"
       timeout: "4s"
       retries: 30
@@ -296,6 +302,8 @@ services:
     init: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
+    # Loopback only: the verifier and the PWA development shell reach it from the host.
+    ports: ["127.0.0.1:${SYNC_PORT:-3005}:3005"]
     volumes: ["config-sync:/run/config:ro"]
     depends_on:
       dynamodb:
@@ -416,3 +424,4 @@ volumes:
   idp-postgres-data: {}
   rabbitmq-data: {}
   mongo-data: {}
+  dynamodb-data: {}
