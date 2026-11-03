@@ -58,3 +58,6 @@ services/finance/storage/framework/cache
 services/finance/storage/framework/sessions
 services/finance/storage/framework/views
 services/finance/bootstrap/cache/*.php
+
+# Incrementales de TypeScript: si entran al contexto, tsc cree que su salida ya existe y no emite
+**/*.tsbuildinfo
