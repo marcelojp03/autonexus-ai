@@ -1,6 +1,6 @@
 # Estado comprobado
 
-## CU27 — cliente Flutter offline: implementado y probado en unitarias; recorrido en dispositivo BLOQUEADO (2026-11-03)
+## CU27 — cliente Flutter offline: recorrido implementado; login móvil en verificación (2026-11-04)
 
 Rama `work/marcelo`. Implementado y compilado, **sin** recorrido real en dispositivo todavía; no se
 declara CU27 entregado.
@@ -26,25 +26,42 @@ Implementado:
   401 o respuesta perdida dejan la operación `pending`; `conflict` y `rejected` son terminales y visibles.
 - **Compose**: Operaciones publica `127.0.0.1:8081` para que el cliente móvil use REST (el móvil no usa
   GraphQL/BFF); se alcanza desde el dispositivo con `adb reverse tcp:8081 tcp:8081`.
-- **Pruebas**: `flutter test` ⇒ **16/16** (almacén, sincronización y sesión: estado persistido antes de
+- **Configuración local**: `flutter_dotenv` carga `assets/config/.env` antes de `runApp`; ese archivo es
+  local e ignorado, y `assets/config/.env.example` versionado da los valores públicos para crearlo.
+  Solo issuer, URLs, `clientId` público y retención offline; nunca secretos/tokens. El directorio entero
+  se declara como asset para que el .env local sí quede en el APK. `AppConfig` conserva defaults para
+  un checkout que todavía no tenga el .env. En el teléfono los loopbacks `127.0.0.1` usan adb reverse.
+- **Pruebas**: `flutter test` ⇒ **18/18** (incluye carga real del asset .env, almacén, sincronización
+  y sesión: estado persistido antes de
   abrir el navegador, canje desde una instancia nueva que simula el reinicio del proceso, `state`
   desconocido rechazado sin petición, autorización denegada, renovación por `refresh_token`).
-  `flutter analyze` sin errores. APK debug compilado e instalado en el Mi A3.
+  `dart analyze --fatal-infos lib/config.dart lib/main.dart lib/app/journey_controller.dart` sin hallazgos.
+  `flutter build apk --debug --no-pub` PASS; el APK contiene ambos assets/config/.env y .env.example.
 
-Bloqueo observado (no es del código del recorrido):
+Diagnóstico y estado observado del login:
 
 1. `flutter_appauth` 13 no persistió **ningún** estado (`shared_prefs` inexistente) y el sistema reinició
    el proceso de la app mientras el navegador estaba al frente; el callback llegaba con
    `AppAuth: No stored state`. Se sustituyó por el flujo propio con estado en SQLite (arriba).
-2. Con el flujo propio el navegador abre y autentica (Keycloak responde `302` con `code` y `state`
-   correctos), pero Chrome 156 sobre MIUI no entrega de forma fiable la redirección al esquema propio y
-   la inyección de texto por `adb` sobre el formulario pierde caracteres (contraseña de 69 caracteres).
-   El relleno por el canal de depuración del navegador sí acierta los 69 y 45 caracteres, y el `POST`
-   llega a `302`; falta el paso de entrega al app en ese entorno.
+2. El APK inicial carecía de `android.permission.INTERNET` (el manifest debug sustituto había omitido
+   el permiso que aporta Flutter). Esa omisión explica el `_ClientSocketException` visto al canjear el
+   código. Se añadió el permiso; el manifest fusionado lo contiene, Android lo concede y el teléfono
+   responde `200` al sondeo de Keycloak, Operaciones y MS05 por los túneles adb reverse. El build nuevo
+   incluye además el .env cargado como asset. El canje OIDC desde este último APK todavía requiere una
+   nueva observación; no se declara identidad autenticada ni lectura autorizada a Operaciones.
+3. Se contrastó el troubleshooting oficial de `flutter_appauth`: el manifest final no debe declarar
+   `android:taskAffinity=""`. Se quitó; el manifest fusionado tiene un único `MainActivity`
+   (`singleTask`) y el filtro scheme=bo.edu.uagrm.autonexus, host=auth, pathPrefix=/callback.
+   El lanzamiento de una URI sintética desde ADB llega a Flutter tanto con la app abierta como con el
+   proceso cerrado; esto comprueba el receptor, **no** el retorno completo desde Keycloak.
+4. El flujo propio implementa PKCE S256, `state` de un solo uso, expiración/limpieza de la transacción y
+   valida `iss`, `aud` y `nonce`; las pruebas focalizadas de sesión pasan. El browser debe regresar a la
+   app sin maniobra manual; aún falta observar callback → canje → identidad → `GET /agenda/me` real en
+   el teléfono con el último APK.
 
-Siguiente: repetir el recorrido textual con el teléfono desbloqueado y el navegador en primer plano
-(intervención física: aceptar el formulario y volver a la app), o validar en un dispositivo sin
-restricciones de MIUI; después fotografía privada + inferencia local y la PWA equivalente.
+Siguiente: completar el formulario del navegador y tocar Sign In una vez en el teléfono. Comprobar el
+retorno automático, el canje, identidad y consulta autorizada antes de iniciar el recorrido textual
+offline. Después fotografía privada + inferencia local y la PWA equivalente.
 
 ## CU23 — infraestructura e inferencia integradas; capacidad visual EXPERIMENTAL, no validada (2026-11-01)
 > **Cobertura: no cuenta como requisito de IA completamente cubierto.** El servicio, MongoDB, los

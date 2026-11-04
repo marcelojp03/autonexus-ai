@@ -142,12 +142,41 @@ class KeycloakSession {
         _snapshot = SessionSnapshot(authenticated: false, error: 'No se pudo canjear el código (${response.statusCode}).');
         return _snapshot;
       }
+      final payload = jsonDecode(response.body) as Map<String, dynamic>;
+      final idToken = payload['id_token'] as String?;
+      final claims = _claims(idToken);
+      final problem = _validateClaims(claims, pending, idToken != null);
+      if (problem != null) {
+        await store.clearPendingAuthorization(state);
+        _snapshot = SessionSnapshot(authenticated: false, error: problem);
+        return _snapshot;
+      }
       await store.clearPendingAuthorization(state);
-      return _adopt(jsonDecode(response.body) as Map<String, dynamic>);
+      return _adopt(payload);
     } catch (failure) {
-      _snapshot = SessionSnapshot(authenticated: false, error: 'No se pudo canjear el código: ${failure.runtimeType}');
+      // The message is kept short and never includes tokens: it names the transport problem so the
+      // operator can tell "no network" from "the server answered something unexpected".
+      final detail = failure.toString();
+      _snapshot = SessionSnapshot(
+        authenticated: false,
+        error: 'No se pudo canjear el código: ${detail.length > 160 ? detail.substring(0, 160) : detail}',
+      );
       return _snapshot;
     }
+  }
+
+  /// OIDC checks the client can perform without the realm keys: the response must come from this
+  /// issuer, be issued to this client and echo the nonce of the request that is being redeemed. A
+  /// mismatch means the response does not belong to this transaction and is not adopted. Signature
+  /// verification stays with the services, which are the ones that authorise the calls.
+  String? _validateClaims(Map<String, dynamic> claims, PendingAuthorization pending, bool hasIdToken) {
+    if (!hasIdToken) return 'La respuesta no incluye el token de identidad.';
+    if (claims['iss'] != issuer) return 'El emisor del token no es el esperado.';
+    final audience = claims['aud'];
+    final audiences = audience is List ? audience.whereType<String>() : audience is String ? [audience] : const <String>[];
+    if (!audiences.contains(clientId)) return 'El token no fue emitido para esta aplicación.';
+    if (claims['nonce'] != pending.nonce) return 'La respuesta no corresponde a esta solicitud de inicio de sesión.';
+    return null;
   }
 
   /// Renews the access token when it is about to expire. Returns `null` when the session is gone,
@@ -209,7 +238,8 @@ class KeycloakSession {
     final rawExpires = payload['expires_in'];
     final expiresIn = rawExpires is num ? rawExpires.toInt() : int.tryParse('$rawExpires');
     _expiresAt = expiresIn == null ? null : DateTime.now().add(Duration(seconds: expiresIn));
-    final claims = _claims(_idToken ?? _accessToken);
+    // Roles and subject come from the access token, which is what the services will read.
+    final claims = _claims(_accessToken ?? _idToken);
     final realm = claims['realm_access'];
     final roles = (realm is Map ? (realm['roles'] as List?) : null)?.whereType<String>().toList() ?? const <String>[];
     _snapshot = SessionSnapshot(

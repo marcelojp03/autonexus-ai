@@ -41,3 +41,20 @@ Evidencia y límites:
 
 Compilar no es ejecutar: la inferencia en dispositivo hay que correrla con el comando de arriba
 cuando haya un teléfono autorizado o un emulador operativo.
+
+## Configuración local de AutoNexus
+
+La app lee `assets/config/.env` con `flutter_dotenv` antes de iniciar. El archivo está ignorado
+por Git; para crear uno en una instalación limpia, copiá `assets/config/.env.example` a
+`assets/config/.env`. Si no existe, se usan los defaults locales de `lib/config.dart`. Solo contiene valores
+**públicos** (issuer, URLs y el ID público del cliente): no pongas secretos, tokens ni credenciales S3.
+
+En el teléfono conectado por USB, el entorno local usa `adb reverse` para que las URLs `127.0.0.1`
+lleguen al laptop; no cambies el issuer a la IP del laptop. Desde esta carpeta se inicia con:
+
+```sh
+adb -s <serial> reverse tcp:4285 tcp:4285
+adb -s <serial> reverse tcp:8081 tcp:8081
+adb -s <serial> reverse tcp:3005 tcp:3005
+flutter run -d <serial>
+```

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api/owner_api.dart';
@@ -19,13 +20,17 @@ import 'session/keycloak_session.dart';
 /// reachable from the app bar.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // `.env` is a Flutter asset, not a process environment file. It contains only public endpoints
+  // and client metadata; never put a client secret, bearer, refresh token or storage credential here.
+  await dotenv.load(fileName: 'assets/config/.env', isOptional: true);
   final store = await OfflineStore.open();
   final session = KeycloakSession(
     issuer: AppConfig.issuer,
     clientId: AppConfig.clientId,
     redirectUrl: AppConfig.redirectUrl,
     store: store,
-    launchBrowser: (url) => launchUrl(url, mode: LaunchMode.externalApplication),
+    launchBrowser: (url) =>
+        launchUrl(url, mode: LaunchMode.externalApplication),
   );
   final controller = JourneyController(
     session: session,
@@ -56,10 +61,16 @@ class _AutoNexusMobileAppState extends State<AutoNexusMobileApp> {
     _links = AppLinks();
     // The redirect arrives as a deep link. Listening here (not inside the sign-in call) is what makes
     // the flow survive a process restart while the browser is in the foreground.
-    _subscription = _links.uriLinkStream.listen(widget.controller.handleCallback, onError: (Object _) {});
-    _links.getInitialLink().then((uri) {
-      if (uri != null) unawaited(widget.controller.handleCallback(uri));
-    }).catchError((Object _) {});
+    _subscription = _links.uriLinkStream.listen(
+      widget.controller.handleCallback,
+      onError: (Object _) {},
+    );
+    _links
+        .getInitialLink()
+        .then((uri) {
+          if (uri != null) unawaited(widget.controller.handleCallback(uri));
+        })
+        .catchError((Object _) {});
   }
 
   @override
@@ -70,8 +81,11 @@ class _AutoNexusMobileAppState extends State<AutoNexusMobileApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'AutoNexus · Taller',
-        theme: ThemeData(colorSchemeSeed: const Color(0xFF1677FF), useMaterial3: true),
-        home: JourneyHome(controller: widget.controller),
-      );
+    title: 'AutoNexus · Taller',
+    theme: ThemeData(
+      colorSchemeSeed: const Color(0xFF1677FF),
+      useMaterial3: true,
+    ),
+    home: JourneyHome(controller: widget.controller),
+  );
 }

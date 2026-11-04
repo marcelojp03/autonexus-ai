@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The client talks to the owner API, to MS05 and to the identity provider: without this
+         permission every request fails with a socket error, and the code exchange never happens. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="autonexus_mobile"
         android:name="${applicationName}"
@@ -7,7 +10,6 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"

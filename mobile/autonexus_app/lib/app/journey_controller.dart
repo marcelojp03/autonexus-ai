@@ -137,7 +137,7 @@ class JourneyController extends ChangeNotifier {
         orderNumber: execution.orderNumber,
         version: execution.version,
         preparedAt: now,
-        expiresAt: now.add(const Duration(days: AppConfig.preparationDays)),
+        expiresAt: now.add(Duration(days: AppConfig.preparationDays)),
       ));
       notice = 'Trabajo ${execution.orderNumber} preparado para usar sin conexión.';
     });

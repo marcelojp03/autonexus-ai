@@ -88,7 +88,7 @@ void main() {
     final stored = await store.pendingAuthorization(state);
 
     // Second process: same database, fresh in-memory tokens.
-    final client = _FakeClient(_tokenPayload());
+    final client = _FakeClient(_tokenPayload(nonce: stored!.nonce));
     final second = KeycloakSession(
       issuer: 'http://127.0.0.1:4285/identity/realms/autonexus',
       clientId: 'autonexus-mobile',
@@ -102,13 +102,13 @@ void main() {
     expect(snapshot.authenticated, isTrue, reason: 'error: ${snapshot.error} calls: ${client.calls}');
     expect(snapshot.subject, 'employee-subject');
     expect(snapshot.roles, contains('mecanico'));
-    expect(client.lastBody['code_verifier'], stored!.codeVerifier);
+    expect(client.lastBody['code_verifier'], stored.codeVerifier);
     expect(client.lastBody['grant_type'], 'authorization_code');
     expect(await store.pendingAuthorization(state), isNull, reason: 'the state is consumed once');
   });
 
   test('a callback with an unknown state is refused and no request is sent', () async {
-    final client = _FakeClient(_tokenPayload());
+    final client = _FakeClient(_tokenPayload(nonce: 'never-used'));
     final session = KeycloakSession(
       issuer: 'http://127.0.0.1:4285/identity/realms/autonexus',
       clientId: 'autonexus-mobile',
@@ -143,6 +143,7 @@ void main() {
 
   test('an expired access token is renewed with the refresh token', () async {
     var state = '';
+    final client = _FakeClient(const {});
     final session = KeycloakSession(
       issuer: 'http://127.0.0.1:4285/identity/realms/autonexus',
       clientId: 'autonexus-mobile',
@@ -152,23 +153,58 @@ void main() {
         state = url.queryParameters['state']!;
         return true;
       },
-      httpClient: _FakeClient(_tokenPayload(expiresIn: 0)),
+      httpClient: client,
     );
     await session.signIn();
+    final pending = await store.pendingAuthorization(state);
+    client.payload = _tokenPayload(expiresIn: 0, nonce: pending!.nonce);
     await session.completeAuthorization(Uri.parse('bo.edu.uagrm.autonexus://auth/callback?code=abc&state=$state'));
     final token = await session.accessToken(margin: const Duration(seconds: 30));
     expect(token, isNotNull, reason: 'the refresh grant renews it instead of returning nothing');
   });
+
+  test('a response with a foreign nonce, issuer or audience is not adopted', () async {
+    for (final mismatch in ['nonce', 'issuer', 'audience']) {
+      var state = '';
+      final client = _FakeClient(const {});
+      final session = KeycloakSession(
+        issuer: 'http://127.0.0.1:4285/identity/realms/autonexus',
+        clientId: 'autonexus-mobile',
+        redirectUrl: 'bo.edu.uagrm.autonexus://auth/callback',
+        store: store,
+        launchBrowser: (url) async {
+          state = url.queryParameters['state']!;
+          return true;
+        },
+        httpClient: client,
+      );
+      await session.signIn();
+      final pending = await store.pendingAuthorization(state);
+      client.payload = _tokenPayload(
+        nonce: mismatch == 'nonce' ? 'someone-elses-nonce' : pending!.nonce,
+        issuer: mismatch == 'issuer' ? 'http://127.0.0.1:4285/identity/realms/other' : null,
+        audience: mismatch == 'audience' ? ['another-client'] : null,
+      );
+      final snapshot = await session.completeAuthorization(Uri.parse('bo.edu.uagrm.autonexus://auth/callback?code=abc&state=$state'));
+      expect(snapshot.authenticated, isFalse, reason: mismatch);
+      expect(snapshot.error, isNotNull, reason: mismatch);
+      expect(await store.pendingAuthorization(state), isNull, reason: 'the transaction is closed on rejection: $mismatch');
+    }
+  });
 }
 
-Map<String, String> _tokenPayload({int expiresIn = 60}) {
-  final payload = base64Url.encode(utf8.encode(jsonEncode({
+Map<String, String> _tokenPayload({required String nonce, int expiresIn = 60, String? issuer, List<String>? audience}) {
+  final claims = {
+    'iss': issuer ?? 'http://127.0.0.1:4285/identity/realms/autonexus',
+    'aud': audience ?? ['autonexus-mobile'],
+    'nonce': nonce,
     'sub': 'employee-subject',
     'preferred_username': 'employee-demo',
     'realm_access': {
       'roles': ['mecanico', 'offline'],
     },
-  }))).replaceAll('=', '');
+  };
+  final payload = base64Url.encode(utf8.encode(jsonEncode(claims))).replaceAll('=', '');
   return {
     'access_token': 'header.$payload.signature',
     'refresh_token': 'refresh-token',
@@ -181,7 +217,7 @@ Map<String, String> _tokenPayload({int expiresIn = 60}) {
 class _FakeClient extends http.BaseClient {
   _FakeClient(this.payload);
 
-  final Map<String, String> payload;
+  Map<String, String> payload;
   final Map<String, String> lastBody = {};
   int calls = 0;
 
