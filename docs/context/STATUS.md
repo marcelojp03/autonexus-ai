@@ -58,13 +58,14 @@ Diagnóstico y estado observado del login:
    valida `iss`, `aud` y `nonce`; las pruebas focalizadas de sesión pasan. El browser debe regresar a la
    app sin maniobra manual; aún falta observar callback → canje → identidad → `GET /agenda/me` real en
    el teléfono con el último APK.
-5. El usuario ejecutó `flutter run` desde `<repo>/mobile/autonexus_app`, que es el checkout `main@c99e797`,
-   no el worktree de `work/marcelo`; su log confirma que Gradle **sí construyó** el APK, pero Flutter no
-   pudo levantar el Dart VM Service en `127.0.0.1:0` (SocketException/ECONNREFUSED) y la CLI quedó sin
-   adjuntar el debugger. El manifest fusionado de ese build sí declaraba INTERNET y Android lo concedía;
-   el dispositivo es API 36/target 36 y `RESTRICT_LOCAL_NETWORK` aparece disabled. Causa de ese bind aún
-   no identificada. Luego se reinstaló el APK de `work/marcelo` y se observó `MainActivity` en foreground;
-   esto no acredita aún el canje ni el acceso a Operaciones.
+5. Reproducción independiente realizada desde `work/marcelo`: `flutter run -d ff77c09b1c12 --no-pub`
+   resolvió dependencias, Gradle tardó 43,2 s, generó el APK e instaló la app. Después Dart emitió
+   `Could not start Dart VM service HTTP server` y `SocketException ECONNREFUSED` al enlazar `127.0.0.1:0`;
+   por eso la CLI no adjunta el debugger ni termina el ciclo de F5. En el dispositivo, `MainActivity`
+   quedó en primer plano y PID 20534 vivo; el log filtrado del proceso no mostró otra excepción de app.
+   INTERNET está concedido, el Mi A3 es API 36/target 36 y `RESTRICT_LOCAL_NETWORK` está disabled.
+   Causa del bind de depuración aún sin identificar; no es un fallo de resolución de paquetes/Gradle y
+   no se confunde con el login/API empresarial.
 
 Siguiente: completar el formulario del navegador y tocar Sign In una vez en el teléfono. Comprobar el
 retorno automático, el canje, identidad y consulta autorizada antes de iniciar el recorrido textual
