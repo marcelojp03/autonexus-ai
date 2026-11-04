@@ -58,18 +58,19 @@ Diagnóstico y estado observado del login:
    valida `iss`, `aud` y `nonce`; las pruebas focalizadas de sesión pasan. El browser debe regresar a la
    app sin maniobra manual; aún falta observar callback → canje → identidad → `GET /agenda/me` real en
    el teléfono con el último APK.
-5. Reproducción independiente realizada desde `work/marcelo`: `flutter run -d ff77c09b1c12 --no-pub`
-   resolvió dependencias, Gradle tardó 43,2 s, generó el APK e instaló la app. Después Dart emitió
-   `Could not start Dart VM service HTTP server` y `SocketException ECONNREFUSED` al enlazar `127.0.0.1:0`;
-   por eso la CLI no adjunta el debugger ni termina el ciclo de F5. En el dispositivo, `MainActivity`
-   quedó en primer plano y PID 20534 vivo; el log filtrado del proceso no mostró otra excepción de app.
-   INTERNET está concedido, el Mi A3 es API 36/target 36 y `RESTRICT_LOCAL_NETWORK` está disabled.
-   Causa del bind de depuración aún sin identificar; no es un fallo de resolución de paquetes/Gradle y
-   no se confunde con el login/API empresarial.
+5. En el Mi A3 (`ff77c09b1c12`), `flutter run -d ff77c09b1c12 --no-pub` compila e instala, pero Dart
+   falla al enlazar el VM Service en `127.0.0.1:0` (ECONNREFUSED); la actividad queda viva pero VS Code
+   no adjunta el debugger. INTERNET está concedido, API 36/target 36 y el opt-in
+   `RESTRICT_LOCAL_NETWORK` aparece disabled; la causa específica del dispositivo sigue sin identificar.
+6. En el Samsung SM-G990B2 (`RZCTA127N1F`), F5 sí conecta el VM Service. Se abrió el flujo desde la app;
+   el POST de Keycloak para canjear el authorization code respondió HTTP 200 y ADB observó `MainActivity`
+   en primer plano al volver. No se observó `GET /agenda/me`: el teléfono se desconectó antes de verificar
+   la lectura autorizada del propietario.
 
-Siguiente: completar el formulario del navegador y tocar Sign In una vez en el teléfono. Comprobar el
-retorno automático, el canje, identidad y consulta autorizada antes de iniciar el recorrido textual
-offline. Después fotografía privada + inferencia local y la PWA equivalente.
+Siguiente: reconectar el Samsung, confirmar sesión activa en la app y ejecutar Descargar trabajos
+autorizados; después preparar trabajo y completar el recorrido textual offline desde la UI. No declarar
+el login móvil completo hasta observar identidad y lectura autorizada. Después fotografía privada +
+inferencia local y la PWA equivalente.
 
 ## CU23 — infraestructura e inferencia integradas; capacidad visual EXPERIMENTAL, no validada (2026-11-01)
 > **Cobertura: no cuenta como requisito de IA completamente cubierto.** El servicio, MongoDB, los
