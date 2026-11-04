@@ -49,7 +49,7 @@ Diagnóstico y estado observado del login:
    responde `200` al sondeo de Keycloak, Operaciones y MS05 por los túneles adb reverse. El build nuevo
    incluye además el .env cargado como asset. El canje OIDC desde este último APK todavía requiere una
    nueva observación; no se declara identidad autenticada ni lectura autorizada a Operaciones.
-3. Se contrastó el troubleshooting oficial de `flutter_appauth`: el manifest final no debe declarar
+ 3. Se contrastó el troubleshooting oficial de `flutter_appauth`: el manifest final no debe declarar
    `android:taskAffinity=""`. Se quitó; el manifest fusionado tiene un único `MainActivity`
    (`singleTask`) y el filtro scheme=bo.edu.uagrm.autonexus, host=auth, pathPrefix=/callback.
    El lanzamiento de una URI sintética desde ADB llega a Flutter tanto con la app abierta como con el
@@ -58,6 +58,13 @@ Diagnóstico y estado observado del login:
    valida `iss`, `aud` y `nonce`; las pruebas focalizadas de sesión pasan. El browser debe regresar a la
    app sin maniobra manual; aún falta observar callback → canje → identidad → `GET /agenda/me` real en
    el teléfono con el último APK.
+5. El usuario ejecutó `flutter run` desde `<repo>/mobile/autonexus_app`, que es el checkout `main@c99e797`,
+   no el worktree de `work/marcelo`; su log confirma que Gradle **sí construyó** el APK, pero Flutter no
+   pudo levantar el Dart VM Service en `127.0.0.1:0` (SocketException/ECONNREFUSED) y la CLI quedó sin
+   adjuntar el debugger. El manifest fusionado de ese build sí declaraba INTERNET y Android lo concedía;
+   el dispositivo es API 36/target 36 y `RESTRICT_LOCAL_NETWORK` aparece disabled. Causa de ese bind aún
+   no identificada. Luego se reinstaló el APK de `work/marcelo` y se observó `MainActivity` en foreground;
+   esto no acredita aún el canje ni el acceso a Operaciones.
 
 Siguiente: completar el formulario del navegador y tocar Sign In una vez en el teléfono. Comprobar el
 retorno automático, el canje, identidad y consulta autorizada antes de iniciar el recorrido textual
