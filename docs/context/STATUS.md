@@ -1,6 +1,6 @@
 # Estado comprobado
 
-## CU27 — aceptación funcional Android/PWA verificada y revisada; cierre Git pendiente (2026-11-05)
+## CU27 — aceptación funcional Android/PWA entregada, integrada y publicada (2026-11-05)
 
 El recorrido físico del Mi A3 se retomó con autorización del usuario y completó los tres casos móviles pendientes. APK actualizado sin borrar datos, issuer 4286 y PKCE real. Nueva foto seleccionada por UI e inferida sin red, con modo avión/Wi-Fi apagado y los tres túneles API retirados; tras cierre y arranque en frío conservó el UUID, JPEG de 61.032 bytes, hash, cuatro puntajes y revisión humana explícita separada (ninguna etiqueta/no concluyente).
 
@@ -12,7 +12,9 @@ Verificación final: Flutter **39/39 PASS**, analyze sin problemas, APK build/in
 
 Revisión final independiente `general-81`: sin defectos accionables confirmados en el arreglo móvil, harnesses, contratos y evidencia compuesta; cumplimiento, corrección y consistencia conformes dentro de una revisión estática acotada. No repitió pruebas ni certificó en vivo dispositivo/AWS/roles. La revisión anterior general-78 cubrió el delta PWA/traslado/S3.
 
-La aceptación funcional CU27 está comprobada por superficie y revisada; falta ejecutar el cierre Git autorizado. La revisión visual comparada sigue diferida; el modelo sigue experimental/no validado. Estado/contratos/evidencias se actualizan antes de integrar/publicar main y work/marcelo mediante push normal. Después continúa MCP de consulta/n8n sobre órdenes, agenda y avances, sin depender de cobros/indicadores.
+Entrega funcional en `9b60f98651a37b82d85f42991caf330ae3841ba7`: fast-forward de main y push normal exacto de main/work/marcelo, ambos con exit0; `ls-remote` confirmó las dos refs en ese SHA. Auditoría de publicación del rango desde c99e797:16 commits/251 blobs, findings=[] para rutas privadas/generadas, claves privadas y material JWT; no es certificación exhaustiva. Auditoría previa del índice:42 archivos, findings=[]. Se preservaron los cuatro archivos locales ajenos y todos los privados/volúmenes. La constancia documental posterior se integra/publica con el mismo procedimiento.
+
+CU27 queda cerrado funcionalmente. La revisión visual comparada sigue diferida; el modelo sigue experimental/no validado. Continúa MCP de consulta/n8n sobre órdenes, agenda y avances, sin depender de cobros/indicadores.
 
 ## Historial CU27 — fotografía PWA reanudada; móvil todavía pendiente en ese incremento (2026-11-05)
 

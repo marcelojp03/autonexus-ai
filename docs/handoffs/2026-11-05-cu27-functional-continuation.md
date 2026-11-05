@@ -1,8 +1,9 @@
 # CU27 — aceptación funcional PWA/Android/S3; cierre y continuidad
 
-Rama personal `work/marcelo`, worktree existente `.worktrees/work-marcelo`, base/HEAD
-`ec43d635812715d86682c45809bfcc9b7253f72d`; incremento aún sin commit/integración/publicación.
-Main conserva su estado anterior. Mantener cambios locales ajenos (pyproject/uv.lock, diagnóstico
+Rama personal `work/marcelo`, worktree existente `.worktrees/work-marcelo`; base de la continuación
+`ec43d635812715d86682c45809bfcc9b7253f72d`. Entrega funcional
+`9b60f98651a37b82d85f42991caf330ae3841ba7`, integrada por FF y publicada en main/work/marcelo
+con refs remotas comprobadas; la constancia documental posterior mantiene este registro. Mantener cambios locales ajenos (pyproject/uv.lock, diagnóstico
 Java y probe Android), privados y todos los volúmenes. No crear otra rama/worktree.
 
 ## Observado
@@ -39,9 +40,9 @@ los informes iniciales parciales/fallidos se preservan y explican en la evidenci
 Red y roles restaurados; forward9222 retirado. No hace falta más interacción con el A3 para
 estos criterios. La revisión visual comparada sigue diferida.
 
-Revisión final general-81 concluida sin defectos accionables confirmados; spec finalizada.
-Próximo: commit, auditoría de publicación, FF a main y push normal exacto de main/work/marcelo, confirmando SHA remoto.
-Luego iniciar MCP de consulta y n8n sobre órdenes/agenda/avances, sin esperar cobros/indicadores.
+Revisión final general-81 concluida sin defectos accionables confirmados; spec finalizada, entrega
+publicada y auditoría del rango16 commits/251 blobs sin hallazgos dentro de su alcance.
+Próximo: MCP de consulta y n8n sobre órdenes/agenda/avances, sin esperar cobros/indicadores.
 
 ## Historial del bloqueo inicial (ya superado)
 

@@ -28,6 +28,10 @@ IDs, resultados y límites en `docs/evidence/cu27-20261105.md`.
 Comparación visual diferida, modelo experimental/no validado y persistencia del emulador
 limitada a parada ordenada/recreación con volumen. No se acredita despliegue DynamoDB en AWS.
 
+Entrega integrada por FF y publicada en main/work/marcelo en
+`9b60f98651a37b82d85f42991caf330ae3841ba7`, con refs remotas comprobadas. La constancia
+documental posterior conserva la fuente `main` y no acredita nuevas ejecuciones.
+
 ## [S1] Problem
 
 El taller trabaja en zonas donde la conexión se corta. Hoy el mecánico no puede abrir un trabajo ya
