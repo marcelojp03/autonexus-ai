@@ -334,6 +334,8 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     volumes: ["config-bff:/run/config:ro"]
+    environment:
+      SYNC_API_URL: "http://sync:3005"
     depends_on:
       employees:
         condition: "service_healthy"

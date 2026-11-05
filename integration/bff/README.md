@@ -1,5 +1,25 @@
 # BFF
 
+## CU27 — puente de sincronización del Shell
+
+El SDL sync.graphql compone los cuatro campos registerOfflineSync, pushOfflineSync,
+offlineSyncOverlay y offlineSyncOperation. El BFF exige sesión autenticada con rol reconocido;
+MS05 verifica el subject del sobre y cada propietario revalida permiso, acción y registro. No se
+consulta ninguna base desde el BFF ni se usa una cuenta técnica para enviar pendientes.
+
+SYNC_API_URL es configuración confiable del proceso (local 3005; Compose http://sync:3005), nunca
+una URL enviada por el cliente. operationsJson tiene límite y conserva el cuerpo propietario y
+operationId; el coordinador valida su estructura cerrada. El lookup entrega overlayId original y
+operation.resultJson saneado para recuperar IDs/versiones. El push entrega resultsJson efímero,
+que puede contener una autorización de carga; no se debe guardar en IndexedDB/Cache Storage.
+Las respuestas GraphQL usan Cache-Control: no-store, private y Pragma: no-cache.
+
+Pruebas locales verificadas en este incremento: 161 unitarias, 45 HTTP, typecheck y build conformes.
+Las HTTP usan JWT y coordinador controlados. La integración PWA real llegó hasta avance confirmado
+y conserva la foto pendiente por EVIDENCE_STORAGE_UNAVAILABLE; no acredita carga S3 ni MS04 real.
+Ver docs/evidence/cu27-20261105.md desde la raíz.
+
+
 Tecnología: NestJS 12.2.0. Persistencia: sin base de negocio. GraphQL 17.0.2 sobre el SDL publicado; cliente HTTP hacia la API REST de Empleados.
 
 ## Estado

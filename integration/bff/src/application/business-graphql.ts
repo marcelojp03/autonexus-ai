@@ -17,6 +17,7 @@ import type { OperationsCommand, OperationsGateway, OperationsPageQuery } from '
 import type { FinanceGateway, QuoteCommand, QuoteQuery } from './finance-gateway.js';
 import type { AgendaGateway, AgendaQuery, AgendaEmployeesQuery } from './agenda-gateway.js';
 import type { IntelligenceGateway } from './intelligence-gateway.js';
+import type { RegisterSyncInput, SyncGateway } from './sync-gateway.js';
 
 /** Closed permission catalog published by the Employees owner. */
 type Permission =
@@ -39,6 +40,10 @@ export interface CallerIdentity { readonly subject: string; readonly roles: read
 
 /** Root-field permission policy: CU03 stays employees:write (administrator only). */
 const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.freeze({
+  registerOfflineSync: null,
+  pushOfflineSync: null,
+  offlineSyncOverlay: null,
+  offlineSyncOperation: null,
   myAgenda: 'agenda:read:self',
   myAgendaWork: 'agenda:read:self',
   teamAgenda: 'agenda:read:team',
@@ -165,7 +170,8 @@ export class BusinessGraphql {
     private readonly finance: FinanceGateway,
     schemaPaths: readonly string[],
     private readonly agenda: AgendaGateway,
-    private readonly intelligence: IntelligenceGateway,
+    private readonly intelligence?: IntelligenceGateway,
+    private readonly sync?: SyncGateway,
   ) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
   }
@@ -272,6 +278,10 @@ export class BusinessGraphql {
 
   private rootValue(token: string) {
     return {
+      registerOfflineSync: (args: { input: RegisterSyncInput }) => this.syncGateway().register(args.input, token),
+      pushOfflineSync: (args: { overlayId: string }) => this.syncGateway().push(args.overlayId, token),
+      offlineSyncOverlay: (args: { overlayId: string }) => this.syncGateway().overlay(args.overlayId, token),
+      offlineSyncOperation: (args: { operationId: string }) => this.syncGateway().operation(args.operationId, token),
       myAgenda: (args: AgendaQuery) => this.agenda.list('self', args, token),
       myAgendaWork: (args: { assignmentId: string }) => this.agenda.work('self', args.assignmentId, token),
       teamAgenda: (args: AgendaQuery) => this.agenda.list('team', args, token),
@@ -303,11 +313,11 @@ export class BusinessGraphql {
         this.operations.approveExecution(args.assignmentId, args.input, token),
       returnExecution: (args: { assignmentId: string; input: OperationsCommand }) =>
         this.operations.returnExecution(args.assignmentId, args.input, token),
-      visionModel: () => this.intelligence.model(token),
-      assignmentAnalyses: (args: { assignmentId: string }) => this.intelligence.assignment(args.assignmentId, token),
-      orderAnalyses: (args: { orderId: string; assignmentId: string }) => this.intelligence.order(args.orderId, args.assignmentId, token),
-      visionAnalysis: (args: { analysisId: string }) => this.intelligence.analysis(args.analysisId, token),
-      analyzeEvidence: (args: { assignmentId: string; evidenceId: string }) => this.intelligence.analyze(args.assignmentId, args.evidenceId, token),
+      visionModel: () => this.intelligenceGateway().model(token),
+      assignmentAnalyses: (args: { assignmentId: string }) => this.intelligenceGateway().assignment(args.assignmentId, token),
+      orderAnalyses: (args: { orderId: string; assignmentId: string }) => this.intelligenceGateway().order(args.orderId, args.assignmentId, token),
+      visionAnalysis: (args: { analysisId: string }) => this.intelligenceGateway().analysis(args.analysisId, token),
+      analyzeEvidence: (args: { assignmentId: string; evidenceId: string }) => this.intelligenceGateway().analyze(args.assignmentId, args.evidenceId, token),
       myAgendaHistory: (args: AgendaQuery) => this.agenda.history('self', args, token),
       teamAgendaHistory: (args: AgendaQuery) => this.agenda.history('team', args, token),
       retryEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>
@@ -376,6 +386,16 @@ export class BusinessGraphql {
       reviseQuote: (args: { id: string; input: QuoteCommand }) => this.finance.reviseQuote(args.id, args.input, token),
       decideQuote: (args: { id: string; input: QuoteCommand }) => this.finance.decideQuote(args.id, args.input, token),
     };
+  }
+
+  private syncGateway(): SyncGateway {
+    if (!this.sync) throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    return this.sync;
+  }
+
+  private intelligenceGateway(): IntelligenceGateway {
+    if (!this.intelligence) throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    return this.intelligence;
   }
 
   private toBody(error: GraphQLError): GraphqlErrorBody {

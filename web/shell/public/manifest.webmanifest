@@ -1,0 +1,12 @@
+{
+  "id": "/offline.html",
+  "name": "AutoNexus — trabajo sin conexión",
+  "short_name": "AutoNexus",
+  "lang": "es",
+  "start_url": "/offline.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#16324f",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

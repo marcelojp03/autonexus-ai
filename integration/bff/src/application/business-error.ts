@@ -26,6 +26,7 @@ const MESSAGES: Readonly<Record<string, string>> = Object.freeze({
   CU15_DISABLED: 'La confirmación de servicios no está habilitada.',
   CONFIRMATION_NOT_FOUND: 'La confirmación no existe.',
   OPERATION_NOT_FOUND: 'La operación aún no tiene un resultado registrado.',
+  OVERLAY_NOT_FOUND: 'El sobre de sincronización no está disponible para esta cuenta.',
   CONFIRMATION_TERMINAL: 'La confirmación ya finalizó.',
   ORDER_NOT_CONFIRMABLE: 'La orden no admite confirmación en su estado actual.',
   ORDER_CONFIRMATION_IN_PROGRESS: 'La orden tiene una confirmación en curso.',

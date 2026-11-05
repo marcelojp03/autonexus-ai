@@ -6,6 +6,7 @@ import type { IntegratedProps } from '../../../contracts/auth/session';
 import type { AppProps, LifeCycles } from 'single-spa';
 import { matchesModule, moduleForPath, moduleProps, modules } from './routes';
 import type { ModuleId } from './routes';
+import { OfflineWorkspace } from './offline/workspace';
 
 type IntegrationProps = IntegratedProps;
 type Props = AppProps & IntegrationProps;
@@ -19,6 +20,10 @@ const logoutFromProvider = sdk.logout.bind(sdk);
 sdk.logout = async options => { await triggerAppChange(); await logoutFromProvider(options); };
 const owner = createBrowserSession(sdk, { origin: location.origin, application: 'shell' });
 const session = owner.session;
+const offlineHost = document.querySelector<HTMLElement>('#offline-workspace')!;
+const offlineWorkspace = new OfflineWorkspace(offlineHost, session);
+let offlineStarted: Promise<void> | undefined;
+const isOfflineRoute = () => location.pathname === '/offline.html';
 const canMount = () => session.snapshot().authenticated && !!session.snapshot().identity?.roles.length;
 const loginButton = document.querySelector<HTMLButtonElement>('#session-login')!;
 const logoutButton = document.querySelector<HTMLButtonElement>('#session-logout')!;
@@ -55,8 +60,10 @@ function renderNavigation(): void {
   const module = moduleForPath(location.pathname);
   const snapshot = session.snapshot();
   const allowed = canMount();
+  offlineHost.hidden = !isOfflineRoute();
+  if (isOfflineRoute() && !offlineStarted) offlineStarted = offlineWorkspace.start().catch(() => { offlineHost.textContent = 'No se pudo abrir el almacenamiento local. No borres los datos del navegador: reintentá recargando.'; });
   document.title = (module === 'employees' ? 'Empleados' : module === 'operations' ? 'Operaciones' : module === 'finance' ? 'Finanzas' : module === 'intelligence' ? 'Inteligencia' : 'Sesión') + ' · AutoNexus';
-  document.getElementById('route-error')!.hidden = !allowed || !!module;
+  document.getElementById('route-error')!.hidden = isOfflineRoute() || !allowed || !!module;
   for (const id of modules) hosts[id].hidden = !canAccess(id) || id !== module;
   const accessNotice = document.querySelector<HTMLElement>('#module-access')!;
   const gated = module !== undefined && MODULE_PERMISSION[module] !== undefined ? module : undefined;
@@ -68,6 +75,10 @@ function renderNavigation(): void {
   document.querySelector<HTMLElement>('#session-identity')!.textContent = snapshot.identity ? snapshot.identity.username + ' · ' + snapshot.identity.roles.join(', ') : '';
   document.querySelector<HTMLElement>('#session-status')!.textContent = snapshot.notice ?? (snapshot.phase === 'initializing' ? 'Comprobando sesión…' : snapshot.authenticated ? allowed ? 'Sesión iniciada.' : 'Acceso insuficiente: la cuenta no tiene un rol del taller. Cierra sesión para cambiar de cuenta.' : 'Ingresa para acceder a los módulos del taller.');
   loginButton.hidden = snapshot.authenticated || snapshot.phase === 'initializing';
+  if (isOfflineRoute() && !navigator.onLine && !snapshot.authenticated) {
+    document.querySelector<HTMLElement>('#session-status')!.textContent = 'Sin red: copia local disponible. Restablecé sesión con conexión para sincronizar.';
+    loginButton.hidden = false;
+  }
   logoutButton.hidden = !snapshot.authenticated;
   document.querySelector<HTMLElement>('#technical-controls')!.hidden = !allowed;
   document.querySelectorAll<HTMLAnchorElement>('[data-module]').forEach((link) => {
@@ -145,6 +156,7 @@ document.querySelectorAll<HTMLAnchorElement>('[data-shell-link]').forEach((link)
   link.addEventListener('click', (event) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
+    if (new URL(link.href).pathname === '/offline.html') { navigateToUrl(link.href); return; }
     if (!session.snapshot().authenticated) { void session.login(new URL(link.href).pathname); return; }
     navigateToUrl(link.href);
   });
@@ -156,8 +168,8 @@ addErrorHandler((error) => {
 });
 window.addEventListener('single-spa:before-routing-event', renderNavigation);
 window.addEventListener('single-spa:routing-event', renderNavigation);
-loginButton.addEventListener('click', () => { loginButton.disabled = true; void session.login().finally(() => { loginButton.disabled = false; }); });
-logoutButton.addEventListener('click', () => { void session.logout(); });
+loginButton.addEventListener('click', () => { loginButton.disabled = true; void owner.start().then(() => session.login(isOfflineRoute() ? '/offline.html' : undefined)).finally(() => { loginButton.disabled = false; }); });
+logoutButton.addEventListener('click', () => { void offlineWorkspace.clearForLogout().then(ok => { if (ok) return session.logout(); }); });
 document.querySelectorAll<HTMLButtonElement>('[data-technical-service]').forEach(button => {
   button.addEventListener('click', async () => {
     const version = diagnosticEpoch;
@@ -184,7 +196,11 @@ session.subscribe(() => {
   renderNavigation();
   void triggerAppChange();
 });
-await owner.start();
+if (!isOfflineRoute() || navigator.onLine) await owner.start();
+else {
+  document.querySelector<HTMLElement>('#session-status')!.textContent = 'Sin red: podés trabajar en tu copia local. Sincronizar exige restablecer sesión.';
+  loginButton.hidden = false;
+}
 renderNavigation();
 start({ urlRerouteOnly: true });
 // A cached document resumes without evaluating this module again. pagehide has

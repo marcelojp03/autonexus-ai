@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#001529" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <title>AutoNexus · Sesión</title>
 </head>
 <body>
@@ -16,6 +17,7 @@
       <a href="/operations" data-module="operations" data-shell-link>Operaciones</a>
       <a href="/finance" data-module="finance" data-shell-link>Finanzas</a>
       <a href="/intelligence" data-module="intelligence" data-shell-link>Inteligencia</a>
+      <a href="/offline.html" id="offline-link" data-shell-link>Trabajo sin conexión</a>
     </nav>
   </header>
   <aside class="demo-banner"><strong>Páginas de ejemplo del template</strong> · La sesión es real; los gráficos no representan operaciones del taller.</aside>
@@ -58,6 +60,7 @@
     <a href="/employees/dashboard/v1" data-page="dashboard/v1" data-shell-link>Panel demo</a>
   </nav>
   <main id="main" tabindex="-1">
+    <section id="offline-workspace" hidden aria-label="Trabajo sin conexión"></section>
     <p id="load-status" role="status" aria-live="polite"></p>
     <section id="route-error" hidden><h1>Ruta no encontrada</h1><p>Selecciona Empleados, Operaciones, Finanzas o Inteligencia para continuar.</p></section>
     <p id="module-access" role="status" hidden></p>

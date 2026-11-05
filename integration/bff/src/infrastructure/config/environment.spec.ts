@@ -20,13 +20,26 @@ describe('finance standalone origin', () => {
   });
 });
 
-describe('CU05 seventh schema and CU23 ninth schema without transport-policy changes', () => {
-  it('loads nine schemas, keeping agenda seventh, executions eighth and intelligence last', () => {
+describe('CU05 seventh, CU23 ninth and CU27 tenth schemas without transport-policy changes', () => {
+  it('uses only the configured sync origin and validates the sync schema override', () => {
+    expect(bffEnvironment({}).syncUrl).toBe('http://127.0.0.1:3005');
+    expect(bffEnvironment({ SYNC_API_URL: 'http://127.0.0.1:3015/' }).syncUrl).toBe('http://127.0.0.1:3015');
+    for (const url of ['http://127.0.0.1:3005/path', 'http://127.0.0.1:3005?url=other', 'file:///tmp/sync']) {
+      expect(() => bffEnvironment({ SYNC_API_URL: url })).toThrow('SYNC_API_URL');
+    }
+    const schema = resolve('../../contracts/graphql/sync.graphql');
+    expect(bffEnvironment({ BFF_SYNC_SCHEMA_PATH: schema }).schemaPaths[9]).toBe(schema);
+    for (const path of ['sync.graphql', resolve('missing-sync.graphql'), resolve('../../contracts/graphql'), '']) {
+      expect(() => bffEnvironment({ BFF_SYNC_SCHEMA_PATH: path })).toThrow('BFF_SYNC_SCHEMA_PATH');
+    }
+  });
+  it('loads ten schemas, keeping agenda seventh, executions eighth, intelligence ninth and sync last', () => {
     const paths = bffEnvironment({}).schemaPaths;
-    expect(paths).toHaveLength(9);
+    expect(paths).toHaveLength(10);
     expect(paths[6]).toBe(resolve('../../contracts/graphql/agenda.graphql'));
     expect(paths[7]).toBe(resolve('../../contracts/graphql/executions.graphql'));
     expect(paths[8]).toBe(resolve('../../contracts/graphql/intelligence.graphql'));
+    expect(paths[9]).toBe(resolve('../../contracts/graphql/sync.graphql'));
     const schema = buildSchema(paths.map(path => readFileSync(path, 'utf8')).join('\n'));
     expect(Object.keys(schema.getQueryType()!.getFields()).filter(name => /agenda/i.test(name)).sort()).toEqual(
       ['myAgenda', 'myAgendaWork', 'teamAgenda', 'teamAgendaWork', 'agendaTeamEmployees', 'myAgendaHistory', 'teamAgendaHistory'].sort());
@@ -40,7 +53,7 @@ describe('CU05 seventh schema and CU23 ninth schema without transport-policy cha
     }
   });
   it('rejects unsafe owners, invalid issuer/audience and port', () => {
-    for (const key of ['EMPLOYEES_API_URL', 'OPERATIONS_API_URL', 'FINANCE_API_URL', 'INTELLIGENCE_API_URL']) {
+    for (const key of ['EMPLOYEES_API_URL', 'OPERATIONS_API_URL', 'FINANCE_API_URL', 'INTELLIGENCE_API_URL', 'SYNC_API_URL']) {
       expect(() => bffEnvironment({ [key]: 'http://u:p@localhost:3002' })).toThrow(key);
     }
     expect(() => bffEnvironment({ OIDC_ISSUER_URI: 'invalid' })).toThrow('OIDC_ISSUER_URI');

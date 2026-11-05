@@ -1,0 +1,65 @@
+"""CU27 coordinator queries and mutations. The Shell uses this BFF contract, never the MS05 REST directly."""
+type OfflineSyncOperation {
+  operationId: UUID!
+  overlayId: UUID!
+  entity: String!
+  state: String!
+  attemptCount: Int!
+  lastStatus: Int
+  lastCode: String
+  "Sanitized durable owner result; signed URLs are redacted."
+  resultJson: String
+}
+
+type OfflineSyncOverlay {
+  overlayId: UUID!
+  deviceId: String!
+  createdAt: DateTime!
+  operations: [OfflineSyncOperation!]!
+}
+
+type OfflineSyncRegistration {
+  overlay: OfflineSyncOverlay!
+  replayed: Boolean!
+  replayedOperations: [UUID!]!
+}
+
+type OfflineSyncFailure {
+  operationId: UUID!
+  state: String!
+  status: Int!
+  code: String!
+}
+
+type OfflineSyncPushResult {
+  overlayId: UUID!
+  operations: [OfflineSyncOperation!]!
+  applied: [UUID!]!
+  pending: [UUID!]!
+  failed: [OfflineSyncFailure!]!
+  "Owner results are transient; they can contain a signed evidence URL and must not be cached."
+  resultsJson: String!
+}
+
+type OfflineSyncOperationLookup {
+  overlayId: UUID!
+  operation: OfflineSyncOperation!
+}
+
+input RegisterOfflineSyncInput {
+  overlayId: UUID!
+  deviceId: String!
+  createdAt: DateTime!
+  "Serialized OverlayOperation[] from contracts/sync/overlay.md; subject is never accepted from the client."
+  operationsJson: String!
+}
+
+extend type Query {
+  offlineSyncOverlay(overlayId: UUID!): OfflineSyncOverlay!
+  offlineSyncOperation(operationId: UUID!): OfflineSyncOperationLookup!
+}
+
+extend type Mutation {
+  registerOfflineSync(input: RegisterOfflineSyncInput!): OfflineSyncRegistration!
+  pushOfflineSync(overlayId: UUID!): OfflineSyncPushResult!
+}

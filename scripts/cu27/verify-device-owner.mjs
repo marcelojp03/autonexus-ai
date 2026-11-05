@@ -1,0 +1,17 @@
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {authorize} from '../../services/employees/scripts/local-pkce.mjs';
+const {accounts}=JSON.parse(readFileSync('output/stack/cu16-proof.accounts.private.json','utf8'));
+const issuer='http://127.0.0.1:4285/identity/realms/autonexus';
+const token=(await authorize({...accounts.mechanicA,enabled:true},false,{issuer,redirect:'http://127.0.0.1:4285/auth/callback'})).access_token;
+const operationId=process.env.CU27_OPERATION ?? '9d4688ff-fe33-478e-9457-e3293465f0f3';
+const assignment='359cde57-3df0-4d53-b5b3-e18303ca4994';
+const derive=seed=>{const b=createHash('sha256').update(seed).digest().subarray(0,16);b[6]=(b[6]&15)|80;b[8]=(b[8]&63)|128;const h=b.toString('hex');return [h.slice(0,8),h.slice(8,12),h.slice(12,16),h.slice(16,20),h.slice(20)].join('-');};
+const get=async url=>{const r=await fetch(url,{headers:{Authorization:'Bearer '+token}});return {status:r.status,data:await r.json()};};
+const execution=await get('http://127.0.0.1:8081/executions/me/'+assignment);
+const marker=process.env.CU27_MARKER ?? 'CU27-MOBILE-20261105A';
+const advances=(execution.data.advances??[]).filter(a=>a.description.includes(marker));
+const operation=await get('http://127.0.0.1:3005/sync/operations/'+operationId);
+const inference=await get('http://127.0.0.1:3005/sync/operations/'+derive(operationId+':client-inference'));
+const client=inference.data.operation?.lastBody;
+console.log(JSON.stringify({executionStatus:execution.status,version:execution.data.version,advanceCount:advances.length,advances:advances.map(a=>({id:a.id,evidences:a.evidences?.map(e=>({id:e.id,state:e.state,attempt:e.attempt,version:e.version,failureCode:e.failureCode}))})),coordinator:{status:operation.status,state:operation.data.operation?.state,lastResult:operation.data.operation?.lastResult},inference:{status:inference.status,state:inference.data.operation?.state,lastResult:inference.data.operation?.lastResult,origin:client?.origin,verifiedByServer:client?.verifiedByServer,modelVersion:client?.modelVersion,imageSha256:client?.imageSha256,labels:client?.labels,humanReview:client?.humanReview}}));

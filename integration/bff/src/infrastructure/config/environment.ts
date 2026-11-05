@@ -28,6 +28,7 @@ export interface BffConfiguration {
   readonly operationsUrl: string;
   readonly financeUrl: string;
   readonly intelligenceUrl: string;
+  readonly syncUrl: string;
   readonly issuer: string;
   readonly audience: string;
   readonly origins: readonly string[];
@@ -42,6 +43,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const operationsUrl = env.OPERATIONS_API_URL ?? 'http://127.0.0.1:8081';
   const financeUrl = env.FINANCE_API_URL ?? 'http://127.0.0.1:8000';
   const intelligenceUrl = env.INTELLIGENCE_API_URL ?? 'http://127.0.0.1:8007';
+  const syncUrl = env.SYNC_API_URL ?? 'http://127.0.0.1:3005';
   const schemaPath = env.BFF_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/employees.graphql');
   const scheduleSchema = env.BFF_SCHEDULE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/schedules.graphql');
   const securitySchema = env.BFF_SECURITY_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/security.graphql');
@@ -51,6 +53,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const agendaSchema = env.BFF_AGENDA_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/agenda.graphql');
   const executionsSchema = env.BFF_EXECUTIONS_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/executions.graphql');
   const intelligenceSchema = env.BFF_INTELLIGENCE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/intelligence.graphql');
+  const syncSchema = env.BFF_SYNC_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/sync.graphql');
   trustedHttpUrl(issuer, 'OIDC_ISSUER_URI');
   const jwksUri = env.OIDC_JWKS_URI ?? LOCAL_ISSUER + '/protocol/openid-connect/certs';
   trustedHttpUrl(jwksUri, 'OIDC_JWKS_URI');
@@ -62,7 +65,8 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const operationsTarget = trustedHttpUrl(operationsUrl, 'OPERATIONS_API_URL');
   const financeTarget = trustedHttpUrl(financeUrl, 'FINANCE_API_URL');
   const intelligenceTarget = trustedHttpUrl(intelligenceUrl, 'INTELLIGENCE_API_URL');
-  for (const [name, url] of [['EMPLOYEES_API_URL', target], ['OPERATIONS_API_URL', operationsTarget], ['FINANCE_API_URL', financeTarget], ['INTELLIGENCE_API_URL', intelligenceTarget]] as const) {
+  const syncTarget = trustedHttpUrl(syncUrl, 'SYNC_API_URL');
+  for (const [name, url] of [['EMPLOYEES_API_URL', target], ['OPERATIONS_API_URL', operationsTarget], ['FINANCE_API_URL', financeTarget], ['INTELLIGENCE_API_URL', intelligenceTarget], ['SYNC_API_URL', syncTarget]] as const) {
     if (url.pathname !== '/') throw new Error(`Invalid configuration: ${name}`);
   }
   if (!isAbsolute(schemaPath) || !existsSync(schemaPath)) throw new Error('Invalid configuration: BFF_SCHEMA_PATH');
@@ -74,6 +78,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   if (!isAbsolute(agendaSchema) || !existsSync(agendaSchema) || !statSync(agendaSchema).isFile()) throw new Error('Invalid configuration: BFF_AGENDA_SCHEMA_PATH');
   if (!isAbsolute(executionsSchema) || !existsSync(executionsSchema) || !statSync(executionsSchema).isFile()) throw new Error('Invalid configuration: BFF_EXECUTIONS_SCHEMA_PATH');
   if (!isAbsolute(intelligenceSchema) || !existsSync(intelligenceSchema) || !statSync(intelligenceSchema).isFile()) throw new Error('Invalid configuration: BFF_INTELLIGENCE_SCHEMA_PATH');
+  if (!isAbsolute(syncSchema) || !existsSync(syncSchema) || !statSync(syncSchema).isFile()) throw new Error('Invalid configuration: BFF_SYNC_SCHEMA_PATH');
   return Object.freeze({
     host: httpHost(env.HTTP_HOST),
     jwksUri,
@@ -85,6 +90,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
     operationsUrl: operationsTarget.origin,
     financeUrl: financeTarget.origin,
     intelligenceUrl: intelligenceTarget.origin,
-    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema, agendaSchema, executionsSchema, intelligenceSchema]),
+    syncUrl: syncTarget.origin,
+    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema, agendaSchema, executionsSchema, intelligenceSchema, syncSchema]),
   });
 }

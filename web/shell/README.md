@@ -1,5 +1,49 @@
 # Shell y PWA — primera integración local
 
+## CU27 — preparación y trabajo offline del Shell (parcial)
+
+La entrada es /offline.html. La gestión normal de los microfrontends sigue siendo online: esta
+superficie propia del Shell abre solo trabajos previamente autorizados y preparados, con fecha y
+vigencia, y no presenta la copia local como sesión o confirmación del servidor.
+
+Preparar el artefacto local autorizado y construir desde web/shell:
+
+~~~sh
+node scripts/prepare-offline-model.mjs
+pnpm build
+pnpm test
+pnpm typecheck
+~~~
+
+El script resuelve el directorio principal del repositorio Git; acepta OFFLINE_MODEL_SOURCE y
+OFFLINE_TFJS_SOURCE si el operador proporciona otra ubicación compatible. Copia solo modelo,
+pesos, metadatos y TFJS 4.20.0 previamente verificado a public/offline-model/ (ignorado). No envía
+imágenes, datasets ni credenciales a servicios externos. Sin esos archivos el build es válido pero
+declara modelReady:false; «Preparar modelo local» falla honestamente hasta disponer del artefacto.
+
+El build genera offline.html, offline-resources.json y sw.js. El worker precarga la lista exacta
+con integridad; una descarga incompleta conserva la versión anterior. No cachea OAuth, GraphQL,
+APIs, URLs firmadas, tráfico autenticado ni binarios de usuarios. Las fotos/colas se guardan
+explícitamente en IndexedDB por subject, no en Cache Storage. La preparación y el modelo deben
+completarse antes de cortar la red. El navegador debe admitir service workers en HTTPS o loopback.
+
+El usuario selecciona el día del taller, descarga sus trabajos, elige uno en ejecución y lo prepara.
+Offline puede consultarlo, seleccionar una foto, inferir localmente y registrar aparte su revisión.
+Reabrir offline no consulta identidad/API. Al reconectar se restablece PKCE de la misma cuenta y se
+sincroniza por GraphQL/BFF→MS05; la carga binaria usa exclusivamente el PUT firmado del propietario,
+sin bearer. Conflictos y rechazos quedan visibles; cerrar sesión advierte antes de descartar pendientes.
+
+Verificación funcional: scripts/cu27/verify-pwa-real.mjs; la continuación textual utiliza el perfil
+privado ya creado (verify-pwa-continuation.mjs) y no es una prueba nueva de la fotografía pendiente.
+verify-pwa-preserved.mjs comprueba actualización del bundle/worker y conservación offline sin crear
+operaciones adicionales. Los perfiles se guardan solo en output/cu27/ ignorado y no son evidencia
+compartible. La preparación nativa de cámara y la validación visual comparada son verificaciones aparte.
+
+Resultados vigentes: docs/evidence/cu27-20261105.md y docs/context/STATUS.md desde la raíz. La cadena
+fotográfica real sigue pendiente por falta de configuración S3 en Operaciones; la capacidad del modelo
+continúa experimental. Los tests con dobles no acreditan S3 ni persistencia real de análisis en MS04.
+
+
 ## T21 — tres módulos reales (2026-10-28)
 
 El registro tipado modules incluye employees, operations y finance. Finanzas se monta en /finance con host #mf-finance, basePath=/finance y ESM /mfs/finance/main.js; staging copia dist/integrated/ de React además de los dos Angular. Antes de envolver los lifecycles, el loader valida que bootstrap/mount/unmount sean funciones exportadas. El cliente no considera HTTP 200 prueba suficiente de montaje.

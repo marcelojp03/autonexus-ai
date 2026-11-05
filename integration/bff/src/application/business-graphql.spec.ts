@@ -72,6 +72,11 @@ function build(rejected?: Error) {
     requestEvidence: vi.fn(),
     confirmEvidence: vi.fn(),
     retryEvidence: vi.fn(),
+    verification: vi.fn(),
+    activity: vi.fn(),
+    requestVerification: vi.fn(),
+    approveExecution: vi.fn(),
+    returnExecution: vi.fn(),
     evidenceDownload: vi.fn(async () => ({ url: 'https://storage.test/signed', expiresAt: '2026-11-02T12:02:00Z' })),
   };
   const gateway = {
@@ -112,7 +117,7 @@ function build(rejected?: Error) {
     reviseQuote: vi.fn(),
     decideQuote: vi.fn(async () => ({ quote: { id: EMPLOYEE_ID }, orderStatusHint: 'quote_approved', replayed: false })),
   };
-  const agenda = { list: vi.fn(), work: vi.fn(), employees: vi.fn() };
+  const agenda = { list: vi.fn(), work: vi.fn(), employees: vi.fn(), history: vi.fn() };
   return { gateway, operations, finance, graphql: new BusinessGraphql(gateway, operations, finance, bffEnvironment({}).schemaPaths, agenda) };
 }
 

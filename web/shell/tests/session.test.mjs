@@ -90,6 +90,8 @@ test('CU15 IdP logout or refresh failure removes owned metadata without active v
 });
 
 test('return routes accept only owned paths and reject OAuth metadata and escapes', () => {
+  assert.equal(safeReturnTo('/offline.html', 'shell'), '/offline.html');
+  for (const path of ['/offline.html?code=x', '/offline.html#access_token=x', '/offline.html-other', '/offline.html/../auth', '/off%6cine.html']) assert.equal(safeReturnTo(path, 'shell'), null);
   for (const path of ['/employees', '/operations/dashboard/v1?tab=work', '/employees/widgets']) assert.equal(safeReturnTo(path, 'shell'), path);
   for (const path of ['https://outside.invalid', '//outside.invalid', '/employees-other', '/employees/../auth/callback', '/employees/%2e%2e/auth', '/employees/%252e%252e/auth', '/employees/\\evil', '/employees?code=secret', '/employees?%61ccess_token=x', '/operations#access_token=x']) assert.equal(safeReturnTo(path, 'shell'), null);
   for (const path of ['/#/widgets', '/#/dashboard/v1?tab=test']) assert.equal(safeReturnTo(path, 'employees'), path);

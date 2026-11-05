@@ -76,3 +76,6 @@ id_ed25519
 
 # Incrementales de compilación de MS05
 services/sync/*.tsbuildinfo
+
+# CU27 self-hosted generated runtime/model; sources remain in the preparation script.
+/web/shell/public/offline-model/

@@ -1,5 +1,33 @@
 # Estado comprobado
 
+## CU27 — estado consolidado móvil/PWA/S3/visual (2026-11-05)
+
+Entrega **parcial** en work/marcelo. El incremento 0679b69 se guardó y publicó solo en esa rama; main continúa sin integración de CU27. Evidencia detallada y límites: [verificación por superficie](../evidence/cu27-20261105.md).
+
+| Superficie | Resultado observado | Pendiente de aceptación |
+| --- | --- | --- |
+| Android físico Mi A3 | Login real, retorno automático, agenda autorizada del 6/11, preparación, modo avión sin túneles API, dos arranques en frío, foto privada/LiteRT/revisión humana persistidos; sending interrumpido se recupera; conflicto VERSION_CONFLICT conserva foto/cola/revisión. Otro avance textual se aplica una sola vez y un segundo sync no cambia conteo/versión. | Éxito de cadena fotográfica S3/MS04, once-only de escritura aceptada tras interrupción en dispositivo y rechazo por permiso en dispositivo. |
+| PWA / Chromium real | Preparación por UI de trabajo/modelo/worker, dos arranques offline con cero intentos identidad/API, inferencia local y Blob/hash/revisión persistidos. Sync aplica avance y conserva foto pendiente por falta de S3. Texto obsoleto termina en conflicto visible; pérdida de respuesta después de push real se recupera al reabrir/reautenticar, con un solo avance. Bundle final/worker conservan las tres filas y la revisión. | PUT/confirmación S3, análisis cliente real en MS04 y rechazo por permiso con setup reversible autorizado. |
+| S3 | No se observó upload. Operaciones responde EVIDENCE_STORAGE_UNAVAILABLE; faltan bucket/región/proveedor de credenciales en el runtime. Las comprobaciones no imprimieron valores secretos. | Configuración privada autorizada S3_EVIDENCE_BUCKET, S3_EVIDENCE_REGION y credenciales por cadena AWS; no crear/sustituir un bucket o usar emulador por iniciativa propia. |
+| Validación visual comparada | Diferida explícitamente por el usuario. Las pruebas funcionales no se presentan como validación visual. | Realizar comparación acordada después, sin bloquear trabajo funcional independiente. |
+
+Implementación adicional: PWA del Shell en offline.html, manifest, service worker con allowlist estática/hash y activación atómica; excluye OAuth, GraphQL/APIs, URLs firmadas y peticiones autenticadas. IndexedDB particionado por subject, borradores/blobs/cola durables; tokens y signed URLs no se persisten. Modelo TFJS 4.20.0 autohospedado preparado por script desde el artefacto autorizado (experimental); build limpio sin modelo declara modelReady:false. BFF integra los cuatro campos de sincronización por SessionPort/GraphQL y recupera el overlay original; los propietarios mantienen acción/registro/idempotencia. SQLite móvil esquema 6 conserva los sobres de cada etapa; confirmaciones usan la versión de la evidencia, no la de ejecución.
+
+Verificaciones observadas del código final: Flutter analyzer exit 0 / No issues found, 36/36 pruebas y APK debug exit 0; Shell 96/96 + typecheck/build exit 0; BFF 161 unitarias + 45 HTTP, typecheck/build conformes; MS04 reconstruido sin caché desde requirements.txt + requirements-test.txt, 3/3 pruebas con --network none y pip check conforme, independiente del venv local. Revisión de código PWA independiente: un P2 de cambio de cuenta durante el hash, corregido y cubierto por dos regresiones. No es revisión visual.
+
+El fixture CU16 no contiene administrador y el administrador sintético de otro fixture conocido no obtuvo autoridad en el realm aislado. No se modificaron roles: el rechazo real por revocación requiere una cuenta administrativa de prueba aprobada y una restauración demostrable. Los casos unitarios de 403/404 no se cuentan como aceptación real.
+
+Perfiles de navegador, fotografías y configuración privada permanecen ignorados. No se borraron los pendientes ni las bases/volúmenes. El teléfono quedó con modo avión=0, Wi-Fi=1 y los túneles originales restaurados. Runtime local: código actualizado en los contenedores afectados, modelo autorizado preparado en el mount ignorado y endpoint público de MS05 añadido al BFF; las credenciales existentes no se regeneraron. Esto no acredita una reconstrucción integral limpia del stack ni despliegue AWS.
+
+
+## CU27 — aceptación PWA textual independiente de S3 (2026-11-05)
+
+En `work/marcelo`, `node scripts/cu27/verify-pwa-continuation.mjs` terminó con **exit2 parcial**, seis etapas PASS: bundle desplegado idéntico al dist local con defensa de otra cuenta, perfil persistente y PKCE normal, conflicto de avance textual preparado en versión16 (`VERSION_CONFLICT` visible y retenido), preparación por UI del 6 de noviembre en versión17, push real aplicado por propietario con respuesta abortada, reapertura persistente + PKCE + reintento por UI. El propietario conserva exactamente un avance para la descripción/opId de interrupción y no cambia versión al reintentar. Sin inyección de sesión/IndexedDB ni respuestas exitosas simuladas.
+
+Evidencia local: `output/cu27/pwa-continuation.json`; conflicto `d6be22ef-1b8c-4433-8312-d5b0eee2fe84`, operación idempotente `0a8dbe05-55c8-48a2-b4c0-bcfd47cc3b5a`. Se conserva `output/cu27/pwa-real.json` y el perfil `profile-1793854003044`: fotografía original `703a26f5-5c52-4500-88c4-4dc41ebae813` permanece pendiente, con Blob/hash/inferencia y avance ya registrado. No se crearon fotografías adicionales. Bundle actual ya estaba desplegado: no rebuild ni docker cp.
+
+Límites: S3 **false**, bloqueado por configuración del operador ya identificada; visual **NOT_RUN**; móvil corresponde a evidencia del agente principal, no repetida aquí. Rechazo403 **NOT_RUN**: alcanzado el límite de seis etapas, sin resolver de forma independiente identidad admin/empleado y asignación exacta reversible del rol; no se revocó ningún rol. No se declara CU27 completo ni integración S3. Primera invocación del arnés fue interrumpida por presupuesto de herramienta de 1s antes del recorrido; la invocación final se observó hasta exit2.
+
 ## CU27 — Flutter: evidencia fotográfica e inferencia local implementadas; integración real pendiente (2026-11-04)
 
 Rama `work/marcelo`. La captura privada, inferencia local y protocolo de sincronización de fotografía

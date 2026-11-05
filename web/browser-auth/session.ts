@@ -61,6 +61,7 @@ export function safeReturnTo(value: unknown, application: BrowserApplication): s
   try { decoded = decodeURIComponent(value); } catch { return null; }
   if (/[\\%\u0000-\u0020]/.test(decoded) || /%2f|%3f|%23/i.test(value.split(/[?#]/)[0]!) || /(?:^|\/)\.{1,2}(?:\/|[?#]|$)/.test(decoded)) return null;
   if (/(?:[?&#])(?:code|state|session_state|iss|error|error_description|access_token|id_token|refresh_token|token|session_code|nonce|redirect_uri|client_id|response_type|response_mode)(?:=|&|$)/i.test(decoded)) return null;
+  if (application === 'shell' && decoded === '/offline.html') return value === decoded ? value : null;
   if (application === 'shell') return /^\/(employees|operations|finance|intelligence)(?:\/|[?]|$)/.test(decoded) && !decoded.includes('#') ? value : null;
   if (application === 'intelligence') return (decoded === '/intelligence' || decoded.startsWith('/intelligence/') || decoded.startsWith('/intelligence?')) && !decoded.includes('#') ? value : null;
   if (application === 'finance') return (decoded === '/finance' || decoded.startsWith('/finance/') || decoded.startsWith('/finance?')) && !decoded.includes('#') ? value : null;

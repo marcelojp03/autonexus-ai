@@ -13,7 +13,8 @@
     "predev": "node scripts/stage-mfs.mjs",
     "dev": "vite",
     "prebuild": "node scripts/stage-mfs.mjs",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/build-offline-manifest.mjs",
+    "prepare:offline-model": "node scripts/prepare-offline-model.mjs",
     "typecheck": "tsc",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "preview": "vite preview"

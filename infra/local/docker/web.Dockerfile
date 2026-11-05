@@ -37,7 +37,8 @@ RUN pnpm --dir /app/web/shell install --frozen-lockfile
 COPY web/shell/tsconfig.json web/shell/vite.config.ts web/shell/index.html /app/web/shell/
 COPY web/shell/src /app/web/shell/src
 COPY web/shell/public/favicon.svg web/shell/public/runtime-config.js /app/web/shell/public/
-COPY web/shell/scripts/stage-mfs.mjs /app/web/shell/scripts/stage-mfs.mjs
+COPY web/shell/public/sw.js web/shell/public/manifest.webmanifest /app/web/shell/public/
+COPY web/shell/scripts/stage-mfs.mjs web/shell/scripts/build-offline-manifest.mjs /app/web/shell/scripts/
 WORKDIR /app/web/shell
 RUN pnpm run stage:mfs && pnpm run build \
     && test -f dist/index.html \
