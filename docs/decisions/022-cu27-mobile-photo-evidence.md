@@ -1,7 +1,7 @@
 # 022 — CU27 móvil: evidencia fotográfica offline
 
 Fecha: 2026-11-04
-Estado: implementación aplicada en `work/marcelo`; CU27 global continúa pendiente de aceptación real.
+Estado original: implementación aplicada en `work/marcelo`; la aceptación real se observó en la continuación del 2026-11-05, documentada al final.
 
 ## Contexto
 
@@ -17,6 +17,20 @@ Flutter ya guardaba avances en SQLite y ejecutaba LiteRT local, pero la fotograf
 - Los registros de inferencia del servidor y del cliente comparten `vision_analyses`, pero la clave de idempotencia incluye `origin`. La corrección humana se mantiene separada de la predicción y ligada al mismo modelVersion.
 - La UI conserva la identidad Material 3 actual de AutoNexus. La aplicación Geofence fue revisada como referencia de componentes Android, no se copiaron su paleta ni su temática. La revisión visual comparada queda para la siguiente sesión con el usuario.
 
-## Límites de verificación
+## Continuación 2026-11-05 — aplicación del contrato de replay
+
+La aceptación física descubrió que el replay del mismo sobre devuelve `replayed:true` con lista de
+operaciones vacía y que un push terminal no repite necesariamente el body. Flutter usa ambos
+indicadores y consulta la operación durable para recuperar `lastBody.advance.id` antes de avanzar
+con la foto; no crea otra intención ni modifica versiones/cuerpos guardados. Dos regresiones
+SQLite con cierre/reapertura reprodujeron el defecto antes del cambio.
+
+El Mi A3 completó foto/S3/MS04 después de perder una respuesta de avance ya aceptado, y otro
+sync conservó IDs/conteos/versión. Otro pendiente fotográfico recibió403 real del propietario,
+con foto preservada; finally restauró la asignación y PKCE fresco recuperó la lectura en UI.
+Detalles y fallos intermedios conservados en `docs/evidence/cu27-20261105.md`. La comparación
+visual sigue diferida y la capacidad del modelo permanece NO validada.
+
+## Límites de verificación originales
 
 Pruebas locales del flujo cliente y build APK no prueban que las cabeceras firmadas coincidan con S3 ni que Operaciones, MS05, MS04 y la cámara trabajen juntos en el teléfono. ADB no muestra ahora un dispositivo conectado y no se observó el PUT/confirmación real. La capacidad del modelo continúa marcada como NO validada. No se declara CU27 completo ni S3 real probado.

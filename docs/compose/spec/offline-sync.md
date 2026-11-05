@@ -1,13 +1,32 @@
 ---
 feature: offline-sync
-status: in-progress
-updated: 2026-11-02
-source: work/marcelo
+status: delivered
+updated: 2026-11-05
+source: main
 ---
 
 # Recorrido offline y sincronización (MS05 / DynamoDB)
 
 ## Report
+
+**What was built** — MS05 coordina intenciones/resultados durables; PWA y Flutter preparan
+trabajos, conservan archivos e inferencia local/revisión separada y sincronizan con autorización
+actual del propietario. Mismo UUID/sobre/cuerpo tras respuesta perdida; conflictos y rechazos
+visibles sin perder fotos. Cadena privada S3 y registro cliente MS04 verificados en ambas
+superficies. Traslado de copia PWA a un origen CORS autorizado sin regenerar secretos.
+
+**Verification** — Flutter39/39 PASS, analyze/build/install conformes; Node66/66 PASS;
+Shell104/tipos/build y PWA por fases conformes. Mi A3: corte después de aceptación real,
+reapertura/reintento y segundo sync sin duplicación; otra foto rechazada por owner403,
+restauración/fresh PKCE/lectura autorizada en UI. PWA: foto original conservada, S3/MS04,
+reapertura offline/replay y rechazo propietario. Expiración AWS y recuperación de la misma
+evidencia se registran en informes separados; los intentos fallidos se conservan.
+Revisiones independientes focalizadas general-78 y general-81 sin defectos accionables
+confirmados en sus respectivos deltas; no repitieron la aceptación en vivo. Detalle de comandos,
+IDs, resultados y límites en `docs/evidence/cu27-20261105.md`.
+
+Comparación visual diferida, modelo experimental/no validado y persistencia del emulador
+limitada a parada ordenada/recreación con volumen. No se acredita despliegue DynamoDB en AWS.
 
 ## [S1] Problem
 
@@ -108,21 +127,41 @@ resultado real de cada petición decide si se puede sincronizar.
 | `POST /sync/overlays/{overlayId}/push` | Intenta aplicar las operaciones pendientes en orden de dependencias |
 | `GET /sync/operations/{operationId}` | Replay/consulta de una operación |
 
+### [S2.8] Traslado local explícito entre orígenes
+
+La validación S3 utiliza el origen 4286 ya autorizado. Se exporta la copia privada desde la UI del
+origen anterior y se importa por UI solo con el mismo subject autenticado y destino vacío. El
+formato versionado contiene trabajos, cola, Blob en base64, hash, inferencia/revisión y sobres
+inmutables; no tokens ni URLs firmadas. Validación cerrada de estructura/propietario/integridad y
+transacción IndexedDB única impiden una importación parcial o sobrescritura. El archivo sigue
+siendo información privada: exportar no elimina el origen ni amplía la autoridad del cliente.
+La migración del stack mantiene secretos/identidades y guarda respaldo privado; no modifica CORS.
+
+### [S2.9] Replay del mismo sobre y resultado durable
+
+`replayed:true` identifica un sobre existente aunque `replayedOperations` esté vacío. Un push
+terminal puede listar un UUID aplicado sin repetir su body. Flutter recupera el resultado de
+`GET /sync/operations/{operationId}` y exige estado `applied` antes de usar `lastBody.advance.id`
+en una etapa dependiente. Nunca reemplaza el UUID, sobre, cuerpo ni baseVersion guardados.
+Una respuesta 5xx conserva el pendiente; no se acredita rechazo hasta el 403 real del propietario.
+
 ## [S3] Out of Scope
 
 Reservas de horario, confirmaciones de servicio y cobros offline: requieren validación en línea y no
 se encolan. Sin detector de cambios del propietario (no hay push al cliente). Sin despliegue real en
-AWS: la prueba usa DynamoDB Local y así se declara. Sin reentrenamiento ni promoción del modelo.
+AWS: la prueba de sincronización usa el emulador DynamoDB compatible de LocalStack; S3 sí se
+verifica contra el bucket privado autorizado. Persistencia del emulador solo acreditada para
+parada ordenada/recreación con volumen conservado, no corte abrupto. Sin reentrenamiento ni promoción del modelo.
 
 ## Tasks
 
-- [ ] T1: Contrato del sobre — acceptance: `contracts/sync/overlay.md` con campos, estados, códigos y reglas de idempotencia (covers: S2.1).
-- [ ] T2: MS05 NestJS + DynamoDB con `POST /sync/overlays` y `GET` de consulta — acceptance: contra DynamoDB Local persiste y devuelve el sobre con sus operaciones (covers: S2.2, S2.7).
-- [ ] T3: Maquinaria de push con dependencias y llamada al propietario con el token del usuario — acceptance: operación dependiente no se aplica antes que su predecesora (covers: S2.2, S2.4).
-- [ ] T4: Mapa de errores del propietario (`conflict` vs `rejected` vs `pending` por 401) — acceptance: 409 y 403 quedan en estados distintos sin filtrar datos (covers: S2.3).
-- [ ] T5: Cadena de evidencia con `needs-reupload` — acceptance: URL vencida provoca nueva autorización sin duplicar la evidencia (covers: S2.4).
-- [ ] T6: Inferencia del cliente registrada como tal — acceptance: el resultado guarda `origin:client`, `runId`, `modelVersion` y hash (covers: S2.4).
-- [ ] T7: Compose con DynamoDB Local y MS05 `healthy` — acceptance: `docker compose up` levanta ambos y `/health/ready` responde (covers: S2.2).
-- [ ] T8: Flutter: SQLite + archivos privados + cola y sincronización — acceptance: recorrido completo en dispositivo con red cortada (covers: S2.5).
-- [ ] T9: PWA: service worker + IndexedDB + cola — acceptance: recorrido completo en navegador con red cortada y recarga (covers: S2.6).
-- [ ] T10: Verificación real de aceptación en ambas plataformas: persistencia tras reinicio, respuesta perdida sin duplicar, conflicto de versión y rechazo de autorización (covers: S2.3, S2.4, S2.5, S2.6).
+- [x] T1: Contrato del sobre — acceptance: `contracts/sync/overlay.md` con campos, estados, códigos y reglas de idempotencia (covers: S2.1).
+- [x] T2: MS05 NestJS + DynamoDB con `POST /sync/overlays` y `GET` de consulta — acceptance: contra el emulador local persiste y devuelve el sobre con sus operaciones (covers: S2.2, S2.7).
+- [x] T3: Maquinaria de push con dependencias y llamada al propietario con el token del usuario — acceptance: operación dependiente no se aplica antes que su predecesora (covers: S2.2, S2.4).
+- [x] T4: Mapa de errores del propietario (`conflict` vs `rejected` vs `pending` por 401) — acceptance: 409 y 403 quedan en estados distintos sin filtrar datos (covers: S2.3).
+- [x] T5: Cadena de evidencia con `needs-reupload` — acceptance: URL vencida provoca nueva autorización sin duplicar la evidencia; expiración AWS y recuperación de la misma evidencia verificadas en informes separados (covers: S2.4).
+- [x] T6: Inferencia del cliente registrada como tal — acceptance: GET/listado autorizado MS04 confirma `origin:client`, `verifiedByServer:false`, `runId`, `modelVersion`, hash y revisión de la fotografía original PWA (covers: S2.4).
+- [x] T7: Compose con emulador DynamoDB y MS05 `healthy` — acceptance: runtime local con ambos levantados y `/health/ready` conforme; no se afirma una nueva instalación limpia en esta continuación (covers: S2.2).
+- [x] T8: Flutter: SQLite + archivos privados + cola y sincronización — acceptance: recorrido completo en Mi A3 con red cortada, reinicio, foto/S3/MS04 y reintentos (covers: S2.5).
+- [x] T9: PWA: service worker + IndexedDB + cola — acceptance: preparación, inferencia/captura sin red, reapertura offline, S3/MS04 real, replay y rechazo propietario con foto conservada; evidencia por fases en `docs/evidence/cu27-20261105.md` (covers: S2.6).
+- [x] T10: Verificación real de aceptación en ambas plataformas: persistencia tras reinicio, respuesta perdida sin duplicar, conflicto de versión y rechazo de autorización; evidencia por superficie en `docs/evidence/cu27-20261105.md` (covers: S2.3, S2.4, S2.5, S2.6).

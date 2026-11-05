@@ -13,10 +13,11 @@ let page;
 let origin;
 
 before(async () => {
-  const source = stripTypeScriptTypes(await readFile(new URL('../src/offline/store.ts', import.meta.url), 'utf8'));
+  const sources = Object.fromEntries(await Promise.all(['store', 'transfer'].map(async name =>
+    ['/' + name + '.ts', stripTypeScriptTypes(await readFile(new URL('../src/offline/' + name + '.ts', import.meta.url), 'utf8'))])));
   server = createServer((req, res) => {
-    res.setHeader('Content-Type', req.url === '/store.js' ? 'text/javascript' : 'text/html');
-    res.end(req.url === '/store.js' ? source : '<!doctype html><title>Offline store test</title>');
+    res.setHeader('Content-Type', sources[req.url] ? 'text/javascript' : 'text/html');
+    res.end(sources[req.url] ?? '<!doctype html><title>Offline store test</title>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
@@ -33,7 +34,7 @@ beforeEach(async () => {
   page = await context.newPage();
   await page.goto(origin);
   await page.evaluate(async () => {
-    const module = await import('/store.js');
+    const module = await import('/store.ts');
     window.openStore = module.openOfflineStore;
     window.store = await window.openStore();
     window.work = subject => ({ subject, assignmentId: 'a1', orderId: 'o1', orderNumber: 'OT-1', version: 1,

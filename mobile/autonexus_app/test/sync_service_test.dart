@@ -145,6 +145,136 @@ void main() {
     },
   );
 
+  for (final sameOverlayReplay in [true, false]) {
+    test(
+      'recovers photo advance after response loss and reopen (same-overlay replay: $sameOverlayReplay)',
+      () async {
+        await store.updateState('op-1', QueueState.applied);
+        const operationId = '55555555-5555-4555-8555-555555555555';
+        const advanceId = '77777777-7777-4777-8777-777777777777';
+        final bytes = utf8.encode('accepted-advance-photo');
+        final photo = await store.savePhoto(operationId, bytes, 'jpg');
+        final imageHash = sha256.convert(bytes).toString();
+        await store.enqueue(
+          QueuedAdvance(
+            operationId: operationId,
+            subject: 'user-a',
+            assignmentId: 'assignment-1',
+            baseVersion: 3,
+            description: 'Avance con foto conservada',
+            minutesWorked: 10,
+            createdAt: DateTime.utc(2026, 11, 4, 12),
+            state: QueueState.pending,
+            photoPath: photo.path,
+            photoSha256: imageHash,
+          ),
+        );
+        final advanceEnvelopes = <String>[];
+        var reopened = false;
+        var ownerWrites = 0;
+        var advancePushes = 0;
+        var storedReads = 0;
+        var evidenceRequests = 0;
+        final client = MockClient((request) async {
+          if (request.url.path == '/sync/overlays') {
+            final envelope = jsonDecode(request.body) as Map<String, dynamic>;
+            final operation = (envelope['operations'] as List).single as Map;
+            if (operation['entity'] == 'evidence-authorize') {
+              evidenceRequests++;
+              expect(operation['target']['advanceId'], advanceId);
+              expect(operation['file']['sha256'], imageHash);
+              return http.Response(
+                jsonEncode({'code': 'EVIDENCE_STORAGE_UNAVAILABLE'}),
+                503,
+              );
+            }
+            expect(operation['entity'], 'advance');
+            expect(operation['operationId'], operationId);
+            advanceEnvelopes.add(request.body);
+            return http.Response(
+              jsonEncode({
+                'overlay': {'overlayId': envelope['overlayId']},
+                'replayed': reopened && sameOverlayReplay,
+                'replayedOperations': [],
+              }),
+              201,
+            );
+          }
+          if (request.url.path.endsWith('/push')) {
+            advancePushes++;
+            if (!reopened) {
+              ownerWrites++;
+              throw const SocketException('accepted response lost');
+            }
+            return http.Response(
+              jsonEncode({
+                'applied': [operationId],
+                'pending': [],
+                'failed': [],
+                'results': [],
+              }),
+              200,
+            );
+          }
+          expect(request.method, 'GET');
+          expect(request.url.path, '/sync/operations/$operationId');
+          if (!reopened) throw const SocketException('app interrupted');
+          storedReads++;
+          return http.Response(
+            jsonEncode({
+              'operation': {
+                'operationId': operationId,
+                'state': 'applied',
+                'lastResult': {'status': 201, 'code': 'HTTP_201'},
+                'lastBody': {
+                  'advance': {'id': advanceId},
+                  'execution': {'version': 4},
+                },
+              },
+            }),
+            200,
+          );
+        });
+        final first = await SyncService(
+          baseUrl: 'http://sync',
+          store: store,
+          client: client,
+        ).pushPending(subject: 'user-a', token: 'token');
+        expect(first.pending, [operationId]);
+        expect(evidenceRequests, 0);
+        final saved = await store.syncRequest(operationId);
+        await store.close();
+        store = await OfflineStore.open(
+          path: '${temp.path}/offline.db',
+          photoDirectory: Directory('${temp.path}/evidence'),
+        );
+        reopened = true;
+        final second = await SyncService(
+          baseUrl: 'http://sync',
+          store: store,
+          client: client,
+        ).pushPending(subject: 'user-a', token: 'renewed-token');
+        expect(second.error, 'EVIDENCE_STORAGE_UNAVAILABLE');
+        expect(second.pending, [operationId]);
+        expect(storedReads, 1);
+        expect(evidenceRequests, 1);
+        expect(ownerWrites, 1);
+        expect(advancePushes, sameOverlayReplay ? 1 : 2);
+        expect(advanceEnvelopes, [advanceEnvelopes.first, advanceEnvelopes.first]);
+        expect(await store.syncRequest(operationId), saved);
+        final row = (await store.queue('user-a'))
+            .singleWhere((item) => item.operationId == operationId);
+        expect(row.ownerAdvanceId, advanceId);
+        expect(row.operationId, operationId);
+        expect(row.baseVersion, 3);
+        expect(row.state, QueueState.pending);
+        expect(row.photoPath, photo.path);
+        expect(row.photoSha256, imageHash);
+        expect(await File(row.photoPath!).readAsBytes(), bytes);
+      },
+    );
+  }
+
   test('a version conflict is terminal and keeps its code', () async {
     final client = MockClient((request) async {
       if (request.url.path == '/sync/overlays') {

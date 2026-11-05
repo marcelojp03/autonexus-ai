@@ -222,6 +222,12 @@ class SyncService {
         }
         ownerAdvanceId = _nestedString(result.body, 'advance', 'id');
         if (ownerAdvanceId == null) {
+          final stored = await _readStoredOperation(token, operationId);
+          if (stored?.state == 'applied') {
+            ownerAdvanceId = _nestedString(stored?.body, 'advance', 'id');
+          }
+        }
+        if (ownerAdvanceId == null) {
           return await _finish(
             advance,
             'pending',
@@ -638,8 +644,9 @@ class SyncService {
     }
     if (created.statusCode >= 400) return _failedHttp(created);
     final replayed =
-        (created.body?['replayedOperations'] as List?)?.contains(operationId) ??
-        false;
+        created.body?['replayed'] == true ||
+        ((created.body?['replayedOperations'] as List?)?.contains(operationId) ??
+            false);
     if (replayed) {
       final stored = await _readStoredOperation(token, operationId);
       if (stored == null) {

@@ -3,6 +3,7 @@ import { openOfflineStore } from './store.ts';
 import type { OfflineStore, PreparedWork, QueuedAdvance } from './store.ts';
 import { prepareModel, inferPhoto } from './inference.ts';
 import { syncPending } from './sync.ts';
+import { createOfflineCopy, decodeOfflineCopy } from './transfer.ts';
 
 /** Shell-owned CU27 workspace. Local scope is not an authenticated session. */
 export class OfflineWorkspace {
@@ -31,6 +32,7 @@ export class OfflineWorkspace {
       '<p id="offline-status" role="status" aria-live="polite"></p><p id="offline-account"></p>' +
       '<label for="offline-day">Día del trabajo (zona del taller)</label><input id="offline-day" type="date" required><div class="offline-actions"><button type="button" id="offline-download">Descargar trabajos autorizados</button><button type="button" id="offline-model">Preparar modelo local</button><button type="button" id="offline-forget">Descartar copia local</button></div>' +
       '<div id="offline-available"></div>' +
+      '<details id="offline-transfer"><summary>Trasladar esta copia local</summary><p>El archivo contiene trabajos y fotografías privados, sin tokens. Guardalo solo en este equipo; no lo publiques ni lo adjuntes al chat. Exportar no borra la copia de origen. Importar requiere la misma cuenta autenticada y un destino sin datos.</p><button type="button" id="offline-export">Exportar copia local</button><label for="offline-import">Importar copia local en esta cuenta</label><input id="offline-import" type="file" accept="application/json,.json"></details>' +
       '<h2>Trabajo preparado</h2><label for="offline-work">Elegí el trabajo descargado</label><select id="offline-work"><option value="">Todavía no hay trabajo preparado</option></select><p id="offline-work-info"></p>' +
       '<form id="offline-form"><label for="offline-description">Descripción del avance</label><textarea id="offline-description" required minlength="3" maxlength="2000" rows="3"></textarea>' +
       '<label for="offline-minutes">Minutos trabajados</label><input id="offline-minutes" type="number" min="1" max="1440" step="1" value="15" required>' +
@@ -54,6 +56,23 @@ export class OfflineWorkspace {
       if (!this.subject || !confirm('Se descartarán trabajos, fotografías y pendientes locales de esta cuenta. ¿Continuar?')) return;
       await this.store.forget(this.subject); this.subject = null; this.resetPhoto();
       this.notice('Copia local descartada.'); await this.refresh();
+    });
+    this.el<HTMLButtonElement>('offline-export').onclick = () => void this.run(async () => {
+      const subject=this.subject; const epoch=this.sessionEpoch;
+      const actor=this.session.snapshot().identity?.subject;
+      if(!subject || (actor && actor!==subject)) throw new Error('La copia no pertenece a esta cuenta.');
+      const copy=await createOfflineCopy(this.store,subject,location.origin);
+      if(epoch!==this.sessionEpoch || subject!==this.subject) throw new Error('La cuenta cambió durante la exportación. Volvé a intentar.');
+      const url=URL.createObjectURL(copy); const link=document.createElement('a');
+      link.href=url; link.download='autonexus-local-copy.private.json'; link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      this.notice('Copia privada exportada. La fotografía y la cola originales siguen en este navegador.');
+    });
+    this.el<HTMLInputElement>('offline-import').onchange = () => void this.run(async () => {
+      const file=this.el<HTMLInputElement>('offline-import').files?.[0]; if(!file)return;
+      await this.importCopy(file);
+      this.notice('Copia trasladada: se conservaron los identificadores, archivos, versiones y estados. Todavía debe sincronizarse con autorización del servidor.');
+      this.el<HTMLInputElement>('offline-import').value='';
     });
     this.el<HTMLSelectElement>('offline-work').onchange = () => this.showWork();
     this.el<HTMLInputElement>('offline-photo').onchange = () => {
@@ -112,6 +131,21 @@ export class OfflineWorkspace {
     return true;
   }
   private notice(message: string): void { this.el('offline-status').textContent = message; }
+  private async importCopy(file: Blob): Promise<void> {
+    const snapshot=this.session.snapshot(); const subject=snapshot.identity?.subject; const epoch=this.sessionEpoch;
+    if(!snapshot.authenticated || !subject) throw new Error('Restablecé la sesión de la cuenta propietaria para importar.');
+    const copy=await decodeOfflineCopy(file,subject);
+    if(epoch!==this.sessionEpoch || this.session.snapshot().identity?.subject!==subject) throw new Error('La cuenta cambió; no se importó la copia.');
+    const guard = () => {
+      const current=this.session.snapshot();
+      if(epoch!==this.sessionEpoch || !current.authenticated || current.identity?.subject!==subject) {
+        throw new Error('La cuenta cambió; la copia permanece ligada a su propietario y no se muestra a esta sesión.');
+      }
+    };
+    await this.store.restoreCopy(copy); guard();
+    await this.store.recoverInterrupted(subject); guard();
+    this.subject=subject; await this.refresh();
+  }
   private async run(action: () => Promise<void>): Promise<void> {
     if (this.busy) return;
     this.busy = true; this.host.setAttribute('aria-busy', 'true');

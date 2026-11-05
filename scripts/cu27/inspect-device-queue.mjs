@@ -18,7 +18,9 @@ try{
     const file=row.photo_path;
     if(file && !/^[/]data[/](user[/]0|data)[/]bo[.]edu[.]uagrm[.]autonexus[.]autonexus_mobile[/]app_flutter[/]evidence[/][0-9a-f-]+[.]jpg$/.test(file))throw new Error('PHOTO_PATH_OUTSIDE_APP');
     const photoBytes=file?Number(execFileSync(adb,['-s',serial,'shell','run-as',pkg,'stat','-c','%s',file],{encoding:'utf8'}).trim()):0;
-    return {operationId:row.operation_id,description:row.description,state:row.state,photoBytes,imageSha256:row.photo_sha256,labels:row.labels_json,humanReviewLabels:row.human_labels_json,runId:row.run_id,modelVersion:row.model_version,advanceId:row.owner_advance_id,evidenceId:row.evidence_id,evidenceState:row.evidence_state,inferenceState:row.inference_state,lastCode:row.last_code};
+    const actualFileSha256=file?execFileSync(adb,['-s',serial,'shell','run-as',pkg,'sha256sum',file],{encoding:'utf8'}).trim().split(/\s+/)[0]:null;
+    if(file && !/^[a-f0-9]{64}$/.test(actualFileSha256))throw new Error('PHOTO_HASH_INVALID');
+    return {operationId:row.operation_id,description:row.description,state:row.state,photoBytes,imageSha256:row.photo_sha256,actualFileSha256,labels:row.labels_json,humanReviewLabels:row.human_labels_json,humanReviewedAt:row.human_reviewed_at,runId:row.run_id,modelVersion:row.model_version,advanceId:row.owner_advance_id,evidenceId:row.evidence_id,evidenceState:row.evidence_state,inferenceState:row.inference_state,lastCode:row.last_code};
   });
   console.log(JSON.stringify({workCount:db.prepare('SELECT count(*) AS n FROM works').get().n,queue:safe}));
 }finally{db?.close();try{unlinkSync(path);}catch{}try{rmdirSync(dir);}catch{}}

@@ -1,3 +1,5 @@
+import { validateOfflineRecords } from './transfer.ts';
+
 export interface PreparedWork {
   subject: string;
   assignmentId: string;
@@ -41,6 +43,7 @@ export interface OfflineStore {
   localSubject(): Promise<string | null>;
   setLocalSubject(subject: string): Promise<void>;
   recoverInterrupted(subject: string): Promise<void>;
+  restoreCopy(copy: { subject: string; works: PreparedWork[]; queue: QueuedAdvance[] }): Promise<void>;
   close(): void;
 }
 
@@ -48,7 +51,7 @@ function requireSubject(subject: string): void {
   if (typeof subject !== 'string' || !subject.trim()) throw new Error('OFFLINE_SUBJECT_REQUIRED');
 }
 
-function withoutCredentials(value: unknown, seen = new Set<object>()): void {
+export function withoutCredentials(value: unknown, seen = new Set<object>()): void {
   if (!value || typeof value !== 'object' || value instanceof Blob || seen.has(value)) return;
   seen.add(value);
   for (const [key, child] of Object.entries(value)) {
@@ -56,6 +59,7 @@ function withoutCredentials(value: unknown, seen = new Set<object>()): void {
       throw new Error('OFFLINE_CREDENTIAL_FIELD');
     }
     withoutCredentials(child, seen);
+    if (key === 'operationsJson' && typeof child === 'string') withoutCredentials(JSON.parse(child), seen);
   }
 }
 
@@ -143,6 +147,31 @@ export async function openOfflineStore(): Promise<OfflineStore> {
     queue: subject => bySubject<QueuedAdvance>('queue', subject),
     enqueue: item => writeAdvance(item, false),
     update: item => writeAdvance(item, true),
+    async restoreCopy(copy) {
+      const snapshot = structuredClone(copy);
+      await validateOfflineRecords(snapshot);
+      const works = snapshot.works.map(workRecord);
+      const queue = snapshot.queue.map(advanceRecord);
+      await transaction(['works', 'queue', 'local_state'], 'readwrite', async tx => {
+        const workStore = tx.objectStore('works');
+        const queueStore = tx.objectStore('queue');
+        const state = tx.objectStore('local_state');
+        const [workCount, queueCount, localSubject, collisions] = await Promise.all([
+          request(workStore.index('subject').count(snapshot.subject)),
+          request(queueStore.index('subject').count(snapshot.subject)),
+          request(state.get('subject')),
+          Promise.all(queue.map(item => request(queueStore.count(item.operationId)))),
+        ]);
+        if (workCount || queueCount) throw new Error('OFFLINE_COPY_TARGET_NOT_EMPTY');
+        if (localSubject && localSubject !== snapshot.subject) throw new Error('OFFLINE_OWNER_MISMATCH');
+        if (collisions.some(Boolean)) throw new Error('OFFLINE_DUPLICATE_OPERATION');
+        await Promise.all([
+          ...works.map(work => request(workStore.add(work))),
+          ...queue.map(item => request(queueStore.add(item))),
+          request(state.put(snapshot.subject, 'subject')),
+        ]);
+      });
+    },
     async forget(subject) {
       requireSubject(subject);
       await transaction(['works', 'queue', 'local_state'], 'readwrite', async tx => {

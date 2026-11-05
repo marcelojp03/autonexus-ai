@@ -1,5 +1,7 @@
 # Cierre y continuidad de sesión
 
+Traspaso vigente: [CU27 — aceptación funcional completa; cierre Git y MCP/n8n](../handoffs/2026-11-05-cu27-functional-continuation.md). Runtime canónico 4286; conservar perfil/cola/fotos. Las tres pruebas móviles ya se observaron; falta el cierre revisado/publicado. Los traspasos siguientes son históricos.
+
 Traspaso de infraestructura: [Docker Compose local — verificado y revisado](../handoffs/2026-10-29-local-compose.md). T25 tiene aceptación funcional/revisión completas y cierre Git registrado en STATUS al ejecutarse; CU05 G2 visual sigue bloqueado por separado.
 
 Traspaso de CU05: [F1/G1 corregidos, revisión visual pendiente](../handoffs/2026-10-29-cu05-review.md). CU05 no se declara cerrado; continúa pendiente la revisión visual (G2) hasta contar con un canal de píxeles reales.

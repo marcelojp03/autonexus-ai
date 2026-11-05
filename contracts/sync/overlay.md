@@ -114,10 +114,21 @@ en la interfaz. Los bytes solo viajan por la URL prefirmada de Operaciones, nunc
 
 | Método | Ruta | Cuerpo | Respuesta |
 | --- | --- | --- | --- |
-| POST | `/sync/overlays` | sobre completo | `{overlay, replayed}`; 201 si es nuevo, 200 si el `overlayId` ya existía |
+| POST | `/sync/overlays` | sobre completo | `{overlay, replayed, replayedOperations}`; HTTP201 también al reconocer un sobre ya existente |
 | GET | `/sync/overlays/:overlayId` | — | `{overlay}` con el estado de cada operación |
-| POST | `/sync/overlays/:overlayId/push` | — | `{overlay, applied, pending, failed}` |
+| POST | `/sync/overlays/:overlayId/push` | — | `{overlayId, operations, applied, pending, failed, results}`; HTTP200 del coordinador no implica éxito de cada operación |
 | GET | `/sync/operations/:operationId` | — | `{operation}` (replay/consulta) |
+
+Un replay del **mismo sobre** responde `replayed:true` y puede dejar `replayedOperations:[]`;
+esta lista enumera operaciones reconocidas al registrar otro sobre, no sustituye el indicador del
+sobre. Reenviar conserva UUID, cuerpo, versiones y dependencias guardados.
+
+`results` del push describe llamadas realizadas en ese intento. Una operación ya terminal puede
+aparecer en `applied` sin otro body en `results`. Para continuar una etapa dependiente, consultar
+la operación original: `state` indica su estado, `lastResult` contiene status/code y `lastBody` el
+resultado propietario durable saneado. Usar IDs de `lastBody` solo con `state=applied`; si falta el
+resultado, mantener pendiente y señalarlo, nunca inventar un ID ni registrar otra intención. Las
+URLs firmadas están saneadas (`[redacted]`), no son autorizaciones de carga reutilizables.
 
 Autorización: token válido con cualquier rol reconocido; el sobre pertenece al `sub` del token y
 **ningún** subject puede leer ni empujar sobres de otro (404 indistinguible).

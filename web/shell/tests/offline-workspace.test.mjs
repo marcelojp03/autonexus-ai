@@ -40,3 +40,18 @@ test('switching away and back during hashing invalidates even an unchanged selec
   await assert.rejects(saving, /cuenta o la fotografía cambió/);
   assert.equal(f.enqueued(), 0);
 });
+
+test('account change during restore never adopts the previous account in the visible workspace', async () => {
+  let actor = 'actor-a'; let release; let entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const workspace = new OfflineWorkspace({}, { snapshot: () => ({authenticated:true,identity:{subject:actor}}) });
+  workspace.subject = 'actor-b';
+  workspace.store = { restoreCopy: async () => { entered(); await gate; }, recoverInterrupted: async () => {} };
+  workspace.refresh = async () => {};
+  const file = new Blob([JSON.stringify({version:1,subject:'actor-a',sourceOrigin:'http://127.0.0.1:4285',createdAt:'2026-11-05T00:00:00Z',works:[],queue:[]})]);
+  const importing = workspace.importCopy(file);
+  await started; actor = 'actor-b'; workspace.sessionEpoch++; release();
+  await assert.rejects(importing, /cuenta cambió/);
+  assert.equal(workspace.subject, 'actor-b');
+});

@@ -63,6 +63,26 @@ flutter run -d <serial>
 
 ### Verificación funcional más reciente (2026-11-05)
 
+Continuación física concluida en Mi A3 con issuer local4286 (valor público en el asset privado de
+configuración). Instalación sin borrar datos, captura/inferencia sin red y reapertura, avance
+real aceptado antes de cortar su respuesta, recuperación con el mismo UUID, evidencia disponible
+en S3 y análisis cliente MS04. Segundo sync no cambió IDs/conteos/versión. Un pendiente diferente
+recibió403 propietario y quedó rechazado con foto; finally restauró el rol y un PKCE nuevo/lectura
+de agenda en la UI confirmaron recuperación. Evidencia por separado en
+`docs/evidence/cu27-20261105.md`, desde la raíz.
+
+Se corrigió el replay del mismo sobre (`replayed:true` puede tener `replayedOperations:[]`) y la
+recuperación de `lastBody.advance.id` cuando el push terminal omite cuerpos. Dos regresiones
+SQLite close/reopen fallaban antes del fix y pasan después. Suite final39 PASS, analyze sin
+problemas, build/install APK conformes. La prueba de configuración usa valores públicos en
+memoria y no depende del .env local. Revisión visual comparada sigue diferida; modelo NO validado.
+
+El puerto4285 del ejemplo es un default de desarrollo. Para el runtime de aceptación actual,
+configurar públicamente issuer4286, reconstruir APK y usar reverse4286/8081/3005; no cambiar
+audiencia, credenciales ni issuer para sortear un error de login.
+
+#### Historial anterior a la continuación fotográfica
+
 En Mi A3 se observó login real, retorno automático, agenda protegida y preparación del trabajo del
 6 de noviembre mediante el selector de día. Con modo avión y sin túneles USB de API, trabajo, foto,
 cola y revisión humana persistieron tras dos arranques en frío. Interrumpir un envío dejó sending

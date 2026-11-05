@@ -72,7 +72,9 @@ La propuesta para llevar el sistema a proveedores administrados está en [prepar
 
 ## Alcance y próximos módulos
 
-La agenda de esta entrega es web y online. La consulta offline, Flutter, el registro de ejecución/finalización, la lectura humana de notificaciones y los módulos de IA y sincronización no se presentan como capacidades terminadas. El nombre del proyecto expresa esa dirección, no una precisión de IA ni un modelo entrenado acreditados.
+La agenda web, ejecución/finalización y sincronización offline cuentan con evidencia funcional por caso de uso. CU27 verificó PWA y Android físico: preparación sin red, fotos/inferencia local, recuperación de respuestas perdidas sin duplicación y rechazo por permiso conservando evidencia; ver [resultados y límites](docs/evidence/cu27-20261105.md). La comparación visual está diferida.
+
+El modelo visual continúa experimental/no validado: ejecutarlo localmente no acredita calidad diagnóstica ni permiso de redistribución de sus artefactos. MCP de consulta y n8n sobre órdenes, agenda y avances son el siguiente bloque; no dependen de cobros ni indicadores. La lectura humana de notificaciones y otros recorridos no se declaran terminados por estas pruebas.
 
 ## Documentación
 
