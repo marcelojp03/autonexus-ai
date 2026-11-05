@@ -1,5 +1,18 @@
 # Estado comprobado
 
+## CU29 — MCP de consulta integrado contra APIs reales; n8n importado sin ejecutar (2026-11-05)
+
+Incremento sobre `8bb0ca9`. Proceso MCP independiente en TypeScript con SDK oficial v2 (`server`/`client` 2.4.0, `node` 2.1.2, `express` 2.0.2), Express 5.2.1, Zod 4.6.7, jose 6.2.13 y TS 6.0.3 sobre Node 22.22.3. Solo seis consultas GET de órdenes, agenda y avances; sin base de negocio ni escrituras CU30.
+
+Autorización: token propio con pareja de audiencias exacta (recurso `http://127.0.0.1:3006/mcp` + requester `autonexus-mcp-server`), cliente prerregistrado revalidado por petición y catálogo cerrado de scopes. El token MCP nunca se reenvía a los propietarios: Keycloak standard token exchange obtiene otro token con el mismo `sub` y las audiencias de Operaciones/Empleados. Tres clientes locales y dos roles de lectura creados por API del propietario, con verificación previa de que el usuario ya tenía esos permisos; sin rotar secretos ni recrear contenedores.
+
+Verificación: compilación exit 0, núcleo **84/84**, transporte con cliente MCP oficial **8/8**, aprovisionamiento **26/26** e integración real **10 etapas PASS** (PKCE, exchange, descubrimiento por scope, órdenes y agenda reales sin campos privados, ejecución de equipo paginada 5/21, registro inexistente 404 como error, mecánico denegado por scope, auditoría solo metadatos). Evidencia: `docs/evidence/cu29-20261105.md`.
+
+Correcciones surgidas de la prueba real: anclaje de sesión administrativa por `sid` (el token master no trae `sub`), renovación del access token de 60 s, mappers de Keycloak (`userinfo.token.claim`), restitución del scope `basic` que emite `sub`, etiqueta Compose del worktree y validación del período devuelto por el propietario en agenda (regresión roja→verde).
+
+n8n: imagen `docker.n8n.io/n8nio/n8n:2.46.6` fijada por digest, contenedor local `healthy` y workflow de resumen manual importado y persistido **inactivo**, sin secretos. **No** se acredita ejecución real del flujo: el primer consentimiento OAuth2 del cliente confidencial exige interacción del usuario.
+
+CU28 sigue **parcial** (sin avisos, programación con identidad técnica ni los cinco flujos). CU31 no se implementa. Sin despliegue cloud, sin cambios a la autorización de los propietarios y sin verificación de ACL de Windows.
 ## CU27 — aceptación funcional Android/PWA entregada, integrada y publicada (2026-11-05)
 
 El recorrido físico del Mi A3 se retomó con autorización del usuario y completó los tres casos móviles pendientes. APK actualizado sin borrar datos, issuer 4286 y PKCE real. Nueva foto seleccionada por UI e inferida sin red, con modo avión/Wi-Fi apagado y los tres túneles API retirados; tras cierre y arranque en frío conservó el UUID, JPEG de 61.032 bytes, hash, cuatro puntajes y revisión humana explícita separada (ninguna etiqueta/no concluyente).

@@ -31,12 +31,13 @@ export async function authorize(fixture, wrongPassword = false, config = {}) {
     redirect_uri: redirect,
     response_type: 'code',
     response_mode: 'fragment',
-    scope: 'openid profile',
+    scope: config.scope ?? 'openid profile',
     state,
     nonce: randomBytes(24).toString('base64url'),
     code_challenge: challenge,
     code_challenge_method: 'S256',
   });
+  if (config.resource !== undefined) query.set('resource', config.resource);
   const response = await request(
     issuer + '/protocol/openid-connect/auth?' + query,
   );
@@ -80,14 +81,18 @@ export async function authorize(fixture, wrongPassword = false, config = {}) {
   assert.equal(callback.origin + callback.pathname, redirect);
   const parameters = new URLSearchParams(callback.hash.slice(1));
   assert.equal(parameters.get('state'), state);
+  if (config.resource !== undefined) assert.equal(parameters.get('iss'), issuer, 'Resource authorization issuer mismatch.');
   assert.ok(parameters.get('code'), 'Authorization code missing.');
-  const exchanged = await formPost(issuer + '/protocol/openid-connect/token', {
+  const tokenRequest = {
     grant_type: 'authorization_code',
     client_id: client,
     redirect_uri: redirect,
     code: parameters.get('code'),
     code_verifier: verifier,
-  });
+  };
+  if (config.resource !== undefined) tokenRequest.resource = config.resource;
+  if (config.clientSecret !== undefined) tokenRequest.client_secret = config.clientSecret;
+  const exchanged = await formPost(issuer + '/protocol/openid-connect/token', tokenRequest);
   assert.equal(exchanged.status, 200, 'PKCE token exchange failed.');
   const tokens = await exchanged.json();
   assert.equal(tokens.token_type?.toLowerCase(), 'bearer');

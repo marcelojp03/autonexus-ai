@@ -1,0 +1,74 @@
+{
+  "name": "AutoNexus — resumen manual de órdenes, agenda y avances",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Ejecutar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-220, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.AUTONEXUS_OPERATIONS_URL }}/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "limit", "value": "={{ $json.orderLimit || 20 }}" },
+            { "name": "offset", "value": "0" }
+          ]
+        },
+        "options": { "redirect": { "redirect": { "followRedirects": false } }, "timeout": 10000, "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Órdenes autorizadas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [0, 160],
+      "credentials": { "oAuth2Api": { "id": "REPLACE_WITH_LOCAL_CREDENTIAL_ID", "name": "AutoNexus n8n reader" } }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.AUTONEXUS_OPERATIONS_URL }}/agenda/team",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "from", "value": "={{ $json.from }}" },
+            { "name": "to", "value": "={{ $json.to }}" },
+            { "name": "limit", "value": "50" }
+          ]
+        },
+        "options": { "redirect": { "redirect": { "followRedirects": false } }, "timeout": 10000, "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Agenda del equipo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [0, 340],
+      "credentials": { "oAuth2Api": { "id": "REPLACE_WITH_LOCAL_CREDENTIAL_ID", "name": "AutoNexus n8n reader" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read-only aggregation: only counts, statuses and identifiers kept by the API projection.\nconst orders = $('Órdenes autorizadas').first().json.items ?? [];\nconst agenda = $('Agenda del equipo').first().json;\nconst items = agenda.items ?? [];\nconst byStatus = items.reduce((acc, item) => {\n  const key = item.executionStatus ?? 'unknown';\n  acc[key] = (acc[key] ?? 0) + 1;\n  return acc;\n}, {});\nreturn [{ json: {\n  source: 'operations',\n  observedAt: new Date().toISOString(),\n  period: { from: agenda.from, to: agenda.to, timeZone: agenda.timeZone },\n  orders: { returned: orders.length, statuses: orders.reduce((acc, o) => { acc[o.status] = (acc[o.status] ?? 0) + 1; return acc; }, {}) },\n  agenda: { returned: items.length, total: agenda.total, executionByStatus: byStatus },\n  advances: items.map(i => ({\n    assignmentId: i.assignmentId,\n    orderNumber: i.orderNumber,\n    startsAt: i.startsAt,\n    executionStatus: i.executionStatus,\n    advances: i.executionProgress?.advances ?? 0,\n    availableEvidence: i.executionProgress?.availableEvidence ?? 0\n  }))\n} }];"
+      },
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Resumen de lectura",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    }
+  ],
+  "connections": {
+    "Ejecutar manualmente": { "main": [[{ "node": "Órdenes autorizadas", "type": "main", "index": 0 }]] },
+    "Órdenes autorizadas": { "main": [[{ "node": "Agenda del equipo", "type": "main", "index": 0 }]] },
+    "Agenda del equipo": { "main": [[{ "node": "Resumen de lectura", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true, "timezone": "America/La_Paz" },
+  "active": false,
+  "pinData": {}
+}

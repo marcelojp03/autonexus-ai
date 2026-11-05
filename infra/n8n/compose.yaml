@@ -1,0 +1,29 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.46.6@sha256:8602f5dfacbe2c931eeafd010de0e68182310e9f309921e780ab69182e92b3ae
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    ports: ["127.0.0.1:${N8N_PORT:-5678}:5678"]
+    environment:
+      N8N_HOST: "127.0.0.1"
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: "http"
+      WEBHOOK_URL: "http://127.0.0.1:${N8N_PORT:-5678}/"
+      N8N_ENCRYPTION_KEY: "${N8N_ENCRYPTION_KEY:?set a private random encryption key}"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      GENERIC_TIMEZONE: "America/La_Paz"
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: "all"
+      EXECUTIONS_DATA_PRUNE: "true"
+      N8N_RUNNERS_ENABLED: "true"
+      AUTONEXUS_OPERATIONS_URL: "${AUTONEXUS_OPERATIONS_URL:-http://127.0.0.1:8081}"
+    volumes:
+      - type: volume
+        source: n8n-data
+        target: /home/node/.n8n
+volumes:
+  n8n-data: {}

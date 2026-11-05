@@ -1,0 +1,34 @@
+{
+  "name": "autonexus-mcp-server",
+  "version": "0.1.0",
+  "description": "Independent read-only MCP service over authorized AutoNexus APIs",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json && node --test tests/*.test.mjs",
+    "start": "node dist/main.js"
+  },
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": "22.22.3",
+    "pnpm": "12.6.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "@modelcontextprotocol/node": "2.1.2",
+    "@modelcontextprotocol/express": "2.0.2",
+    "express": "5.2.1",
+    "jose": "6.2.13",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/express": "5.0.6",
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
+  }
+}

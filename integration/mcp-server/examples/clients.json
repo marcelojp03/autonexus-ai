@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "clients": [
+    {
+      "clientId": "example-self-reader",
+      "enabled": false,
+      "scopes": ["mcp", "mcp:agenda:read:self", "mcp:executions:read:self"]
+    },
+    {
+      "clientId": "example-team-reader",
+      "enabled": false,
+      "scopes": ["mcp", "mcp:orders:read", "mcp:agenda:read:team", "mcp:executions:read:team"]
+    }
+  ]
+}
