@@ -53,14 +53,21 @@ class ClientLabel(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
 
 
+class ClientHumanReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    modelVersion: str = Field(min_length=1, max_length=80)
+    labels: list[str] = Field(max_length=32)
+
+
 class ClientAnalysisRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assignmentId: str = Field(min_length=1, max_length=64)
-    evidenceId: str | None = Field(default=None, max_length=64)
+    evidenceId: str = Field(min_length=1, max_length=64)
     runId: str = Field(min_length=1, max_length=64)
     modelVersion: str = Field(min_length=1, max_length=80)
     imageSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     labels: list[ClientLabel] = Field(min_length=1, max_length=32)
+    humanReview: ClientHumanReview | None = None
 
 async def _identity(services: Services, authorization: str | None) -> Identity:
     return await services.verifier.verify(authorization)
@@ -148,6 +155,10 @@ def build_router(services: Services) -> APIRouter:
         """
         identity = await _identity(services, authorization)
         permissions = await _grant(services, identity, ANALYZE)
+        if payload.humanReview and payload.humanReview.modelVersion != payload.modelVersion:
+            raise InteligenciaError("VALIDATION_ERROR", 400)
+        if payload.humanReview and len(set(payload.humanReview.labels)) != len(payload.humanReview.labels):
+            raise InteligenciaError("VALIDATION_ERROR", 400)
         await services.executions.execution(identity, payload.assignmentId, ExecutionsClient.scope_for(permissions))
         return await services.repository.save_client_analysis(
             {
@@ -157,6 +168,7 @@ def build_router(services: Services) -> APIRouter:
                 "modelVersion": payload.modelVersion,
                 "imageSha256": payload.imageSha256,
                 "labels": [label.model_dump() for label in payload.labels],
+                "humanReview": payload.humanReview.model_dump() if payload.humanReview else None,
                 "subject": identity.subject,
                 "roles": identity.roles,
             }

@@ -1,9 +1,10 @@
 # Estado comprobado
 
-## CU27 — cliente Flutter offline: recorrido implementado; login móvil en verificación (2026-11-04)
+## CU27 — Flutter: evidencia fotográfica e inferencia local implementadas; integración real pendiente (2026-11-04)
 
-Rama `work/marcelo`. Implementado y compilado, **sin** recorrido real en dispositivo todavía; no se
-declara CU27 entregado.
+Rama `work/marcelo`. La captura privada, inferencia local y protocolo de sincronización de fotografía
+están implementados, con pruebas de cliente y APK debug compilado. No se declara CU27 entregado:
+continúa pendiente observar la carga S3/confirmación real y el recorrido completo en un dispositivo.
 
 Implementado:
 
@@ -19,11 +20,14 @@ Implementado:
   consulta del trabajo preparado, avance pendiente (descripción y minutos), cola con estados
   (`pending`/`sending`/`applied`/`conflict`/`rejected`/`needs-reupload`) y reintento de operaciones que
   quedaron en `sending` al cerrarse la app (vuelven a `pending` y conservan su `operationId`).
-- **Almacén local** (`lib/offline/offline_store.dart`, esquema 3): `works`, `queue`, `local_state`
+- **Almacén local** (`lib/offline/offline_store.dart`, esquema 5): `works`, `queue`, `local_state`
   (último `subject` para consultar la copia sin sesión) y `auth_state`. Todo por `subject`; cerrar sesión
   borra trabajos, cola y fotos del usuario anterior.
-- **Sincronización por MS05** (`lib/offline/sync_service.dart`): sobre con `operationId` por avance;
-  401 o respuesta perdida dejan la operación `pending`; `conflict` y `rejected` son terminales y visibles.
+- **Sincronización por MS05** (`lib/offline/sync_service.dart`): persiste el avance y cada etapa; para
+  una foto ejecuta avance → autorización → PUT prefirmado sin bearer → confirmación → inferencia del
+  cliente en MS04. Los `operationId` son estables entre reintentos; si se pierde la respuesta del PUT,
+  confirma la misma evidencia antes de crear un nuevo intento. `needs-reupload`, conflictos y rechazos
+  permanecen visibles. La predicción y `humanReview` se guardan por separado con `modelVersion`.
 - **Compose**: Operaciones publica `127.0.0.1:8081` para que el cliente móvil use REST (el móvil no usa
   GraphQL/BFF); se alcanza desde el dispositivo con `adb reverse tcp:8081 tcp:8081`.
 - **Configuración local**: `flutter_dotenv` carga `assets/config/.env` antes de `runApp`; ese archivo es
@@ -31,12 +35,17 @@ Implementado:
   Solo issuer, URLs, `clientId` público y retención offline; nunca secretos/tokens. El directorio entero
   se declara como asset para que el .env local sí quede en el APK. `AppConfig` conserva defaults para
   un checkout que todavía no tenga el .env. En el teléfono los loopbacks `127.0.0.1` usan adb reverse.
-- **Pruebas**: `flutter test` ⇒ **18/18** (incluye carga real del asset .env, almacén, sincronización
-  y sesión: estado persistido antes de
-  abrir el navegador, canje desde una instancia nueva que simula el reinicio del proceso, `state`
-  desconocido rechazado sin petición, autorización denegada, renovación por `refresh_token`).
-  `dart analyze --fatal-infos lib/config.dart lib/main.dart lib/app/journey_controller.dart` sin hallazgos.
-  `flutter build apk --debug --no-pub` PASS; el APK contiene ambos assets/config/.env y .env.example.
+- **Captura/inferencia** (`lib/evidence/photo_capture.dart`, `lib/app/work_page.dart`): cámara o galería;
+  `retrieveLostData()` recupera la selección asociada al trabajo; normaliza con orientación a JPEG ≤5 MiB,
+  persiste en archivos privados (Android Auto Backup deshabilitado), calcula SHA-256 y analiza exactamente esos bytes con LiteRT. La pantalla
+  conserva el aviso “NO validada”; la corrección humana es independiente de las puntuaciones del modelo.
+- **Verificación ejecutada ahora**: `flutter test --no-pub` **24/24 PASS**; `flutter build apk --debug
+  --no-pub` **PASS** (65,2 s); MS05 `pnpm test` **19/19 PASS**, `pnpm typecheck` PASS; MS04
+  `pytest -q tests/test_client_analysis_review.py` **3/3 PASS**. El `.venv` local necesitó `motor==3.6.0`
+  de `requirements.txt`; no se versionaron dependencias privadas ni se modificó el lock de Python.
+- **Límite actual**: no se ejecutó `flutter analyze` con resultado (excedió el límite de la herramienta);
+  el APK sí compila. No se observó S3 real ni confirmación de Operaciones en el teléfono. El Samsung
+  se desconectó durante la detección Flutter; no se realizó otra captura visual, según lo acordado.
 
 Diagnóstico y estado observado del login:
 
@@ -67,10 +76,10 @@ Diagnóstico y estado observado del login:
    en primer plano al volver. No se observó `GET /agenda/me`: el teléfono se desconectó antes de verificar
    la lectura autorizada del propietario.
 
-Siguiente: reconectar el Samsung, confirmar sesión activa en la app y ejecutar Descargar trabajos
-autorizados; después preparar trabajo y completar el recorrido textual offline desde la UI. No declarar
-el login móvil completo hasta observar identidad y lectura autorizada. Después fotografía privada +
-inferencia local y la PWA equivalente.
+Siguiente: reconectar el Samsung, confirmar login y descarga de un trabajo autorizado, probar cámara/galería
+y ejecutar el flujo real con S3; luego resolver conflictos/reintentos en dispositivo. La revisión visual
+comparada de la pantalla queda para la siguiente sesión con el usuario. CU27 PWA y los límites de
+aceptación integral siguen pendientes.
 
 ## CU23 — infraestructura e inferencia integradas; capacidad visual EXPERIMENTAL, no validada (2026-11-01)
 > **Cobertura: no cuenta como requisito de IA completamente cubierto.** El servicio, MongoDB, los

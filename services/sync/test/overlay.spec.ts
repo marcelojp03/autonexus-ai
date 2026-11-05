@@ -65,15 +65,29 @@ describe('overlay validation', () => {
 
   it('requires the client inference block exactly on the client-inference entity', () => {
     const clientInference = { runId: 'r1', modelVersion: 'm1', imageSha256: HEX, labels: [{ name: 'scratch', score: 0.4 }] };
-    expectValidation(() => overlay(envelope([advance({ entity: 'client-inference' })]), 's'), /requires clientInference/);
+    expectValidation(() => overlay(envelope([advance({ entity: 'client-inference', target: { assignmentId: UUID_B, evidenceId: UUID_A } })]), 's'), /requires clientInference/);
     expectValidation(() => overlay(envelope([advance({ clientInference })]), 's'), /only belongs/);
-    const parsed = overlay(envelope([advance({ entity: 'client-inference', clientInference })]), 's');
+    const parsed = overlay(envelope([advance({ entity: 'client-inference', target: { assignmentId: UUID_B, evidenceId: UUID_A }, clientInference })]), 's');
     expect(parsed.operations[0]!.clientInference?.imageSha256).toBe(HEX);
+    const reviewed = overlay(envelope([advance({
+      entity: 'client-inference',
+      target: { assignmentId: UUID_B, evidenceId: UUID_A },
+      clientInference: { ...clientInference, humanReview: { modelVersion: 'm1', labels: ['dent'] } },
+    })]), 's');
+    expect(reviewed.operations[0]!.clientInference?.labels[0]).toEqual({ name: 'scratch', score: 0.4 });
+    expect(reviewed.operations[0]!.clientInference?.humanReview).toEqual({ modelVersion: 'm1', labels: ['dent'] });
+    expectValidation(() => overlay(envelope([advance({
+      entity: 'client-inference',
+      target: { assignmentId: UUID_B, evidenceId: UUID_A },
+      clientInference: { ...clientInference, humanReview: { modelVersion: 'other', labels: [] } },
+    })]), 's'), /modelVersion/);
   });
 
   it('validates the file descriptor', () => {
-    expectValidation(() => overlay(envelope([advance({ file: { sha256: 'short', bytes: 10, contentType: 'image/jpeg' } })]), 's'), /sha256/);
-    expectValidation(() => overlay(envelope([advance({ file: { sha256: HEX, bytes: 0, contentType: 'image/jpeg' } })]), 's'), /positive/);
+    const auth = (file: unknown) => advance({ entity: 'evidence-authorize', target: { assignmentId: UUID_B, advanceId: UUID_A }, file });
+    expectValidation(() => overlay(envelope([auth({ sha256: 'short', bytes: 10, contentType: 'image/jpeg' })]), 's'), /sha256/);
+    expectValidation(() => overlay(envelope([auth({ sha256: HEX, bytes: 0, contentType: 'image/jpeg' })]), 's'), /positive/);
+    expectValidation(() => overlay(envelope([advance({ entity: 'evidence-authorize', target: { assignmentId: UUID_B, advanceId: UUID_A } })]), 's'), /requires operation.file/);
   });
 });
 

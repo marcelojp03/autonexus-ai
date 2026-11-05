@@ -5,6 +5,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as img;
 
 import 'antialias_resize.dart';
+
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 /// CU22 — on-device inference with the LiteRT artefact produced by CU23.
@@ -42,13 +43,17 @@ class DamageClassifier {
   /// normalize. Exposed so the device test compares the whole pipeline, not only the interpreter.
   List<List<List<List<double>>>> preprocess(Uint8List bytes) {
     final decoded = img.decodeImage(bytes);
-    if (decoded == null) throw const FormatException('La imagen no se pudo decodificar');
+    if (decoded == null)
+      throw const FormatException('La imagen no se pudo decodificar');
     return [AntialiasResize.run(decoded, inputSize)];
   }
 
   /// Runs inference on the given tensor and reports scores plus elapsed milliseconds.
   DeviceResult runTensor(List<List<List<List<double>>>> input) {
-    final output = List.generate(1, (_) => List.filled(manifest.labels.length, 0.0));
+    final output = List.generate(
+      1,
+      (_) => List.filled(manifest.labels.length, 0.0),
+    );
     final watch = Stopwatch()..start();
     _interpreter.run(input, output);
     watch.stop();
@@ -57,18 +62,34 @@ class DamageClassifier {
     for (var index = 0; index < manifest.labels.length; index++) {
       final score = scores[index];
       final threshold = manifest.thresholds[index];
-      results.add(DeviceScore(label: manifest.labels[index], score: score, threshold: threshold, flagged: score >= threshold));
+      results.add(
+        DeviceScore(
+          label: manifest.labels[index],
+          score: score,
+          threshold: threshold,
+          flagged: score >= threshold,
+        ),
+      );
     }
-    return DeviceResult(scores: results, latencyMs: watch.elapsedMicroseconds / 1000.0);
+    return DeviceResult(
+      scores: results,
+      latencyMs: watch.elapsedMicroseconds / 1000.0,
+    );
   }
 
-  Future<DeviceResult> analyse(Uint8List bytes) async => runTensor(preprocess(bytes));
+  Future<DeviceResult> analyse(Uint8List bytes) async =>
+      runTensor(preprocess(bytes));
 
   void dispose() => _interpreter.close();
 }
 
 class DeviceScore {
-  const DeviceScore({required this.label, required this.score, required this.threshold, required this.flagged});
+  const DeviceScore({
+    required this.label,
+    required this.score,
+    required this.threshold,
+    required this.flagged,
+  });
 
   final String label;
   final double score;
@@ -76,7 +97,8 @@ class DeviceScore {
   final bool flagged;
 
   @override
-  String toString() => '$label ${(score * 100).toStringAsFixed(1)}% (umbral ${(threshold * 100).toStringAsFixed(0)}%)';
+  String toString() =>
+      '$label ${(score * 100).toStringAsFixed(1)}% (umbral ${(threshold * 100).toStringAsFixed(0)}%)';
 }
 
 class DeviceResult {
@@ -91,6 +113,7 @@ class ManifestData {
   const ManifestData({
     required this.labels,
     required this.thresholds,
+    required this.modelVersion,
     required this.runId,
     required this.qualityStatus,
     required this.qualityNote,
@@ -98,21 +121,30 @@ class ManifestData {
 
   final List<String> labels;
   final List<double> thresholds;
+  final String modelVersion;
   final String runId;
   final String qualityStatus;
   final String qualityNote;
 
   static ManifestData parse(String raw) {
     final decoded = json.decode(raw) as Map<String, dynamic>;
-    final labels = (decoded['labels'] as List).map((value) => value.toString()).toList();
-    final thresholdsRaw = decoded['thresholds'] as Map<String, dynamic>? ?? const {};
+    final labels = (decoded['labels'] as List)
+        .map((value) => value.toString())
+        .toList();
+    final thresholdsRaw =
+        decoded['thresholds'] as Map<String, dynamic>? ?? const {};
     final quality = decoded['quality'] as Map<String, dynamic>?;
     return ManifestData(
       labels: labels,
-      thresholds: labels.map((label) => (thresholdsRaw[label] as num?)?.toDouble() ?? 0.5).toList(),
+      thresholds: labels
+          .map((label) => (thresholdsRaw[label] as num?)?.toDouble() ?? 0.5)
+          .toList(),
+      modelVersion: (decoded['modelVersion'] ?? 'sin-version').toString(),
       runId: (decoded['runId'] ?? 'sin-corrida').toString(),
       qualityStatus: (quality?['status'] ?? 'unknown').toString(),
-      qualityNote: (quality?['note'] ?? 'Sin declaración de calidad del operador.').toString(),
+      qualityNote:
+          (quality?['note'] ?? 'Sin declaración de calidad del operador.')
+              .toString(),
     );
   }
 }

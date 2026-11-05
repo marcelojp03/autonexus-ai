@@ -36,7 +36,7 @@ Evidencia y límites:
 | --- | --- |
 | `flutter analyze` | Sin hallazgos |
 | `flutter build apk --debug` | APK construido (`build/app/outputs/flutter-apk/app-debug.apk`) |
-| Ejecución en Android | **Pendiente**: el teléfono conectado (`RZCTA127N1F`) está sin autorizar y el emulador no llega a `online` en este entorno |
+| Ejecución manual Android | Samsung SM-G990B2 abrió la app y ejecutó la muestra LiteRT desde la interfaz (195 ms). No se verificó `GET /agenda/me`, cámara, PUT/confirmación S3 ni el recorrido offline completo; ADB ahora no muestra un dispositivo conectado. |
 | Equivalencia numérica del artefacto | Verificada fuera del dispositivo: LiteRT 3e-06 y TFJS en navegador 2e-06 |
 
 Compilar no es ejecutar: la inferencia en dispositivo hay que correrla con el comando de arriba
@@ -58,3 +58,28 @@ adb -s <serial> reverse tcp:8081 tcp:8081
 adb -s <serial> reverse tcp:3005 tcp:3005
 flutter run -d <serial>
 ```
+
+## Evidencia fotográfica offline
+
+Desde un trabajo preparado se puede tomar una foto o elegirla de la galería. El selector del sistema
+puede reiniciar `MainActivity`; la app persiste antes la asignación y recupera el resultado perdido al
+iniciar. Normaliza la foto con orientación EXIF, la mantiene como JPEG privado de hasta 5 MiB, calcula
+el hash de esos mismos bytes y ejecuta LiteRT local. Android Auto Backup está deshabilitado para evitar
+copiar evidencia a respaldos del dispositivo. La pantalla conserva el aviso de capacidad visual
+no validada y permite guardar aparte una revisión humana sin sobrescribir la predicción.
+
+Al sincronizar, MS05 registra el avance, Operaciones autoriza la evidencia, el teléfono carga el
+binario por PUT prefirmado sin bearer y luego confirma la evidencia. Solo tras la confirmación se
+envía la inferencia del cliente a MS04. Una operación no aparece como confirmada antes de que el
+propietario lo responda.
+
+Verificación local ejecutada en `work/marcelo`:
+
+```sh
+flutter test --no-pub
+flutter build apk --debug --no-pub
+```
+
+El test de protocolo usa transporte controlado; no prueba S3 real. La aceptación en dispositivo
+requiere un teléfono autorizado, una sesión vigente, un trabajo asignado y almacenamiento S3
+configurado. La revisión visual del nuevo flujo queda pendiente.

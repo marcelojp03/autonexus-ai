@@ -30,12 +30,15 @@ export class HttpOwnerClient implements OwnerClient {
 
   async apply(operation: StoredOperation, token: string): Promise<OwnerResult> {
     const { path, base } = this.route(operation);
+    const payload = operation.entity === 'client-inference' && operation.clientInference
+      ? { assignmentId: operation.target.assignmentId, evidenceId: operation.target.evidenceId, ...operation.clientInference }
+      : operation.payload;
     let response: Response;
     try {
       response = await this.transport(base + path, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(operation.payload),
+        body: JSON.stringify(payload),
         redirect: 'error',
         signal: AbortSignal.timeout(this.timeoutMs),
       });

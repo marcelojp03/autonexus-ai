@@ -24,15 +24,17 @@ class MemoryRepository implements OverlayRepository {
     // The in-memory double needs no schema.
   }
 
-  async save(input: Overlay): Promise<{ replayed: boolean }> {
+  async save(input: Overlay, _expiresAt: number): Promise<{ replayed: boolean; replayedOperations: string[] }> {
     const key = input.subject;
     const existing = this.overlays.get(key) ?? [];
-    if (existing.some(operation => operation.overlayId === input.overlayId)) return { replayed: true };
+    if (existing.some(operation => operation.overlayId === input.overlayId)) return { replayed: true, replayedOperations: [] };
+    const replayedOperations = input.operations.filter(operation => existing.some(known => known.operationId === operation.operationId)).map(operation => operation.operationId);
+    const fresh = input.operations.filter(operation => !replayedOperations.includes(operation.operationId));
     this.overlays.set(key, [
       ...existing,
-      ...input.operations.map(operation => ({ ...operation, overlayId: input.overlayId, subject: input.subject, state: 'pending' as const, attempts: [], expiresAt: 0 })),
+      ...fresh.map(operation => ({ ...operation, overlayId: input.overlayId, subject: input.subject, state: 'pending' as const, attempts: [], expiresAt: _expiresAt })),
     ]);
-    return { replayed: false };
+    return { replayed: false, replayedOperations };
   }
 
   async byId(subject: string, overlayId: string) {
@@ -88,7 +90,7 @@ function threeStepOverlay() {
       createdAt: '2026-11-02T10:00:00Z',
       operations: [
         { operationId: ADVANCE, entity: 'advance', target: { assignmentId: ASSIGNMENT }, baseVersion: 1, dependsOn: [], payload: {} },
-        { operationId: AUTHORIZE, entity: 'evidence-authorize', target: { assignmentId: ASSIGNMENT, advanceId: ADVANCE_ID }, baseVersion: 2, dependsOn: [ADVANCE], payload: {} },
+        { operationId: AUTHORIZE, entity: 'evidence-authorize', target: { assignmentId: ASSIGNMENT, advanceId: ADVANCE_ID }, baseVersion: 2, dependsOn: [ADVANCE], payload: {}, file: { sha256: 'a'.repeat(64), bytes: 128, contentType: 'image/jpeg' } },
         { operationId: CONFIRM, entity: 'evidence-confirm', target: { assignmentId: ASSIGNMENT, evidenceId: EVIDENCE_ID }, baseVersion: 3, dependsOn: [AUTHORIZE], payload: {} },
       ],
     },
@@ -101,7 +103,7 @@ describe('push overlay', () => {
     const repository = new MemoryRepository();
     const owner = new ScriptedOwner();
     const push = new PushOverlay(repository, owner);
-    await repository.save(threeStepOverlay());
+    await repository.save(threeStepOverlay(), 0);
 
     const summary = await push.push('subject-1', OVERLAY, 'user-token');
     expect(owner.calls).toEqual([ADVANCE, AUTHORIZE, CONFIRM]);
@@ -113,7 +115,7 @@ describe('push overlay', () => {
     const repository = new MemoryRepository();
     const owner = new ScriptedOwner().respond(ADVANCE, { status: 403, code: 'EXECUTION_ACCESS_DENIED', body: { code: 'EXECUTION_ACCESS_DENIED' } });
     const push = new PushOverlay(repository, owner);
-    await repository.save(threeStepOverlay());
+    await repository.save(threeStepOverlay(), 0);
 
     const summary = await push.push('subject-1', OVERLAY, 'user-token');
     expect(owner.calls).toEqual([ADVANCE]);
@@ -125,7 +127,7 @@ describe('push overlay', () => {
     const repository = new MemoryRepository();
     const owner = new ScriptedOwner().respond(ADVANCE, { status: 401, code: 'UNAUTHENTICATED', body: {} }, { status: 200, code: 'OK', body: {} });
     const push = new PushOverlay(repository, owner);
-    await repository.save(threeStepOverlay());
+    await repository.save(threeStepOverlay(), 0);
 
     const first = await push.push('subject-1', OVERLAY, 'user-token');
     expect(first.pending).toContain(ADVANCE);
@@ -145,7 +147,7 @@ describe('push overlay', () => {
       { status: 200, code: 'OK', body: { replayed: true } },
     );
     const push = new PushOverlay(repository, owner);
-    await repository.save(threeStepOverlay());
+    await repository.save(threeStepOverlay(), 0);
 
     const first = await push.push('subject-1', OVERLAY, 'user-token');
     expect(first.pending).toContain(ADVANCE);
@@ -158,7 +160,7 @@ describe('push overlay', () => {
     const repository = new MemoryRepository();
     const owner = new ScriptedOwner().respond(ADVANCE, { status: 409, code: 'VERSION_CONFLICT', body: {} });
     const push = new PushOverlay(repository, owner);
-    await repository.save(threeStepOverlay());
+    await repository.save(threeStepOverlay(), 0);
 
     const first = await push.push('subject-1', OVERLAY, 'user-token');
     const second = await push.push('subject-1', OVERLAY, 'user-token');
@@ -169,7 +171,7 @@ describe('push overlay', () => {
 
   it('does not expose another subject overlay', async () => {
     const repository = new MemoryRepository();
-    await repository.save(threeStepOverlay());
+    await repository.save(threeStepOverlay(), 0);
     expect(await repository.byId('subject-2', OVERLAY)).toBeUndefined();
     expect(await repository.operationsByOverlay('subject-2', OVERLAY)).toEqual([]);
   });

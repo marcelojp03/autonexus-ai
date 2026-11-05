@@ -22,17 +22,17 @@ operación ya aplicada: el propietario la reconoce por su `operationId` y respon
   "operations": [
     {
       "operationId": "UUID",
-      "entity": "advance",
-      "target": { "assignmentId": "UUID", "advanceId": "UUID?" },
+      "entity": "client-inference",
+      "target": { "assignmentId": "UUID", "evidenceId": "UUID" },
       "baseVersion": 3,
-      "dependsOn": ["UUID"],
-      "payload": { "...": "cuerpo del propietario" },
-      "file": { "sha256": "hex", "bytes": 39808, "contentType": "image/jpeg" },
+      "dependsOn": [],
+      "payload": {},
       "clientInference": {
         "runId": "20261101T-with-negatives",
         "modelVersion": "automotive-damage-mobilenetv2-v1",
         "imageSha256": "hex",
-        "labels": [{ "name": "scratch", "score": 0.47 }]
+        "labels": [{ "name": "scratch", "score": 0.47 }],
+        "humanReview": { "modelVersion": "automotive-damage-mobilenetv2-v1", "labels": ["dent"] }
       }
     }
   ]
@@ -41,9 +41,13 @@ operación ya aplicada: el propietario la reconoce por su `operationId` y respon
 
 - `subject` **no** se envía: lo toma el servidor del token. Cualquier campo de identidad en el cuerpo
   se rechaza (`400 VALIDATION_ERROR`).
-- `entity` ∈ `advance` | `evidence-authorize` | `evidence-confirm` | `client-inference`.
+- `entity` ∈ `advance` | `evidence-authorize` | `evidence-reauthorize` | `evidence-confirm` | `client-inference`.
 - `dependsOn` sólo puede referenciar operaciones del **mismo** sobre; un ciclo o una referencia
   inexistente produce `400 VALIDATION_ERROR`.
+- `evidence-authorize` requiere `target.advanceId` y `file`; `evidence-reauthorize` y
+  `evidence-confirm` requieren `target.evidenceId`. El descriptor `file` (SHA-256 hex, tamaño y
+  contentType) aparece en ambas autorizaciones; el cuerpo `payload` conserva el checksum base64 que
+  Operaciones verifica al confirmar.
 - Claves cerradas en todos los niveles: un campo desconocido invalida la petición.
 
 ## Estados de una operación
@@ -82,17 +86,21 @@ Cadena obligatoria y durable para una evidencia con fotografía:
 3. *carga* — `PUT` del archivo a la URL con las cabeceras exactas devueltas.
 4. `evidence-confirm` — confirma con `expectedVersion`.
 
-Reglas: una operación no se aplica si alguna de sus `dependsOn` no está `applied`. La carga no la hace
-MS05 (el archivo no viaja a DynamoDB); el cliente la ejecuta y luego pide la confirmación. Si la URL
-caducó, el propietario responde con error de estado de evidencia y MS05 marca `needs-reupload`,
-conservando el `evidenceId` para no crear otra evidencia.
+Reglas: una operación no se aplica si alguna de sus `dependsOn` no está `applied`. El cliente puede
+secuenciar cada paso en un sobre distinto; conserva los operationId estables y el estado local entre
+intentos. La carga no la hace MS05 (el archivo no viaja a DynamoDB); el cliente la ejecuta con las
+cabeceras exactas y **sin bearer**. Si la respuesta de la carga se pierde, primero confirma la misma
+evidencia; solo solicita `evidence-reauthorize` cuando Operaciones informa que hace falta otro intento.
+Se conserva el `evidenceId`, y Operaciones genera una clave S3 distinta por intento.
 
 ## Inferencia del cliente
 
 Se envía con `entity: "client-inference"` y el bloque `clientInference`. MS05 lo reenvía a
 Inteligencia (`POST /vision/client-analyses`), que lo guarda como **inferencia del cliente**: no es
 una inferencia del servidor, no crea estado de modelo y conserva `runId`, `modelVersion` y hash de la
-imagen. El aviso de capacidad experimental se mantiene en la interfaz.
+imagen. Si se aportó `humanReview`, sus etiquetas quedan en un campo separado, asociadas al mismo
+`modelVersion`; nunca reemplazan los puntajes originales. El aviso de capacidad experimental se mantiene
+en la interfaz. Los bytes solo viajan por la URL prefirmada de Operaciones, nunca a DynamoDB ni a MS04.
 
 ## Identidad y sesión
 

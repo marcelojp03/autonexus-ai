@@ -9,7 +9,7 @@
 library;
 
 import 'dart:async';
-import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -19,14 +19,22 @@ import '../offline/offline_models.dart';
 import '../offline/offline_store.dart';
 import '../offline/sync_service.dart';
 import '../session/keycloak_session.dart';
+import '../evidence/photo_capture.dart';
 
 class JourneyController extends ChangeNotifier {
-  JourneyController({required this.session, required this.store, required this.api, required this.sync});
+  JourneyController({
+    required this.session,
+    required this.store,
+    required this.api,
+    required this.sync,
+    PhotoCapturePort? photoCapture,
+  }) : photoCapture = photoCapture ?? MobilePhotoCapture();
 
   final KeycloakSession session;
   final OfflineStore store;
   final OwnerApi api;
   final SyncService sync;
+  final PhotoCapturePort photoCapture;
 
   SessionSnapshot get snapshot => session.snapshot;
 
@@ -119,7 +127,9 @@ class JourneyController extends ChangeNotifier {
       final token = await _token();
       if (token == null) return;
       available = await api.myAgenda(token);
-      notice = available!.isEmpty ? 'No hay trabajos asignados para hoy.' : '${available!.length} trabajo(s) autorizado(s).';
+      notice = available!.isEmpty
+          ? 'No hay trabajos asignados para hoy.'
+          : '${available!.length} trabajo(s) autorizado(s).';
     });
   }
 
@@ -130,19 +140,48 @@ class JourneyController extends ChangeNotifier {
       final subject = snapshot.subject!;
       final execution = await api.execution(token, item.assignmentId);
       final now = DateTime.now().toUtc();
-      await store.saveWork(PreparedWork(
-        subject: subject,
-        assignmentId: item.assignmentId,
-        orderId: execution.orderId,
-        orderNumber: execution.orderNumber,
-        version: execution.version,
-        preparedAt: now,
-        expiresAt: now.add(Duration(days: AppConfig.preparationDays)),
-      ));
-      notice = 'Trabajo ${execution.orderNumber} preparado para usar sin conexión.';
+      await store.saveWork(
+        PreparedWork(
+          subject: subject,
+          assignmentId: item.assignmentId,
+          orderId: execution.orderId,
+          orderNumber: execution.orderNumber,
+          version: execution.version,
+          preparedAt: now,
+          expiresAt: now.add(Duration(days: AppConfig.preparationDays)),
+        ),
+      );
+      notice =
+          'Trabajo ${execution.orderNumber} preparado para usar sin conexión.';
     });
     await load();
   }
+
+  Future<StagedPhoto?> capturePhoto(
+    PreparedWork work,
+    PhotoSource source,
+  ) async {
+    await store.beginPhotoCapture(work.subject, work.assignmentId);
+    try {
+      final raw = await photoCapture.pick(source);
+      if (raw == null) return null;
+      final prepared = PhotoProcessor.prepare(raw);
+      return await store.saveStagedPhoto(
+        subject: work.subject,
+        assignmentId: work.assignmentId,
+        bytes: prepared.bytes,
+        sha256: prepared.sha256,
+      );
+    } finally {
+      await store.clearPendingPhotoCapture(work.subject);
+    }
+  }
+
+  Future<StagedPhoto?> stagedPhoto(PreparedWork work) =>
+      store.stagedPhoto(work.subject, work.assignmentId);
+
+  Future<void> removeStagedPhoto(PreparedWork work) =>
+      store.removeStagedPhoto(work.subject, work.assignmentId);
 
   /// Saves an advance in the local queue. It works with or without session: the operator is working on
   /// the prepared copy and the server has not seen anything yet.
@@ -150,11 +189,12 @@ class JourneyController extends ChangeNotifier {
     required PreparedWork work,
     required String description,
     required int minutes,
-    File? photo,
-    String? photoSha256,
+    StagedPhoto? photo,
     String? runId,
     String? modelVersion,
     Map<String, double> labels = const {},
+    List<String>? humanReviewLabels,
+    DateTime? humanReviewedAt,
   }) async {
     QueuedAdvance? created;
     await _run(() async {
@@ -163,7 +203,24 @@ class JourneyController extends ChangeNotifier {
         lastError = 'La copia local pertenece a otra cuenta.';
         return;
       }
+      if (photo != null &&
+          (photo.subject != subject ||
+              photo.assignmentId != work.assignmentId)) {
+        lastError = 'La fotografía pertenece a otro trabajo o cuenta.';
+        return;
+      }
       final operationId = _uuid();
+      final privatePhoto = photo == null
+          ? null
+          : await store.promoteStagedPhoto(
+              subject,
+              work.assignmentId,
+              operationId,
+            );
+      if (photo != null && privatePhoto == null) {
+        lastError = 'La fotografía privada ya no está disponible.';
+        return;
+      }
       created = QueuedAdvance(
         operationId: operationId,
         subject: subject,
@@ -173,14 +230,23 @@ class JourneyController extends ChangeNotifier {
         minutesWorked: minutes,
         createdAt: DateTime.now().toUtc(),
         state: QueueState.pending,
-        photoPath: photo?.path,
-        photoSha256: photoSha256,
+        photoPath: privatePhoto?.path,
+        photoSha256: photo?.sha256,
+        humanReviewLabels: humanReviewLabels,
+        humanReviewedAt: humanReviewedAt,
         runId: runId,
         modelVersion: modelVersion,
         labels: labels,
       );
       await store.enqueue(created!);
-      notice = 'Avance guardado como pendiente. Todavía no está en el servidor.';
+      if (photo != null)
+        await store.removeStagedPhoto(
+          subject,
+          work.assignmentId,
+          deleteFile: false,
+        );
+      notice =
+          'Avance guardado como pendiente. Todavía no está en el servidor.';
     });
     await load();
     return created;
@@ -195,12 +261,15 @@ class JourneyController extends ChangeNotifier {
       final subject = snapshot.subject!;
       final outcome = await sync.pushPending(subject: subject, token: token);
       if (outcome.error != null) {
-        lastError = 'No se pudo sincronizar (${outcome.error}); el avance sigue pendiente.';
+        lastError =
+            'No se pudo sincronizar (${outcome.error}); el avance sigue pendiente.';
       } else if (outcome.applied.isNotEmpty) {
-        notice = '${outcome.applied.length} avance(s) confirmados por el servidor.';
+        notice =
+            '${outcome.applied.length} avance(s) confirmados por el servidor.';
       } else if (outcome.failed.isNotEmpty) {
         final first = outcome.failed.first;
-        notice = 'El servidor respondió ${first.state} (${first.code ?? 'sin código'}).';
+        notice =
+            'El servidor respondió ${first.state} (${first.code ?? 'sin código'}).';
       } else {
         notice = 'Nada pendiente de sincronizar.';
       }
@@ -213,7 +282,8 @@ class JourneyController extends ChangeNotifier {
   Future<String?> _token() async {
     final token = await session.accessToken();
     if (token == null) {
-      lastError = 'La sesión no está vigente. Volvé a iniciar sesión para sincronizar.';
+      lastError =
+          'La sesión no está vigente. Volvé a iniciar sesión para sincronizar.';
     }
     return token;
   }
@@ -225,7 +295,9 @@ class JourneyController extends ChangeNotifier {
     try {
       await action();
     } on OwnerFailure catch (error) {
-      lastError = error.isUnauthenticated ? 'La sesión no está vigente.' : error.label;
+      lastError = error.isUnauthenticated
+          ? 'La sesión no está vigente.'
+          : error.label;
     } catch (error) {
       lastError = 'No se pudo completar: $error';
     } finally {
@@ -235,10 +307,13 @@ class JourneyController extends ChangeNotifier {
   }
 
   String _uuid() {
-    final values = List<int>.generate(16, (index) => DateTime.now().microsecondsSinceEpoch.toRadixString(16).codeUnitAt(index % 8) & 0xff);
+    final random = math.Random.secure();
+    final values = List<int>.generate(16, (_) => random.nextInt(256));
     values[6] = (values[6] & 0x0f) | 0x40;
     values[8] = (values[8] & 0x3f) | 0x80;
-    final hex = values.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
+    final hex = values
+        .map((value) => value.toRadixString(16).padLeft(2, '0'))
+        .join();
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 }

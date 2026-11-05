@@ -39,6 +39,8 @@ def _document(prediction: Prediction, *, assignment_id: str, evidence_id: str, o
 
 
 def _view(document: dict[str, Any], *, replayed: bool = False) -> dict[str, Any]:
+    if document.get("origin") == "client":
+        return _client_view(document, replayed=replayed)
     created = document["createdAt"]
     if isinstance(created, datetime):
         created = created.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -65,6 +67,9 @@ def _client_view(document: dict[str, Any], *, replayed: bool = False) -> dict[st
     created = document["createdAt"]
     if isinstance(created, datetime):
         created = created.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    human_review = document.get("humanReview")
+    if human_review and isinstance(human_review.get("recordedAt"), datetime):
+        human_review = {**human_review, "recordedAt": human_review["recordedAt"].astimezone(timezone.utc).isoformat().replace("+00:00", "Z")}
     return {
         "analysisId": document["analysisId"],
         "origin": "client",
@@ -74,6 +79,7 @@ def _client_view(document: dict[str, Any], *, replayed: bool = False) -> dict[st
         "modelVersion": document["modelVersion"],
         "imageSha256": document["imageSha256"],
         "labels": document["labels"],
+        "humanReview": human_review,
         "createdAt": created,
         "replayed": replayed,
         "verifiedByServer": False,
@@ -92,10 +98,15 @@ class AnalysisRepository:
             raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503, cause=error) from error
         try:
             await self._collection.create_index([("analysisId", ASCENDING)], unique=True, name="analysis_id")
-            await self._collection.create_index([("evidenceId", ASCENDING), ("modelVersion", ASCENDING), ("imageSha256", ASCENDING)], unique=True, name="evidence_model_image")
+            await self._collection.create_index([("origin", ASCENDING), ("evidenceId", ASCENDING), ("modelVersion", ASCENDING), ("imageSha256", ASCENDING)], unique=True, name="analysis_origin_evidence_model_image")
+            indexes = await self._collection.index_information()
+            if "evidence_model_image" in indexes:
+                await self._collection.drop_index("evidence_model_image")
             await self._collection.create_index([("orderId", ASCENDING), ("createdAt", DESCENDING)], name="order_created")
             await self._collection.create_index([("assignmentId", ASCENDING), ("createdAt", DESCENDING)], name="assignment_created")
-            await self._collection.create_index([("origin", ASCENDING), ("imageSha256", ASCENDING), ("runId", ASCENDING), ("modelVersion", ASCENDING)], unique=True, partialFilterExpression={"origin": "client"}, name="client_unique")
+            await self._collection.create_index([("origin", ASCENDING), ("actor.subject", ASCENDING), ("assignmentId", ASCENDING), ("evidenceId", ASCENDING), ("imageSha256", ASCENDING), ("runId", ASCENDING), ("modelVersion", ASCENDING)], unique=True, partialFilterExpression={"origin": "client"}, name="client_actor_work_image")
+            if "client_unique" in indexes:
+                await self._collection.drop_index("client_unique")
         except PyMongoError as error:
             raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503, cause=error) from error
 
@@ -124,7 +135,7 @@ class AnalysisRepository:
             return _view(document)
         except DuplicateKeyError:
             existing = await self._collection.find_one(
-                {"evidenceId": evidence_id, "modelVersion": prediction.model_version, "imageSha256": prediction.image_sha256}
+                {"origin": {"$exists": False}, "evidenceId": evidence_id, "modelVersion": prediction.model_version, "imageSha256": prediction.image_sha256}
             )
             if existing is None:
                 raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503)
@@ -139,6 +150,8 @@ class AnalysisRepository:
         the service did not compute anything, and the record keeps the `runId`, `modelVersion` and
         image hash the device reported so nobody can mistake it for a server verification.
         """
+        created = datetime.now(timezone.utc)
+        review = client.get("humanReview")
         document = {
             "analysisId": str(uuid.uuid4()),
             "origin": "client",
@@ -148,14 +161,19 @@ class AnalysisRepository:
             "modelVersion": client["modelVersion"],
             "imageSha256": client["imageSha256"],
             "labels": client["labels"],
+            "humanReview": {
+                "modelVersion": review["modelVersion"],
+                "labels": review["labels"],
+                "recordedAt": created,
+            } if review else None,
             "actor": {"subject": client["subject"], "roles": list(client["roles"])},
-            "createdAt": datetime.now(timezone.utc),
+            "createdAt": created,
         }
         try:
             await self._collection.insert_one(document)
         except DuplicateKeyError:
             existing = await self._collection.find_one(
-                {"origin": "client", "imageSha256": client["imageSha256"], "runId": client["runId"], "modelVersion": client["modelVersion"]}
+                {"origin": "client", "actor.subject": client["subject"], "assignmentId": client["assignmentId"], "evidenceId": client.get("evidenceId"), "imageSha256": client["imageSha256"], "runId": client["runId"], "modelVersion": client["modelVersion"]}
             )
             if existing is None:
                 raise InteligenciaError("PERSISTENCE_UNAVAILABLE", 503)

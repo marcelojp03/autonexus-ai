@@ -23,6 +23,7 @@ propietario y el que consumen el propio BFF y los verificadores.
 | GET /health/ready | — | `{status:"UP"\|"DOWN",mongo:"up"\|"down",model:{…}}`; 503 si Mongo o el modelo no están listos |
 | GET /vision/model | autenticado | `{model, task, preprocessing, dataset, limits}` |
 | POST /vision/analyze | intelligence:analyze | `VisionAnalysis` |
+| POST /vision/client-analyses | intelligence:analyze | `ClientAnalysis` (inferencia del dispositivo; no verificada por el servidor) |
 | GET /vision/analyses/:analysisId | intelligence:read | `VisionAnalysis` |
 | GET /vision/assignments/:assignmentId | intelligence:read | `{assignmentId, items:[VisionAnalysis]}` |
 | GET /vision/orders/:orderId?assignmentId= | intelligence:read | `{orderId, items:[VisionAnalysis]}` |
@@ -32,6 +33,17 @@ propietario y el que consumen el propio BFF y los verificadores.
 ```
 POST /vision/analyze
 { "assignmentId": UUID, "evidenceId": UUID }
+
+POST /vision/client-analyses
+{
+  "assignmentId": UUID,
+  "evidenceId": UUID,
+  "runId": String,
+  "modelVersion": String,
+  "imageSha256": hex-SHA256,
+  "labels": [{ "name": String, "score": Number }],
+  "humanReview": { "modelVersion": String, "labels": [String] }?
+}
 ```
 
 Claves cerradas: cualquier propiedad adicional produce `400 VALIDATION_ERROR`. El servicio **no**
@@ -42,11 +54,14 @@ emite para ese actor y ese registro.
 
 `VisionAnalysis` = `{analysisId, assignmentId, evidenceId, orderId, modelVersion, task, labels:[{name,score,threshold,flagged}], flagged:[String], threshold, insufficientData, imageSha256, image:{width,height,contentType}, createdAt, replayed}`.
 
+`ClientAnalysis` = `{analysisId, origin:"client", assignmentId, evidenceId, runId, modelVersion, imageSha256, labels:[{name,score}], humanReview?:{modelVersion,labels:[String],recordedAt}, createdAt, replayed, verifiedByServer:false}`. `labels` conserva únicamente la salida informada por el modelo del dispositivo; la corrección humana es un campo separado y debe referir al mismo `modelVersion`. `recordedAt` lo asigna MS04.
+
 - `labels` conserva el orden del manifiesto; `flagged` son las etiquetas sobre su umbral.
 - `insufficientData` es verdadero cuando la evaluación publicada no alcanza el mínimo declarado
   por etiqueta; el resultado sigue siendo una señal, no un veredicto.
 - Repetir el análisis de la misma evidencia con el mismo modelo y los mismos bytes devuelve el
-  documento existente con `replayed:true`; no crea duplicados.
+  documento existente con `replayed:true`; no crea duplicados. Para inferencias de cliente el replay
+  también está acotado por actor y asignación, conservando la revisión humana original.
 
 ### Errores
 
@@ -67,7 +82,8 @@ emite para ese actor y ese registro.
 ## Persistencia
 
 MongoDB, base `autonexus_intelligence`, colección `vision_analyses`. Índices: único por
-`analysisId`, único por `(evidenceId, modelVersion, imageSha256)`, y `(orderId, createdAt)` /
+`analysisId`, único por `(origin, evidenceId, modelVersion, imageSha256)` para separar fuentes,
+idempotencia de cliente por actor/asignación/evidencia/imagen/modelo, y `(orderId, createdAt)` /
 `(assignmentId, createdAt)` para el histórico. Se guardan etiquetas, puntajes, umbrales, hash de la
 imagen y metadatos de la evidencia. **Los bytes de la imagen no se persisten**: se procesan en
 memoria y se descartan.
