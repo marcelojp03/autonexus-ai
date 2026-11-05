@@ -12,6 +12,8 @@ Correcciones surgidas de la prueba real: anclaje de sesión administrativa por `
 
 n8n: imagen `docker.n8n.io/n8nio/n8n:2.46.6` fijada por digest, contenedor local `healthy` y workflow de resumen manual importado y persistido **inactivo**, sin secretos. **No** se acredita ejecución real del flujo: el primer consentimiento OAuth2 del cliente confidencial exige interacción del usuario.
 
+Publicado: fast-forward de `main` y push normal de `main`/`work/marcelo` en `938cb65b0e7e8f6b0392709296599b151f911d51`, con `ls-remote` confirmando ambas refs. Auditoría del rango `8bb0ca9..938cb65`: 3 commits, 50 blobs, `findings: []`. Revisión independiente focalizada `general-85`: siete hallazgos (uno medio en el flujo n8n, sin proyección de PII al persistir ejecuciones, exchange que enmascaraba rechazos como caída, auditoría sin resultado final, cifras de evidencia, README/SPEC obsoletos y allowlist de agenda no documentada); todos corregidos, con 84/84 y nueva corrida real de 10 etapas exit 0.
+
 CU28 sigue **parcial** (sin avisos, programación con identidad técnica ni los cinco flujos). CU31 no se implementa. Sin despliegue cloud, sin cambios a la autorización de los propietarios y sin verificación de ACL de Windows.
 ## CU27 — aceptación funcional Android/PWA entregada, integrada y publicada (2026-11-05)
 
