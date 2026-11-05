@@ -1,6 +1,6 @@
 # Cierre y continuidad de sesión
 
-Traspaso vigente: [CU27 — aceptación funcional completa y publicada; siguiente MCP/n8n](../handoffs/2026-11-05-cu27-functional-continuation.md). Runtime canónico 4286; conservar perfil/cola/fotos. Entrega9b60f98 revisada, integrada y publicada en ambas ramas. Los traspasos siguientes son históricos.
+Traspaso vigente: [CU29 — MCP de consulta verificado; n8n importado sin ejecutar](../handoffs/2026-11-05-cu29-mcp-consultation.md). Siguiente pendiente real: consentimiento OAuth2 y ejecución del flujo n8n; CU28/CU31 incompletos.`n`nTraspaso CU27: [CU27 — aceptación funcional completa y publicada; siguiente MCP/n8n](../handoffs/2026-11-05-cu27-functional-continuation.md). Runtime canónico 4286; conservar perfil/cola/fotos. Entrega9b60f98 revisada, integrada y publicada en ambas ramas. Los traspasos siguientes son históricos.
 
 Traspaso de infraestructura: [Docker Compose local — verificado y revisado](../handoffs/2026-10-29-local-compose.md). T25 tiene aceptación funcional/revisión completas y cierre Git registrado en STATUS al ejecutarse; CU05 G2 visual sigue bloqueado por separado.
 
