@@ -43,8 +43,9 @@ class DamageClassifier {
   /// normalize. Exposed so the device test compares the whole pipeline, not only the interpreter.
   List<List<List<List<double>>>> preprocess(Uint8List bytes) {
     final decoded = img.decodeImage(bytes);
-    if (decoded == null)
+    if (decoded == null) {
       throw const FormatException('La imagen no se pudo decodificar');
+    }
     return [AntialiasResize.run(decoded, inputSize)];
   }
 

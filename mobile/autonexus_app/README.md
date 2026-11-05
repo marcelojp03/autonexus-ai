@@ -61,6 +61,23 @@ flutter run -d <serial>
 
 ## Evidencia fotográfica offline
 
+### Verificación funcional más reciente (2026-11-05)
+
+En Mi A3 se observó login real, retorno automático, agenda protegida y preparación del trabajo del
+6 de noviembre mediante el selector de día. Con modo avión y sin túneles USB de API, trabajo, foto,
+cola y revisión humana persistieron tras dos arranques en frío. Interrumpir un envío dejó sending
+durable; al reabrir se recuperó pending y el servidor devolvió un conflicto real sin borrar evidencia.
+Un avance textual nuevo fue aplicado una sola vez; un segundo sync no cambió conteo ni versión.
+
+SQLite usa esquema 6, incluidos los sobres de petición inmutables de cada etapa. La confirmación
+usa la versión de la evidencia; no la de ejecución. flutter analyze --no-pub terminó con exit 0
+sin hallazgos y la suite pasó 36/36. Hay pruebas nuevas de versiones diferentes y recuperación del
+overlay original, además del entorno limpio MS04 documentado en services/intelligence/README.md.
+
+No se declara aceptación fotográfica completa: S3 no está configurado en Operaciones y todavía
+no se observó foto disponible ni análisis cliente real. Rechazo por permiso y revisión visual
+comparada permanecen separados. Evidencia detallada: docs/evidence/cu27-20261105.md desde la raíz.
+
 Desde un trabajo preparado se puede tomar una foto o elegirla de la galería. El selector del sistema
 puede reiniciar `MainActivity`; la app persiste antes la asignación y recupera el resultado perdido al
 iniciar. Normaliza la foto con orientación EXIF, la mantiene como JPEG privado de hasta 5 MiB, calcula

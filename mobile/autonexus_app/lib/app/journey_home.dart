@@ -125,6 +125,22 @@ class _SessionCard extends StatelessWidget {
                     label: const Text('Cerrar sesión'),
                   ),
                 if (snapshot.authenticated)
+                  OutlinedButton.icon(
+                    key: const Key('choose-agenda-day'),
+                    onPressed: controller.busy ? null : () async {
+                      final day = await showDatePicker(
+                        context: context,
+                        initialDate: controller.agendaDay,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                        helpText: 'Elegir día del trabajo (taller)',
+                      );
+                      if (day != null) await controller.chooseAgendaDay(day);
+                    },
+                    icon: const Icon(Icons.calendar_today_outlined),
+                    label: Text('Día ${controller.agendaDay.year}-${controller.agendaDay.month.toString().padLeft(2, '0')}-${controller.agendaDay.day.toString().padLeft(2, '0')}'),
+                  ),
+                if (snapshot.authenticated)
                   FilledButton.tonalIcon(
                     key: const Key('fetch-works'),
                     onPressed: controller.busy
@@ -326,12 +342,15 @@ String queueProgressLabel(QueuedAdvance advance) {
       advance.inferenceState != 'applied') {
     return 'avance y fotografía confirmados; inferencia del cliente pendiente';
   }
-  if (advance.evidenceState == 'uploaded')
+  if (advance.evidenceState == 'uploaded') {
     return 'avance confirmado; Operaciones está verificando la foto';
-  if (advance.evidenceState == 'authorized')
+  }
+  if (advance.evidenceState == 'authorized') {
     return 'avance confirmado; fotografía pendiente de carga';
-  if (advance.ownerAdvanceId != null)
+  }
+  if (advance.ownerAdvanceId != null) {
     return 'avance confirmado; evidencia pendiente';
+  }
   return queueLabel(advance.state);
 }
 

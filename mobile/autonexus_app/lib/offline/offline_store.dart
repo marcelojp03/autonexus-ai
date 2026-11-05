@@ -9,6 +9,7 @@
 library;
 
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -22,7 +23,7 @@ class OfflineStore {
   final Database _database;
   final Directory _photos;
 
-  static const int schemaVersion = 5;
+  static const int schemaVersion = 6;
 
   /// Opens the store. `directory` lets tests use an in-memory database and a temp photo folder.
   static Future<OfflineStore> open({
@@ -73,6 +74,9 @@ class OfflineStore {
             inference_state TEXT
           )''');
         await db.execute(
+          'CREATE TABLE sync_requests(operation_id TEXT NOT NULL PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES queue(operation_id) ON DELETE CASCADE, envelope TEXT NOT NULL)',
+        );
+        await db.execute(
           'CREATE INDEX queue_subject ON queue(subject, created_at)',
         );
         await db.execute('CREATE INDEX works_subject ON works(subject)');
@@ -118,6 +122,11 @@ class OfflineStore {
             'CREATE TABLE IF NOT EXISTS staged_photos(subject TEXT NOT NULL, assignment_id TEXT NOT NULL, photo_path TEXT NOT NULL, sha256 TEXT NOT NULL, bytes INTEGER NOT NULL, content_type TEXT NOT NULL, PRIMARY KEY(subject, assignment_id))',
           );
         }
+        if (from < 6) {
+          await db.execute(
+            'CREATE TABLE sync_requests(operation_id TEXT NOT NULL PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES queue(operation_id) ON DELETE CASCADE, envelope TEXT NOT NULL)',
+          );
+        }
         if (from < 5) {
           await db.execute(
             'ALTER TABLE queue ADD COLUMN owner_advance_id TEXT',
@@ -141,6 +150,29 @@ class OfflineStore {
         );
     await photos.create(recursive: true);
     return OfflineStore._(database, photos);
+  }
+
+  Future<Map<String, dynamic>?> syncRequest(String operationId) async {
+    final rows = await _database.query(
+      'sync_requests',
+      where: 'operation_id = ?',
+      whereArgs: [operationId],
+    );
+    return rows.isEmpty
+        ? null
+        : jsonDecode(rows.single['envelope'] as String) as Map<String, dynamic>;
+  }
+
+  Future<void> saveSyncRequest(
+    String operationId,
+    String parentId,
+    Map<String, Object?> envelope,
+  ) async {
+    await _database.insert('sync_requests', {
+      'operation_id': operationId,
+      'parent_id': parentId,
+      'envelope': jsonEncode(envelope),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   Future<void> close() => _database.close();
@@ -219,7 +251,7 @@ class OfflineStore {
         'state': state.wire,
         'last_code': clearError ? null : code,
         'last_status': clearError ? null : status,
-        if (attempts != null) 'attempts': attempts,
+        'attempts': ?attempts,
       },
       where: 'operation_id = ?',
       whereArgs: [operationId],
@@ -239,15 +271,15 @@ class OfflineStore {
     await _database.update(
       'queue',
       {
-        if (ownerAdvanceId != null) 'owner_advance_id': ownerAdvanceId,
-        if (evidenceId != null) 'evidence_id': evidenceId,
-        if (evidenceAttempt != null) 'evidence_attempt': evidenceAttempt,
-        if (evidenceState != null) 'evidence_state': evidenceState,
+        'owner_advance_id': ?ownerAdvanceId,
+        'evidence_id': ?evidenceId,
+        'evidence_attempt': ?evidenceAttempt,
+        'evidence_state': ?evidenceState,
         if (clearEvidenceConfirmVersion)
           'evidence_confirm_version': null
-        else if (evidenceConfirmVersion != null)
-          'evidence_confirm_version': evidenceConfirmVersion,
-        if (inferenceState != null) 'inference_state': inferenceState,
+        else
+          'evidence_confirm_version': ?evidenceConfirmVersion,
+        'inference_state': ?inferenceState,
       },
       where: 'operation_id = ?',
       whereArgs: [operationId],
@@ -333,10 +365,7 @@ class OfflineStore {
   }) async {
     final previous = await stagedPhoto(subject, assignmentId);
     final path =
-        _photos.path +
-        '/staged-' +
-        DateTime.now().microsecondsSinceEpoch.toString() +
-        '.jpg';
+        '${_photos.path}/staged-${DateTime.now().microsecondsSinceEpoch}.jpg';
     final file = File(path);
     await file.writeAsBytes(bytes, flush: true);
     try {
@@ -393,11 +422,12 @@ class OfflineStore {
     final staged = await stagedPhoto(subject, assignmentId);
     if (staged == null) return null;
     final source = File(staged.path);
-    if (!await source.exists())
+    if (!await source.exists()) {
       throw const FileSystemException(
         'La fotografía privada ya no está disponible.',
       );
-    final target = File(_photos.path + '/' + operationId + '.jpg');
+    }
+    final target = File('${_photos.path}/$operationId.jpg');
     if (source.path != target.path) {
       if (await target.exists()) await target.delete();
       final moved = await source.rename(target.path);

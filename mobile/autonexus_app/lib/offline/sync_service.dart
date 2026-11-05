@@ -8,11 +8,11 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
+import '../api/owner_api.dart';
 import 'offline_models.dart';
 import 'offline_store.dart';
 
@@ -36,12 +36,14 @@ class _OperationResult {
     required this.status,
     required this.code,
     this.body,
+    this.overlayId,
   });
 
   final String state;
   final int? status;
   final String? code;
   final Map<String, dynamic>? body;
+  final String? overlayId;
 }
 
 class _HttpResult {
@@ -58,9 +60,10 @@ class _UploadAuthorization {
   final Map<String, String> headers;
 }
 
-typedef ExecutionVersionReader = Future<int> Function(
+typedef EvidenceReader = Future<EvidenceSnapshot> Function(
   String token,
   String assignmentId,
+  String evidenceId,
 );
 
 class SyncService {
@@ -69,16 +72,15 @@ class SyncService {
     required this.store,
     http.Client? client,
     http.Client? uploadClient,
-    ExecutionVersionReader? readExecutionVersion,
+    this.readEvidence,
   }) : _client = client ?? http.Client(),
-       _uploadClient = uploadClient ?? http.Client(),
-       _readExecutionVersion = readExecutionVersion;
+       _uploadClient = uploadClient ?? http.Client();
 
   final String baseUrl;
   final OfflineStore store;
   final http.Client _client;
   final http.Client _uploadClient;
-  final ExecutionVersionReader? _readExecutionVersion;
+  final EvidenceReader? readEvidence;
 
   /// Pushes the pending queue of one user and updates every row with the owner's answer.
   ///
@@ -89,8 +91,9 @@ class SyncService {
     required String token,
   }) async {
     final pending = await store.queue(subject, onlyPending: true);
-    if (pending.isEmpty)
+    if (pending.isEmpty) {
       return const SyncOutcome(applied: [], pending: [], failed: []);
+    }
     final plain = pending
         .where((advance) => advance.photoPath == null)
         .toList();
@@ -133,69 +136,36 @@ class SyncService {
     String token,
     List<QueuedAdvance> pending,
   ) async {
+    final outcomes = <SyncOutcome>[];
     for (final advance in pending) {
       await store.updateState(
         advance.operationId,
         QueueState.sending,
         attempts: advance.attempts + 1,
       );
-    }
-
-    final overlayId = _uuid();
-    final body = {
-      'overlayId': overlayId,
-      'deviceId': 'flutter-offline',
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-      'operations': pending
-          .map(
-            (advance) => {
-              'operationId': advance.operationId,
-              'entity': 'advance',
-              'target': {'assignmentId': advance.assignmentId},
-              'baseVersion': advance.baseVersion,
-              'dependsOn': <String>[],
-              'payload': advance.ownerPayload(),
-            },
-          )
-          .toList(),
-    };
-
-    final created = await _post('/sync/overlays', token, body);
-    if (created == null) return _abort(subject, pending, 'SERVICE_UNAVAILABLE');
-
-    final pushed = await _post('/sync/overlays/$overlayId/push', token, null);
-    if (pushed == null) return _abort(subject, pending, 'SERVICE_UNAVAILABLE');
-
-    final applied =
-        (pushed['applied'] as List?)?.cast<String>() ?? const <String>[];
-    final stillPending =
-        (pushed['pending'] as List?)?.cast<String>() ?? const <String>[];
-    final failed = <({String operationId, String state, String? code})>[];
-    for (final item in (pushed['failed'] as List?) ?? const []) {
-      final map = item as Map<String, dynamic>;
-      failed.add((
-        operationId: item['operationId'] as String,
-        state: map['state'] as String,
-        code: map['code'] as String?,
-      ));
-    }
-
-    for (final id in applied) {
-      await store.updateState(id, QueueState.applied, clearError: true);
-    }
-    for (final id in stillPending) {
-      await store.updateState(id, QueueState.pending);
-    }
-    for (final item in failed) {
-      final state = QueueState.fromWire(item.state);
-      await store.updateState(
-        item.operationId,
-        state,
-        code: item.code,
-        status: null,
+      final result = await _applyOperation(token, advance.operationId, {
+        'operationId': advance.operationId,
+        'entity': 'advance',
+        'target': {'assignmentId': advance.assignmentId},
+        'baseVersion': advance.baseVersion,
+        'dependsOn': <String>[],
+        'payload': advance.ownerPayload(),
+      });
+      outcomes.add(
+        await _finish(
+          advance,
+          result.state,
+          code: result.code,
+          status: result.status,
+        ),
       );
     }
-    return SyncOutcome(applied: applied, pending: stillPending, failed: failed);
+    return SyncOutcome(
+      applied: outcomes.expand((x) => x.applied).toList(),
+      pending: outcomes.expand((x) => x.pending).toList(),
+      failed: outcomes.expand((x) => x.failed).toList(),
+      error: outcomes.map((x) => x.error).whereType<String>().firstOrNull,
+    );
   }
 
   Future<SyncOutcome> _pushWithPhoto(
@@ -205,16 +175,26 @@ class SyncService {
     final operationId = advance.operationId;
     try {
       final path = advance.photoPath;
-      if (path == null)
-        return _finish(advance, 'rejected', code: 'LOCAL_EVIDENCE_MISSING');
+      if (path == null) {
+        return await _finish(
+          advance,
+          'rejected',
+          code: 'LOCAL_EVIDENCE_MISSING',
+        );
+      }
       final file = File(path);
-      if (!await file.exists())
-        return _finish(advance, 'rejected', code: 'LOCAL_EVIDENCE_MISSING');
+      if (!await file.exists()) {
+        return await _finish(
+          advance,
+          'rejected',
+          code: 'LOCAL_EVIDENCE_MISSING',
+        );
+      }
       final bytes = await file.readAsBytes();
       final digest = sha256.convert(bytes);
       final imageHash = digest.toString();
       if (advance.photoSha256 != null && advance.photoSha256 != imageHash) {
-        return _finish(
+        return await _finish(
           advance,
           'rejected',
           code: 'LOCAL_EVIDENCE_CHECKSUM_MISMATCH',
@@ -224,7 +204,7 @@ class SyncService {
 
       var ownerAdvanceId = advance.ownerAdvanceId;
       if (ownerAdvanceId == null) {
-        final result = await _applyOperation(token, {
+        final result = await _applyOperation(token, advance.operationId, {
           'operationId': operationId,
           'entity': 'advance',
           'target': {'assignmentId': advance.assignmentId},
@@ -232,20 +212,22 @@ class SyncService {
           'dependsOn': <String>[],
           'payload': advance.ownerPayload(),
         });
-        if (result.state != 'applied')
-          return _finish(
+        if (result.state != 'applied') {
+          return await _finish(
             advance,
             result.state,
             code: result.code,
             status: result.status,
           );
+        }
         ownerAdvanceId = _nestedString(result.body, 'advance', 'id');
-        if (ownerAdvanceId == null)
-          return _finish(
+        if (ownerAdvanceId == null) {
+          return await _finish(
             advance,
             'pending',
             code: 'ADVANCE_RESULT_UNAVAILABLE',
           );
+        }
         await store.updateSyncProgress(
           operationId,
           ownerAdvanceId: ownerAdvanceId,
@@ -265,21 +247,23 @@ class SyncService {
           imageHash,
           checksumBase64,
         );
-        if (result.state != 'applied')
-          return _finish(
+        if (result.state != 'applied') {
+          return await _finish(
             advance,
             result.state,
             code: result.code,
             status: result.status,
           );
+        }
         evidenceId = _nestedString(result.body, 'evidence', 'id');
         attempt = _nestedInt(result.body, 'evidence', 'attempt') ?? 1;
-        if (evidenceId == null)
-          return _finish(
+        if (evidenceId == null) {
+          return await _finish(
             advance,
             'pending',
             code: 'EVIDENCE_RESULT_UNAVAILABLE',
           );
+        }
         evidenceState = 'authorized';
         await store.updateSyncProgress(
           operationId,
@@ -290,8 +274,6 @@ class SyncService {
         upload = _uploadAuthorization(result.body);
       }
 
-      if (evidenceId == null)
-        return _finish(advance, 'pending', code: 'EVIDENCE_RESULT_UNAVAILABLE');
       if (evidenceState == 'authorized' && upload == null) {
         // Recover the ambiguous case after Android was killed while the signed upload was in flight.
         final confirmation = await _confirmEvidence(
@@ -314,7 +296,7 @@ class SyncService {
             clearEvidenceConfirmVersion: true,
           );
         } else {
-          return _finish(
+          return await _finish(
             advance,
             confirmation.state,
             code: confirmation.code,
@@ -325,13 +307,14 @@ class SyncService {
 
       if (evidenceState == 'failed' ||
           advance.state == QueueState.needsReupload) {
-        if (attempt >= 5)
-          return _finish(
+        if (attempt >= 5) {
+          return await _finish(
             advance,
             'rejected',
             code: 'EVIDENCE_ATTEMPTS_EXHAUSTED',
             status: 409,
           );
+        }
         final authorization = await _reauthorizeEvidence(
           token,
           advance,
@@ -341,13 +324,14 @@ class SyncService {
           imageHash,
           checksumBase64,
         );
-        if (authorization.state != 'applied')
-          return _finish(
+        if (authorization.state != 'applied') {
+          return await _finish(
             advance,
             authorization.state,
             code: authorization.code,
             status: authorization.status,
           );
+        }
         attempt =
             _nestedInt(authorization.body, 'evidence', 'attempt') ??
             attempt + 1;
@@ -365,12 +349,13 @@ class SyncService {
       }
 
       if (evidenceState != 'available' && evidenceState != 'uploaded') {
-        if (upload == null)
-          return _finish(
+        if (upload == null) {
+          return await _finish(
             advance,
             'needs-reupload',
             code: 'EVIDENCE_UPLOAD_URL_UNAVAILABLE',
           );
+        }
         final uploaded = await _putEvidence(upload, bytes);
         if (uploaded == 412 ||
             (uploaded != null && uploaded >= 200 && uploaded < 300)) {
@@ -381,7 +366,7 @@ class SyncService {
           );
         } else if (uploaded == null || uploaded >= 500) {
           // A lost PUT response is ambiguous; next sync asks the owner to confirm before reuploading.
-          return _finish(
+          return await _finish(
             advance,
             'pending',
             code: 'EVIDENCE_UPLOAD_UNCONFIRMED',
@@ -393,7 +378,7 @@ class SyncService {
             evidenceState: 'failed',
             clearEvidenceConfirmVersion: true,
           );
-          return _finish(
+          return await _finish(
             advance,
             'needs-reupload',
             code: 'EVIDENCE_UPLOAD_FAILED',
@@ -411,13 +396,14 @@ class SyncService {
         );
         if (confirmation.state != 'applied') {
           final failed = confirmation.state == 'needs-reupload';
-          if (failed)
+          if (failed) {
             await store.updateSyncProgress(
               operationId,
               evidenceState: 'failed',
               clearEvidenceConfirmVersion: true,
             );
-          return _finish(
+          }
+          return await _finish(
             advance,
             confirmation.state,
             code: confirmation.code,
@@ -435,9 +421,7 @@ class SyncService {
           advance.modelVersion != null &&
           advance.labels.isNotEmpty &&
           advance.inferenceState != 'applied') {
-        final inferenceId = _deriveOperationId(
-          operationId + ':client-inference',
-        );
+        final inferenceId = _deriveOperationId('$operationId:client-inference');
         final clientInference = {
           'runId': advance.runId,
           'modelVersion': advance.modelVersion,
@@ -452,7 +436,7 @@ class SyncService {
               'labels': advance.humanReviewLabels,
             },
         };
-        final result = await _applyOperation(token, {
+        final result = await _applyOperation(token, advance.operationId, {
           'operationId': inferenceId,
           'entity': 'client-inference',
           'target': {
@@ -469,7 +453,7 @@ class SyncService {
             operationId,
             inferenceState: result.state,
           );
-          return _finish(
+          return await _finish(
             advance,
             result.state,
             code: result.code,
@@ -479,7 +463,7 @@ class SyncService {
         await store.updateSyncProgress(operationId, inferenceState: 'applied');
       }
 
-      return _finish(advance, 'applied');
+      return await _finish(advance, 'applied');
     } catch (_) {
       return _finish(advance, 'pending', code: 'SERVICE_UNAVAILABLE');
     }
@@ -492,9 +476,9 @@ class SyncService {
     List<int> bytes,
     String imageHash,
     String checksumBase64,
-  ) => _applyOperation(token, {
+  ) => _applyOperation(token, advance.operationId, {
     'operationId': _deriveOperationId(
-      advance.operationId + ':evidence-authorize',
+      '${advance.operationId}:evidence-authorize',
     ),
     'entity': 'evidence-authorize',
     'target': {'assignmentId': advance.assignmentId, 'advanceId': advanceId},
@@ -507,7 +491,7 @@ class SyncService {
     },
     'payload': {
       'operationId': _deriveOperationId(
-        advance.operationId + ':evidence-authorize',
+        '${advance.operationId}:evidence-authorize',
       ),
       'fileName': 'inspection.jpg',
       'contentType': 'image/jpeg',
@@ -525,18 +509,34 @@ class SyncService {
     String imageHash,
     String checksumBase64,
   ) async {
-    final readVersion = _readExecutionVersion;
-    if (readVersion == null)
+    final retryId = _deriveOperationId(
+      '${advance.operationId}:evidence-reauthorize:$attempt',
+    );
+    final saved = await store.syncRequest(retryId);
+    if (saved != null) {
+      return _applyOperation(
+        token,
+        advance.operationId,
+        Map<String, Object?>.from((saved['operations'] as List).single as Map),
+      );
+    }
+    final readVersion = readEvidence;
+    if (readVersion == null) {
       return const _OperationResult(
         state: 'pending',
         status: 503,
         code: 'OWNER_VERSION_UNAVAILABLE',
       );
-    final version = await readVersion(token, advance.assignmentId);
+    }
+    final version = (await readVersion(
+      token,
+      advance.assignmentId,
+      evidenceId,
+    )).version;
     final operationId = _deriveOperationId(
-      advance.operationId + ':evidence-reauthorize:' + attempt.toString(),
+      '${advance.operationId}:evidence-reauthorize:$attempt',
     );
-    return _applyOperation(token, {
+    return _applyOperation(token, advance.operationId, {
       'operationId': operationId,
       'entity': 'evidence-reauthorize',
       'target': {
@@ -577,23 +577,28 @@ class SyncService {
     }
     var version = latest.evidenceConfirmVersion;
     if (version == null) {
-      final readVersion = _readExecutionVersion;
-      if (readVersion == null)
+      final readVersion = readEvidence;
+      if (readVersion == null) {
         return const _OperationResult(
           state: 'pending',
           status: 503,
           code: 'OWNER_VERSION_UNAVAILABLE',
         );
-      version = await readVersion(token, advance.assignmentId);
+      }
+      version = (await readVersion(
+        token,
+        advance.assignmentId,
+        evidenceId,
+      )).version;
       await store.updateSyncProgress(
         advance.operationId,
         evidenceConfirmVersion: version,
       );
     }
     final operationId = _deriveOperationId(
-      advance.operationId + ':evidence-confirm:' + attempt.toString(),
+      '${advance.operationId}:evidence-confirm:$attempt',
     );
-    return _applyOperation(token, {
+    return _applyOperation(token, advance.operationId, {
       'operationId': operationId,
       'entity': 'evidence-confirm',
       'target': {
@@ -608,52 +613,69 @@ class SyncService {
 
   Future<_OperationResult> _applyOperation(
     String token,
+    String parentId,
     Map<String, Object?> operation,
   ) async {
     final operationId = operation['operationId']! as String;
-    final overlayId = _uuid();
-    final overlay = {
-      'overlayId': overlayId,
-      'deviceId': 'flutter-offline',
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-      'operations': [operation],
-    };
+    final saved = await store.syncRequest(operationId);
+    final overlay =
+        saved ??
+        {
+          'overlayId': _deriveOperationId('$operationId:overlay'),
+          'deviceId': 'flutter-offline',
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'operations': [operation],
+        };
+    await store.saveSyncRequest(operationId, parentId, overlay);
+    var overlayId = overlay['overlayId'] as String;
     final created = await _request('POST', '/sync/overlays', token, overlay);
-    if (created == null)
+    if (created == null) {
       return const _OperationResult(
         state: 'pending',
         status: 503,
         code: 'SERVICE_UNAVAILABLE',
       );
+    }
     if (created.statusCode >= 400) return _failedHttp(created);
     final replayed =
         (created.body?['replayedOperations'] as List?)?.contains(operationId) ??
         false;
-    if (replayed)
-      return await _readStoredOperation(token, operationId) ??
-          const _OperationResult(
-            state: 'pending',
-            status: 503,
-            code: 'SYNC_RESULT_UNAVAILABLE',
-          );
+    if (replayed) {
+      final stored = await _readStoredOperation(token, operationId);
+      if (stored == null) {
+        return const _OperationResult(
+          state: 'pending',
+          status: 503,
+          code: 'SYNC_RESULT_UNAVAILABLE',
+        );
+      }
+      if (['applied', 'conflict', 'rejected'].contains(stored.state)) {
+        return stored;
+      }
+      if (stored.overlayId == null) return stored;
+      overlayId = stored.overlayId!;
+    }
 
     final pushed = await _request(
       'POST',
-      '/sync/overlays/' + overlayId + '/push',
+      '/sync/overlays/$overlayId/push',
       token,
       null,
     );
-    if (pushed == null)
+    if (pushed == null) {
       return await _readStoredOperation(token, operationId) ??
           const _OperationResult(
             state: 'pending',
             status: 503,
             code: 'SERVICE_UNAVAILABLE',
           );
+    }
+    if (pushed.statusCode >= 400) return _failedHttp(pushed);
     final results = (pushed.body?['results'] as List?) ?? const [];
     for (final raw in results) {
-      if (raw is! Map<String, dynamic> || raw['operationId'] != operationId)
+      if (raw is! Map<String, dynamic> || raw['operationId'] != operationId) {
         continue;
+      }
       Map<String, dynamic>? failure;
       for (final item in (pushed.body?['failed'] as List?) ?? const []) {
         if (item is Map<String, dynamic> &&
@@ -677,6 +699,12 @@ class SyncService {
             : null,
       );
     }
+    if (((pushed.body?['applied'] as List?) ?? const []).contains(
+          operationId,
+        ) &&
+        operation['entity'] == 'advance') {
+      return const _OperationResult(state: 'applied', status: 200, code: null);
+    }
     Map<String, dynamic>? failed;
     for (final item in (pushed.body?['failed'] as List?) ?? const []) {
       if (item is Map<String, dynamic> && item['operationId'] == operationId) {
@@ -684,12 +712,13 @@ class SyncService {
         break;
       }
     }
-    if (failed != null)
+    if (failed != null) {
       return _OperationResult(
         state: failed['state'] as String,
         status: (failed['status'] as num?)?.toInt(),
         code: failed['code'] as String?,
       );
+    }
     return await _readStoredOperation(token, operationId) ??
         const _OperationResult(
           state: 'pending',
@@ -704,15 +733,16 @@ class SyncService {
   ) async {
     final response = await _request(
       'GET',
-      '/sync/operations/' + Uri.encodeComponent(operationId),
+      '/sync/operations/${Uri.encodeComponent(operationId)}',
       token,
       null,
     );
     final operation = response?.body?['operation'];
     if (response == null ||
         response.statusCode >= 400 ||
-        operation is! Map<String, dynamic>)
+        operation is! Map<String, dynamic>) {
       return null;
+    }
     final lastResult = operation['lastResult'] as Map<String, dynamic>?;
     final lastBody = operation['lastBody'] as Map<String, dynamic>?;
     final state = (operation['state'] as String?) ?? 'pending';
@@ -721,6 +751,7 @@ class SyncService {
       status: (lastResult?['status'] as num?)?.toInt(),
       code: lastResult?['code'] as String?,
       body: lastBody,
+      overlayId: operation['overlayId'] as String?,
     );
   }
 
@@ -732,7 +763,7 @@ class SyncService {
   ) async {
     try {
       final request = http.Request(method, Uri.parse(baseUrl + path));
-      request.headers['Authorization'] = 'Bearer ' + token;
+      request.headers['Authorization'] = 'Bearer $token';
       if (body != null) {
         request.headers['Content-Type'] = 'application/json';
         request.body = jsonEncode(body);
@@ -754,8 +785,7 @@ class SyncService {
 
   _OperationResult _failedHttp(_HttpResult response) {
     final code =
-        response.body?['code'] as String? ??
-        'HTTP_' + response.statusCode.toString();
+        response.body?['code'] as String? ?? 'HTTP_${response.statusCode}';
     final state = response.statusCode == 401 || response.statusCode >= 500
         ? 'pending'
         : [
@@ -827,19 +857,21 @@ class SyncService {
       status: status,
       clearError: queueState == QueueState.applied,
     );
-    if (queueState == QueueState.applied)
+    if (queueState == QueueState.applied) {
       return SyncOutcome(
         applied: [advance.operationId],
         pending: const [],
         failed: const [],
       );
-    if (queueState == QueueState.pending)
+    }
+    if (queueState == QueueState.pending) {
       return SyncOutcome(
         applied: const [],
         pending: [advance.operationId],
         failed: const [],
         error: code ?? 'SERVICE_UNAVAILABLE',
       );
+    }
     final failure = (
       operationId: advance.operationId,
       state: queueState.wire,
@@ -865,58 +897,6 @@ class SyncService {
     return nested is num ? nested.toInt() : null;
   }
 
-  Future<SyncOutcome> _abort(
-    String subject,
-    List<QueuedAdvance> pending,
-    String code,
-  ) async {
-    for (final advance in pending) {
-      await store.updateState(
-        advance.operationId,
-        QueueState.pending,
-        code: code,
-      );
-    }
-    return SyncOutcome(
-      applied: const [],
-      pending: pending.map((advance) => advance.operationId).toList(),
-      failed: const [],
-      error: code,
-    );
-  }
-
-  Future<Map<String, dynamic>?> _post(
-    String path,
-    String token,
-    Map<String, Object?>? body,
-  ) async {
-    try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl$path'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          if (body != null) 'Content-Type': 'application/json',
-        },
-        body: body == null ? null : jsonEncode(body),
-      );
-      if (response.statusCode == 401 || response.statusCode >= 500) return null;
-      if (response.body.isEmpty) return const {};
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (_) {
-      // A lost response is not a rejection: the operation stays pending and the retry uses the same
-      // operationId, which is what keeps the owner from duplicating the advance.
-      return null;
-    }
-  }
-
-  String _uuid() {
-    final random = math.Random.secure();
-    final values = List<int>.generate(16, (_) => random.nextInt(256));
-    values[6] = (values[6] & 0x0f) | 0x40;
-    values[8] = (values[8] & 0x3f) | 0x80;
-    return _formatUuid(values);
-  }
-
   String _deriveOperationId(String seed) {
     final values = sha256.convert(utf8.encode(seed)).bytes.take(16).toList();
     values[6] = (values[6] & 0x0f) | 0x50;
@@ -928,15 +908,7 @@ class SyncService {
     final hex = values
         .map((value) => value.toRadixString(16).padLeft(2, '0'))
         .join();
-    return hex.substring(0, 8) +
-        '-' +
-        hex.substring(8, 12) +
-        '-' +
-        hex.substring(12, 16) +
-        '-' +
-        hex.substring(16, 20) +
-        '-' +
-        hex.substring(20);
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
   void dispose() {

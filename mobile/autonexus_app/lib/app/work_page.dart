@@ -6,7 +6,6 @@ library;
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -65,10 +64,11 @@ class _WorkPageState extends State<WorkPage> {
       final bytes = await File(photo.path).readAsBytes();
       await _analysePhoto(photo, bytes);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _photoError = 'No se pudo recuperar la fotografía local. Podés volver a elegirla.',
         );
+      }
     }
   }
 
@@ -83,22 +83,24 @@ class _WorkPageState extends State<WorkPage> {
       final bytes = await File(photo.path).readAsBytes();
       await _analysePhoto(photo, bytes);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _photoError = 'No se pudo preparar esa fotografía. Elegí otra imagen JPEG o PNG.',
         );
+      }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
     }
   }
 
   Future<void> _analysePhoto(StagedPhoto photo, Uint8List bytes) async {
-    if (mounted)
+    if (mounted) {
       setState(() {
         _photo = photo;
         _photoBytes = bytes;
         _analysis = null;
       });
+    }
     try {
       final classifier = _classifier ?? await DamageClassifier.load();
       if (!mounted) {
@@ -121,10 +123,11 @@ class _WorkPageState extends State<WorkPage> {
         _photoError = null;
       });
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _photoError = 'La foto quedó guardada localmente, pero no se pudo ejecutar el modelo.',
         );
+      }
     }
   }
 
@@ -300,7 +303,7 @@ class _WorkPageState extends State<WorkPage> {
                       height: 220,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(
+                      errorBuilder: (_, _, _) => const SizedBox(
                         height: 120,
                         child: Center(
                           child: Text('No se pudo mostrar la imagen.'),

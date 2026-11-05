@@ -17,9 +17,9 @@ import 'package:autonexus_mobile/offline/sync_service.dart';
 /// next increment). Everything else is the client's own code: SQLite, the queue and the MS05 client.
 ///
 /// Run:
-///   flutter test integration_test/offline_journey_test.dart -d <device> \
+///   flutter test integration_test/offline_journey_test.dart -d `<device>` \
 ///     --dart-define=CU_TOKEN=... --dart-define=CU_SYNC_URL=http://10.0.2.2:3005 \
-///     --dart-define=CU_ORIGIN=http://10.0.2.2:4285 --dart-define=CU_ASSIGNMENT=<uuid>
+///     --dart-define=CU_ORIGIN=http://10.0.2.2:4285 --dart-define=CU_ASSIGNMENT=`<uuid>`
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -100,14 +100,14 @@ void main() {
 
 Future<int> _executionVersion(String origin, String assignmentId, String token) async {
   final response = await _graphql(origin, token, 'query(!){myExecution(assignmentId:){version}}', {'id': assignmentId});
-  expect(response['data'], isNotNull, reason: 'graphql body: ' + _jsonEncode(response));
+  expect(response['data'], isNotNull, reason: 'graphql body: ${_jsonEncode(response)}');
   final data = response['data'] as Map<String, dynamic>;
   return ((data['myExecution'] as Map<String, dynamic>)['version'] as num).toInt();
 }
 
 Future<int> _advanceCount(String origin, String assignmentId, String token) async {
   final response = await _graphql(origin, token, 'query(!){myExecution(assignmentId:){advances{id}}}', {'id': assignmentId});
-  expect(response['data'], isNotNull, reason: 'graphql body: ' + _jsonEncode(response));
+  expect(response['data'], isNotNull, reason: 'graphql body: ${_jsonEncode(response)}');
   final data = response['data'] as Map<String, dynamic>;
   return ((data['myExecution'] as Map<String, dynamic>)['advances'] as List).length;
 }

@@ -46,10 +46,11 @@ class MobilePhotoCapture implements PhotoCapturePort {
     final file = files != null && files.isNotEmpty
         ? files.first
         : response.file;
-    if (file == null)
+    if (file == null) {
       throw const FormatException(
         'Android no devolvió la fotografía interrumpida.',
       );
+    }
     return file.readAsBytes();
   }
 }

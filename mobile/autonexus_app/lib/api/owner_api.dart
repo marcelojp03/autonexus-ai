@@ -21,11 +21,16 @@ class OwnerFailure implements Exception {
 
   /// Public sentence for the operator; the owner's message is safe to show as-is.
   String get label => switch (code) {
-        'AGENDA_ACCESS_DENIED' || 'AGENDA_WORK_NOT_FOUND' || 'EXECUTION_ACCESS_DENIED' || 'EXECUTION_WORK_NOT_FOUND' =>
-          'Ya no tenés acceso a este trabajo.',
-        'AGENDA_DEPENDENCY_UNAVAILABLE' || 'AGENDA_STATE_UNAVAILABLE' || 'PERSISTENCE_UNAVAILABLE' => 'El servicio no está disponible; reintentá cuando vuelva la conexión.',
-        _ => message.isEmpty ? code : message,
-      };
+    'AGENDA_ACCESS_DENIED' ||
+    'AGENDA_WORK_NOT_FOUND' ||
+    'EXECUTION_ACCESS_DENIED' ||
+    'EXECUTION_WORK_NOT_FOUND' => 'Ya no tenés acceso a este trabajo.',
+    'AGENDA_DEPENDENCY_UNAVAILABLE' ||
+    'AGENDA_STATE_UNAVAILABLE' ||
+    'PERSISTENCE_UNAVAILABLE' =>
+      'El servicio no está disponible; reintentá cuando vuelva la conexión.',
+    _ => message.isEmpty ? code : message,
+  };
 
   @override
   String toString() => '$code ($status)';
@@ -55,15 +60,28 @@ class AgendaWorkItem {
   bool get canReceiveAdvances => executionStatus == 'in_progress';
 
   static AgendaWorkItem fromJson(Map<String, dynamic> json) => AgendaWorkItem(
-        assignmentId: json['assignmentId'] as String,
-        orderId: json['orderId'] as String,
-        orderNumber: json['orderNumber'] as String,
-        description: (json['description'] as String?) ?? '',
-        vehiclePlate: ((json['vehicle'] as Map?)?['plate'] as String?) ?? '',
-        executionStatus: (json['executionStatus'] as String?) ?? 'not_started',
-        advances: (((json['executionProgress'] as Map?)?['advances']) as num?)?.toInt() ?? 0,
-        startsAt: (json['startsAt'] as String?) ?? '',
-      );
+    assignmentId: json['assignmentId'] as String,
+    orderId: json['orderId'] as String,
+    orderNumber: json['orderNumber'] as String,
+    description: (json['description'] as String?) ?? '',
+    vehiclePlate: ((json['vehicle'] as Map?)?['plate'] as String?) ?? '',
+    executionStatus: (json['executionStatus'] as String?) ?? 'not_started',
+    advances:
+        (((json['executionProgress'] as Map?)?['advances']) as num?)?.toInt() ??
+        0,
+    startsAt: (json['startsAt'] as String?) ?? '',
+  );
+}
+
+class EvidenceSnapshot {
+  const EvidenceSnapshot({
+    required this.id,
+    required this.version,
+    required this.state,
+  });
+  final String id;
+  final int version;
+  final String state;
 }
 
 class ExecutionSnapshot {
@@ -74,8 +92,10 @@ class ExecutionSnapshot {
     required this.status,
     required this.version,
     required this.advances,
+    this.evidences = const [],
   });
 
+  final List<EvidenceSnapshot> evidences;
   final String assignmentId;
   final String orderId;
   final String orderNumber;
@@ -83,18 +103,29 @@ class ExecutionSnapshot {
   final int version;
   final int advances;
 
-  static ExecutionSnapshot fromJson(Map<String, dynamic> json) => ExecutionSnapshot(
+  static ExecutionSnapshot fromJson(Map<String, dynamic> json) =>
+      ExecutionSnapshot(
         assignmentId: json['assignmentId'] as String,
         orderId: json['orderId'] as String,
         orderNumber: json['orderNumber'] as String,
         status: (json['status'] as String?) ?? 'in_progress',
         version: ((json['version'] as num?) ?? 0).toInt(),
         advances: ((json['advances'] as List?) ?? const []).length,
+        evidences: [
+          for (final advance in (json['advances'] as List?) ?? const [])
+            for (final evidence in (advance['evidences'] as List?) ?? const [])
+              EvidenceSnapshot(
+                id: evidence['id'] as String,
+                version: (evidence['version'] as num).toInt(),
+                state: evidence['state'] as String,
+              ),
+        ],
       );
 }
 
 class OwnerApi {
-  OwnerApi({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
+  OwnerApi({required this.baseUrl, http.Client? client})
+    : _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
@@ -104,10 +135,28 @@ class OwnerApi {
     final date = _civilDate(day ?? DateTime.now());
     final body = await _get('/agenda/me?from=$date&to=$date', token);
     final items = (body['items'] as List?) ?? const [];
-    return items.map((item) => AgendaWorkItem.fromJson(item as Map<String, dynamic>)).toList();
+    return items
+        .map((item) => AgendaWorkItem.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
-  /// Current version of the execution, needed as `baseVersion`/`expectedVersion` of every write.
+  Future<EvidenceSnapshot> evidence(
+    String token,
+    String assignmentId,
+    String evidenceId,
+  ) async {
+    final snapshot = await execution(token, assignmentId);
+    for (final evidence in snapshot.evidences) {
+      if (evidence.id == evidenceId) return evidence;
+    }
+    throw const OwnerFailure(
+      404,
+      'EVIDENCE_NOT_FOUND',
+      'La evidencia no está disponible.',
+    );
+  }
+
+  /// Current execution version for advances.
   Future<ExecutionSnapshot> execution(String token, String assignmentId) async {
     final body = await _get('/executions/me/$assignmentId', token);
     return ExecutionSnapshot.fromJson(body);
@@ -120,14 +169,26 @@ class OwnerApi {
   Future<Map<String, dynamic>> _get(String path, String token) async {
     late final http.Response response;
     try {
-      response = await _client.get(Uri.parse('$baseUrl$path'), headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 20));
+      response = await _client
+          .get(
+            Uri.parse('$baseUrl$path'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 20));
     } catch (error) {
-      throw OwnerFailure(0, 'OWNER_UNREACHABLE', 'Sin conexión con el servicio: ${error.runtimeType}');
+      throw OwnerFailure(
+        0,
+        'OWNER_UNREACHABLE',
+        'Sin conexión con el servicio: ${error.runtimeType}',
+      );
     }
-    if (response.statusCode == 401) throw const OwnerFailure(401, 'UNAUTHENTICATED', 'La sesión venció.');
+    if (response.statusCode == 401) {
+      throw const OwnerFailure(401, 'UNAUTHENTICATED', 'La sesión venció.');
+    }
     final decoded = _decode(response.body);
     if (response.statusCode >= 400) {
-      final code = (decoded?['code'] as String?) ?? 'HTTP_${response.statusCode}';
+      final code =
+          (decoded?['code'] as String?) ?? 'HTTP_${response.statusCode}';
       final message = (decoded?['message'] as String?) ?? '';
       throw OwnerFailure(response.statusCode, code, message);
     }

@@ -39,8 +39,7 @@ Future<void> main() async {
   final sync = SyncService(
     baseUrl: AppConfig.syncUrl,
     store: store,
-    readExecutionVersion: (token, assignmentId) async =>
-        (await ownerApi.execution(token, assignmentId)).version,
+    readEvidence: ownerApi.evidence,
   );
   final controller = JourneyController(
     session: session,

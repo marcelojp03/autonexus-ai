@@ -41,6 +41,7 @@ class JourneyController extends ChangeNotifier {
   List<PreparedWork> works = const [];
   List<QueuedAdvance> queue = const [];
   List<AgendaWorkItem>? available;
+  DateTime agendaDay = DateTime.now();
   String? notice;
   String? lastError;
   bool busy = false;
@@ -126,11 +127,18 @@ class JourneyController extends ChangeNotifier {
     await _run(() async {
       final token = await _token();
       if (token == null) return;
-      available = await api.myAgenda(token);
+      available = await api.myAgenda(token, day: agendaDay);
       notice = available!.isEmpty
-          ? 'No hay trabajos asignados para hoy.'
+          ? 'No hay trabajos asignados para el día elegido.'
           : '${available!.length} trabajo(s) autorizado(s).';
     });
+  }
+
+  Future<void> chooseAgendaDay(DateTime day) async {
+    agendaDay = DateTime(day.year, day.month, day.day);
+    available = null;
+    notifyListeners();
+    await fetchAvailable();
   }
 
   Future<void> prepare(AgendaWorkItem item) async {
@@ -239,12 +247,13 @@ class JourneyController extends ChangeNotifier {
         labels: labels,
       );
       await store.enqueue(created!);
-      if (photo != null)
+      if (photo != null) {
         await store.removeStagedPhoto(
           subject,
           work.assignmentId,
           deleteFile: false,
         );
+      }
       notice =
           'Avance guardado como pendiente. Todavía no está en el servidor.';
     });
