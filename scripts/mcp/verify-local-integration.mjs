@@ -90,15 +90,19 @@ try {
   assert.equal(JSON.stringify(agenda).includes("description"), false);
   pass("real_team_agenda_projection", {count: agenda.structuredContent?.data?.length ?? 0, periodConfirmed: true});
 
-  const teamExec = await client.callTool({name: "autonexus_get_team_execution", arguments: {assignmentId: "359cde57-3df0-4d53-b5b3-e18303ca4994", advanceLimit: 5}});
+  // MCP access tokens live 60 s: re-authenticate like a real client before the next call.
+  await client.close();
+  const refreshed = await connect(await login("chief", "openid mcp mcp:orders:read mcp:agenda:read:team mcp:executions:read:team"));
+  const teamExec = await refreshed.callTool({name: "autonexus_get_team_execution", arguments: {assignmentId: "359cde57-3df0-4d53-b5b3-e18303ca4994", advanceLimit: 5}});
+  if (teamExec.isError) console.log(JSON.stringify({stage: "team_execution_detail", code: teamExec.structuredContent?.error?.code ?? null, status: teamExec.structuredContent?.error?.status ?? null}));
   assert.equal(teamExec.isError, false, "TEAM_EXECUTION_OWNER_READ");
   assert.ok(teamExec.structuredContent.data.advances.length <= 5, "ADVANCE_PAGINATION");
   assert.equal(JSON.stringify(teamExec).includes("description"), false);
   pass("real_team_execution_projection", {advances: teamExec.structuredContent.data.advances.length, total: teamExec.structuredContent.page.total});
-  const unknown = await client.callTool({name: "autonexus_get_team_execution", arguments: {assignmentId: "00000000-0000-4000-8000-000000000000"}});
+  const unknown = await refreshed.callTool({name: "autonexus_get_team_execution", arguments: {assignmentId: "00000000-0000-4000-8000-000000000000"}});
   assert.equal(unknown.isError, true, "UNKNOWN_RECORD_MUST_NOT_BE_EMPTY_SUCCESS");
   pass("real_unknown_record_is_error", {code: unknown.structuredContent?.error?.code ?? null, status: unknown.structuredContent?.error?.status ?? null});
-  await client.close();
+  await refreshed.close();
 
   const mechanicToken = await login("mechanicA", "openid mcp mcp:agenda:read:self mcp:executions:read:self");
   mechanic = await verifier.verify(mechanicToken);

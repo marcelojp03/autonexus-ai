@@ -188,10 +188,10 @@ for (const [name, claims] of [
   ['extended lifetime', { exp: now() + 600 }], ['missing employee audience', { aud: API_AUDIENCES[0] }],
   ['wrong issuer', { iss: 'https://untrusted.test/realm' }], ['wrong token typ', { typ: 'ID' }],
   ['expired exchange', { exp: now() - 60 }],
-]) test(`unit: exchange rejects ${name}`, async () => {
+]) test(`unit: exchange rejects ${name} as an authentication failure`, async () => {
   exchangeResult.access_token = await signed({ aud: [...API_AUDIENCES], azp: 'autonexus-mcp-server', ...claims });
   await assert.rejects(new KeycloakTokenExchange(config, verifier).exchange(await verifier.verify(await signed())),
-    safeError(503, 'identity_unavailable'));
+    safeError(401, 'invalid_token'));
 });
 for (const [name, response] of [
   ['refresh token', { refresh_token: 'sensitive-marker' }],

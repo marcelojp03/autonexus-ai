@@ -90,6 +90,8 @@ export function createConsultationApp(deps: AppDependencies) {
             structuredContent: output, isError: !output.ok };
         } catch (error) {
           const code = error instanceof ConsultationInputError ? 'INVALID_ARGUMENTS' : safeFailure(error).code.toUpperCase();
+          // Best effort: the terminal outcome must be recorded even when the call fails closed.
+          await audit.write({ ...event, durationMs: now() - started, outcome: code }).catch(() => undefined);
           return failureResult(code);
         }
       });

@@ -9,8 +9,9 @@ de CU30. Contrato: `contracts/mcp/consultation.md`, desde la raíz.
 Proyecto inicializado con `npm init -y` sin sobrescribir AGENTS/README; instalación con
 `pnpm install --ignore-scripts`, exit 0, creó lockfile. Compilación central con Node22.22.3 y
 `node node_modules/typescript/bin/tsc -p tsconfig.json`, exit 0. Las pruebas de componente
-están en verificación. No se acredita todavía integración real Keycloak/Operaciones,
-registro operativo de clientes, ejecución n8n ni publicación de este incremento.
+`pnpm test` **84/84**. La integración real con Keycloak y Operaciones se observó en **10 etapas**
+(ver `docs/evidence/cu29-20261105.md`), con clientes y roles de lectura provisionados localmente.
+n8n está importado pero **no ejecutado**; CU28/CU31 siguen incompletos.
 
 Herramientas fijadas: Node22.22.3, pnpm12.6.0, TypeScript6.0.3. SDK oficial v2 server/client2.4.0,
 node2.1.2, express2.0.2; Express5.2.1, Zod4.6.7 y jose6.2.13. El README oficial actual usa

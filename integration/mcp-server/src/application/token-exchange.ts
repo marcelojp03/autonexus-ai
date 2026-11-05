@@ -59,7 +59,10 @@ export class KeycloakTokenExchange implements TokenExchange {
       if (Object.hasOwn(result, 'refresh_token')) throw new Error('Unexpected refresh token');
       await this.verifier.verifyExchanged(result.access_token, current);
       return result.access_token;
-    } catch {
+    } catch (error) {
+      // A rejected or mismatched exchange is an authentication failure, not an IdP outage:
+      // the caller must learn to re-authenticate instead of retrying against a broken dependency.
+      if (error instanceof AccessError) throw error;
       throw new AccessError('identity_unavailable');
     }
   }

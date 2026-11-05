@@ -17,7 +17,7 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "limit", "value": "={{ $json.orderLimit || 20 }}" },
+            { "name": "limit", "value": "20" },
             { "name": "offset", "value": "0" }
           ]
         },
@@ -38,8 +38,8 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "from", "value": "={{ $json.from }}" },
-            { "name": "to", "value": "={{ $json.to }}" },
+            { "name": "from", "value": "={{ $now.minus({ days: 6 }).toFormat('yyyy-MM-dd') }}" },
+            { "name": "to", "value": "={{ $now.toFormat('yyyy-MM-dd') }}" },
             { "name": "limit", "value": "50" }
           ]
         },
@@ -68,7 +68,7 @@
     "Órdenes autorizadas": { "main": [[{ "node": "Agenda del equipo", "type": "main", "index": 0 }]] },
     "Agenda del equipo": { "main": [[{ "node": "Resumen de lectura", "type": "main", "index": 0 }]] }
   },
-  "settings": { "executionOrder": "v1", "saveManualExecutions": true, "timezone": "America/La_Paz" },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": false, "timezone": "America/La_Paz" },
   "active": false,
   "pinData": {}
 }

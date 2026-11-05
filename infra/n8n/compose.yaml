@@ -17,7 +17,10 @@ services:
       N8N_TEMPLATES_ENABLED: "false"
       N8N_SECURE_COOKIE: "false"
       GENERIC_TIMEZONE: "America/La_Paz"
-      EXECUTIONS_DATA_SAVE_ON_SUCCESS: "all"
+      # A read-only flow must not retain raw owner payloads in the n8n database.
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: "none"
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "false"
+      EXECUTIONS_DATA_SAVE_ON_PROGRESS: "false"
       EXECUTIONS_DATA_PRUNE: "true"
       N8N_RUNNERS_ENABLED: "true"
       AUTONEXUS_OPERATIONS_URL: "${AUTONEXUS_OPERATIONS_URL:-http://127.0.0.1:8081}"

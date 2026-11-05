@@ -34,7 +34,7 @@ ejecución exigen empleado activo vinculado al sub actual: no hay excepción de 
 
 Envelope con source=operations, observedAt, alcance y período cuando corresponda, datos
 proyectados y paginación (`total`, `limit`, `offset`, `hasMore`, `nextOffset`).
-Órdenes: IDs/número/estado/prioridad/versiones/fechas y servicios sin tarifas. Agenda:
+Órdenes: IDs/número/estado/prioridad/versiones/fechas y servicios sin tarifas. Agenda: servicios sin tarifas, además de
 asignación/orden/intervalo/prioridad/estados/versiones/progreso. Ejecución: IDs/estado/inicio/
 versión; avances id/sequence/minutesWorked/occurredAt/recordedAt/version y conteos de evidencia.
 
