@@ -4,6 +4,7 @@ import { RouterLink, Routes } from '@angular/router';
 import { sessionGuard } from '../auth/session';
 import { employeeEntryGuard } from '../features/agenda/entry.guard';
 import { agendaRoutes } from '../features/agenda/routes';
+import { assistantRoutes } from '../features/assistant/routes';
 import { employeesRoutes } from '../features/employees/routes';
 import { executionRoutes } from '../features/execution/routes';
 import { scheduleRoutes } from '../features/schedules/routes';
@@ -27,6 +28,7 @@ export const integratedRoutes: Routes = [
   ...scheduleRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...securityRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   ...verificationRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
+  ...assistantRoutes.map(route => ({ ...route, canActivate: [sessionGuard] })),
   { path: 'widgets', canActivate: [sessionGuard], loadChildren: () => import('../routes/widgets/routes').then(module => module.routes) },
   {
     path: 'dashboard',

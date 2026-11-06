@@ -1,0 +1,159 @@
+<nz-page-header nzTitle="Asistente y reporte" nzSubtitle="CU25/CU26 · taller">
+  <nz-page-header-extra>
+    <span class="when">Sesión del Shell · el asistente usa tu propio acceso</span>
+  </nz-page-header-extra>
+</nz-page-header>
+
+<nz-card nzTitle="Preguntar al asistente">
+  <p class="note">El asistente consulta con tu token y responde con las fuentes, la procedencia y los límites que declaró. Una respuesta lenta es normal: puede tardar hasta dos minutos.</p>
+  <div class="toolbar">
+    <label class="field" for="assistant-question">Pregunta</label>
+    <textarea
+      nz-input
+      id="assistant-question"
+      class="question"
+      rows="3"
+      [attr.maxlength]="maxQuestion"
+      [placeholder]="'¿Qué trabajos están en curso y qué avances tienen?'"
+      [ngModel]="question"
+      (ngModelChange)="question = $event"
+    ></textarea>
+    <button nz-button nzType="primary" type="button" id="assistant-ask" [disabled]="!canAsk()" [nzLoading]="asking()" (click)="ask()">Preguntar</button>
+  </div>
+
+  @if (asking()) {
+    <nz-alert id="assistant-loading" nzType="info" nzShowIcon [nzMessage]="'Consultando al asistente… ' + elapsed() + ' s'" nzDescription="No cierres la vista: la respuesta combina el modelo con consultas autorizadas al taller."></nz-alert>
+  }
+  @if (askError()) {
+    <nz-alert id="assistant-error" nzType="error" nzShowIcon [nzMessage]="askError()!" nzDescription="Podés reintentar la misma pregunta; no se registró ninguna acción."></nz-alert>
+  }
+
+  @if (answer(); as view) {
+    <div class="row">
+      <nz-tag nzColor="blue">{{ view.model }}</nz-tag>
+      <span class="when">generado {{ time(view.generatedAt) }}</span>
+      @for (tool of view.toolsUsed; track tool) { <nz-tag>{{ tool }}</nz-tag> }
+    </div>
+
+    @if (view.refused) {
+      <nz-alert id="assistant-refused" nzType="warning" nzShowIcon nzMessage="El asistente no respondió esta pregunta" [nzDescription]="view.answer"></nz-alert>
+    } @else {
+      <p class="answer" id="assistant-answer">{{ view.answer }}</p>
+    }
+
+    <h4>Fuentes citadas</h4>
+    @if (!view.references.length) {
+      <p class="when">La respuesta no citó registros concretos.</p>
+    }
+    @for (reference of view.references; track reference.kind + reference.id) {
+      <div class="row">
+        <nz-tag>{{ reference.kind }}</nz-tag>
+        <span>{{ reference.label ?? reference.id }}</span>
+      </div>
+    }
+
+    <h4>Procedencia</h4>
+    @if (!view.provenance.length) {
+      <p class="when">Sin procedencia declarada para esta respuesta.</p>
+    }
+    @for (entry of view.provenance; track $index) {
+      <div class="row">
+        <nz-tag nzColor="geekblue">{{ entry.service }}</nz-tag>
+        <span>{{ entry.resource }}</span>
+        @if (entry.tool) { <span class="when">{{ entry.tool }}</span> }
+      </div>
+    }
+
+    @if (view.limitations.length) {
+      <nz-alert id="assistant-limitations" nzType="info" nzShowIcon nzMessage="Límites declarados">
+        <ul>
+          @for (limitation of view.limitations; track $index) { <li>{{ limitation }}</li> }
+        </ul>
+      </nz-alert>
+    }
+  }
+</nz-card>
+
+<nz-card nzTitle="Reporte narrativo del período">
+  <p class="note">Las cifras las calcula el servidor de forma determinista; el modelo solo redacta sobre ellas. El reporte no incluye importes ni datos financieros.</p>
+  <div class="toolbar">
+    <label class="field" for="assistant-from">Desde<input nz-input id="assistant-from" type="date" [(ngModel)]="from" /></label>
+    <label class="field" for="assistant-to">Hasta<input nz-input id="assistant-to" type="date" [(ngModel)]="to" /></label>
+    <button nz-button nzType="primary" type="button" id="assistant-generate" [disabled]="!canGenerate() || (permissionKnown() && !reportAllowed())" [nzLoading]="generating()" (click)="generate()">Generar reporte</button>
+  </div>
+
+  @if (permissionKnown() && !reportAllowed()) {
+    <nz-alert id="assistant-report-forbidden" nzType="warning" nzShowIcon nzMessage="Esta cuenta no puede generar el reporte del taller" nzDescription="El reporte cubre todos los trabajos del período y requiere el permiso de lectura del equipo. La pregunta al asistente sigue disponible."></nz-alert>
+  }
+  @if (generating()) {
+    <nz-alert id="assistant-report-loading" nzType="info" nzShowIcon nzMessage="Generando el reporte…"></nz-alert>
+  }
+  @if (reportError()) {
+    <nz-alert id="assistant-report-error" nzType="error" nzShowIcon [nzMessage]="reportError()!" nzDescription="El reporte es de solo lectura: reintentar no modifica ningún registro."></nz-alert>
+  }
+
+  @if (report(); as view) {
+    <div class="row">
+      <nz-tag nzColor="purple">{{ view.period.from }} → {{ view.period.to }}</nz-tag>
+      <nz-tag nzColor="blue">{{ view.model }}</nz-tag>
+      <span class="when">generado {{ time(view.generatedAt) }} · {{ view.figures.totalWorks }} trabajos</span>
+    </div>
+
+    <p class="answer" id="assistant-report-narrative">{{ view.narrative }}</p>
+
+    <h4>Trabajos por estado</h4>
+    @if (!view.figures.byStatus.length) {
+      <nz-empty nzNotFoundImage="simple" nzNotFoundContent="Sin trabajos en el período."></nz-empty>
+    }
+    <div class="row">
+      @for (row of view.figures.byStatus; track row.status) {
+        <nz-tag nzColor="gold">{{ statusLabel(row.status) }}: {{ row.count }}</nz-tag>
+      }
+    </div>
+
+    <h4>Avances y evidencias por trabajo</h4>
+    @if (view.figures.works.length) {
+      <table id="assistant-report-figures">
+        <thead>
+          <tr>
+            <th scope="col">Orden</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Avances</th>
+            <th scope="col">Evidencias disponibles</th>
+            <th scope="col">Pendientes</th>
+            <th scope="col">Fallidas</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (work of view.figures.works; track work.orderNumber) {
+            <tr>
+              <td>{{ work.orderNumber }}</td>
+              <td>{{ statusLabel(work.executionStatus) }}</td>
+              <td>{{ work.advances }}</td>
+              <td>{{ work.evidenceAvailable }}</td>
+              <td>{{ work.evidencePending }}</td>
+              <td>{{ work.evidenceFailed }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <h4>Procedencia</h4>
+    @for (entry of view.provenance; track $index) {
+      <div class="row">
+        <nz-tag nzColor="geekblue">{{ entry.service }}</nz-tag>
+        <span>{{ entry.resource }}</span>
+        @if (entry.tool) { <span class="when">{{ entry.tool }}</span> }
+      </div>
+    }
+
+    @if (view.limitations.length) {
+      <nz-alert id="assistant-report-limitations" nzType="info" nzShowIcon nzMessage="Límites declarados">
+        <ul>
+          @for (limitation of view.limitations; track $index) { <li>{{ limitation }}</li> }
+        </ul>
+      </nz-alert>
+    }
+  }
+</nz-card>

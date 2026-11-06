@@ -4,6 +4,7 @@ import bo.edu.uagrm.autonexus.operations.application.VerificationPorts;
 import bo.edu.uagrm.autonexus.operations.domain.Execution;
 import bo.edu.uagrm.autonexus.operations.domain.OperationsError;
 import bo.edu.uagrm.autonexus.operations.domain.Verification;
+import bo.edu.uagrm.autonexus.operations.infrastructure.cu28.ReviewRequestedEvent;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
@@ -142,6 +143,7 @@ public class JdbcVerificationRepository extends OperationsStore implements Verif
             review(current, "requested", actor, null, expectedVersion + 1, now);
             audit("work-execution", current.id(), "review-requested", actor, expectedVersion + 1,
                     Map.of("status", Verification.PENDING_VERIFICATION));
+            outbox(current, expectedVersion + 1, now, operationId);
             remember(operationId, fingerprint, current.id());
             return true;
         } catch (DataAccessException failure) {
@@ -189,8 +191,23 @@ public class JdbcVerificationRepository extends OperationsStore implements Verif
         }
     }
 
-    private void review(Execution execution, String action, String actor, String reason, int version, Instant now) {
+    /**
+     * CU28: the intent to publish is committed with the state change. The publisher is a separate
+     * process step, so neither a delivery failure nor a slow webhook can undo the review request.
+     */
+    private void outbox(Execution execution, int version, Instant now, UUID operationId) {
+        Map<String, Object> event = ReviewRequestedEvent.envelope(execution, version, now, operationId);
         jdbc.sql("""
+                INSERT INTO operations.cu28_outbox(event_id,event_type,aggregate_type,aggregate_id,
+                    aggregate_version,correlation_id,causation_id,payload,occurred_at,next_attempt_at)
+                VALUES(?,?,?,?,?,?,?,?::jsonb,?,?)
+                ON CONFLICT (event_id) DO NOTHING
+                """).params(UUID.fromString((String) event.get("eventId")), ReviewRequestedEvent.TYPE,
+                ReviewRequestedEvent.AGGREGATE_TYPE, execution.id(), version, execution.id(), operationId,
+                write(event), Timestamp.from(now), Timestamp.from(now)).update();
+    }
+
+    private void review(Execution execution, String action, String actor, String reason, int version, Instant now) {        jdbc.sql("""
                 INSERT INTO operations.work_execution_reviews(id,execution_id,order_id,action,actor,reason,
                     execution_version,occurred_at) VALUES(?,?,?,?,?,?,?,?)
                 """).params(UUID.randomUUID(), execution.id(), execution.orderId(), action, actor, reason, version,

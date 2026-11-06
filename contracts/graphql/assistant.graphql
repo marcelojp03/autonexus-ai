@@ -1,0 +1,117 @@
+# CU25/CU26 — asistente con LLM y reporte narrativo (GraphQL)
+# Diseño: docs/compose/spec/assistant-reports-events.md (S2.3, S2.4, S2.5)
+#
+# El BFF reenvía el token del USUARIO al servicio del asistente; nunca acuña una identidad técnica
+# ni usa el token de otra cuenta. El asistente ejecuta sus herramientas con ese mismo token, así que
+# cada propietario vuelve a autorizar permiso y registro: una respuesta no amplía autoridad y sus
+# límites declarados acompañan siempre al texto.
+#
+# `assistantAnswer` no declara permiso de módulo porque el catálogo cerrado (contracts/auth/permissions.md)
+# no tiene uno para el asistente: el catálogo de herramientas se cierra por el token del portador y el
+# servicio las ejecuta (denegación por permiso dentro de la respuesta, no en el BFF). `operationsReport`
+# sí declara `executions:read:team` porque sus cifras son del taller completo.
+#
+# Cifras: el servicio las calcula de forma determinista desde las herramientas y el LLM solo redacta
+# sobre ellas. El BFF proyecta campo por campo y no suma, resta ni deriva ningún total. No hay campos
+# financieros: el reporte no inventa importes, cotizaciones ni facturación.
+#
+# Cuerpo esperado del servicio (propietario externo en ASSISTANT_API_URL):
+#   POST /assistant {"query": String}      -> { answer, refused?, toolsUsed?, model, generatedAt, references?, provenance?, limitations? }
+#   POST /report    {"from": Date, "to": Date} -> { narrative, period:{from,to}, generatedAt, model, toolsUsed?, figures:{byStatus?, works?, totalWorks?}, references?, provenance?, limitations? }
+#   Ambos con Authorization: Bearer <token del usuario>. 401/403/503 y timeout se publican saneados.
+
+"Referencia a un registro citado por la respuesta o el reporte."
+type AssistantRecordReference {
+  "Tipo de registro citado: order, assignment, execution, advance, evidence, employee."
+  kind: String!
+  "Identificador publicado por el servicio propietario."
+  id: String!
+  "Etiqueta legible para la interfaz, sin datos personales ni financieros."
+  label: String
+}
+
+"Procedencia de un dato: qué servicio, qué recurso y qué herramienta lo produjo."
+type AssistantProvenance {
+  "Servicio propietario consultado (operations, employees, intelligence)."
+  service: String!
+  "Recurso o ruta consultada por el asistente."
+  resource: String!
+  "Herramienta del catálogo cerrado que produjo el dato."
+  tool: String
+  "Instante de la observación en ISO-8601 UTC."
+  observedAt: DateTime
+}
+
+"Respuesta del asistente. `refused` indica que no respondió por límite o permiso, no un error de transporte."
+type AssistantAnswer {
+  "Texto de la respuesta en lenguaje natural."
+  answer: String!
+  "Verdadero cuando el asistente se negó a responder dentro de sus límites o permisos."
+  refused: Boolean!
+  "Herramientas del catálogo cerrado que el servidor ejecutó para responder."
+  toolsUsed: [String!]!
+  "Modelo que redactó la respuesta (`modelVersion` declarada por el servicio)."
+  model: String!
+  "Instante de generación en ISO-8601 UTC."
+  generatedAt: DateTime!
+  "Registros concretos citados por la respuesta."
+  references: [AssistantRecordReference!]!
+  "Procedencia de los datos usados."
+  provenance: [AssistantProvenance!]!
+  "Límites declarados por el servicio: alcance, datos ausentes o herramienta no disponible."
+  limitations: [String!]!
+}
+
+"Cifra determinista de trabajos por estado, calculada por el servicio."
+type OperationsStatusCount {
+  "Estado de ejecución publicado por Operaciones."
+  status: String!
+  count: Int!
+}
+
+"Cifras deterministas de un trabajo del período."
+type OperationsWorkFigure {
+  orderNumber: String!
+  "Asignación del trabajo; `null` si el servicio no la publicó."
+  assignmentId: UUID
+  executionStatus: String!
+  "Avances registrados en el período."
+  advances: Int!
+  evidenceAvailable: Int!
+  evidencePending: Int!
+  evidenceFailed: Int!
+}
+
+"Cifras deterministas del período; nunca financieras."
+type OperationsFigures {
+  byStatus: [OperationsStatusCount!]!
+  works: [OperationsWorkFigure!]!
+  "Cantidad de trabajos incluidos; igual al cálculo del servicio."
+  totalWorks: Int!
+}
+
+"Período civil del reporte, en la zona del taller."
+type ReportPeriod {
+  from: Date!
+  to: Date!
+}
+
+"Reporte narrativo de un período: las cifras son deterministas y el texto solo las redacta."
+type OperationsReport {
+  period: ReportPeriod!
+  generatedAt: DateTime!
+  model: String!
+  "Narración del período; no sustituye las cifras ni agrega importes."
+  narrative: String!
+  figures: OperationsFigures!
+  references: [AssistantRecordReference!]!
+  provenance: [AssistantProvenance!]!
+  limitations: [String!]!
+}
+
+extend type Query {
+  "Pregunta libre al asistente. Sin permiso de módulo: el servicio cierra el catálogo de herramientas por token."
+  assistantAnswer(query: String!): AssistantAnswer!
+  "Reporte del período con cifras deterministas. Requiere `executions:read:team` y el token del usuario."
+  operationsReport(from: Date!, to: Date!): OperationsReport!
+}

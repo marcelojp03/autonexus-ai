@@ -17,6 +17,7 @@ import type { OperationsCommand, OperationsGateway, OperationsPageQuery } from '
 import type { FinanceGateway, QuoteCommand, QuoteQuery } from './finance-gateway.js';
 import type { AgendaGateway, AgendaQuery, AgendaEmployeesQuery } from './agenda-gateway.js';
 import type { IntelligenceGateway } from './intelligence-gateway.js';
+import type { AssistantGateway } from './assistant-gateway.js';
 import type { RegisterSyncInput, SyncGateway } from './sync-gateway.js';
 
 /** Closed permission catalog published by the Employees owner. */
@@ -70,6 +71,11 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.fre
   orderAnalyses: 'intelligence:read',
   visionAnalysis: 'intelligence:read',
   analyzeEvidence: 'intelligence:analyze',
+  // CU25: the closed catalogue has no assistant permission, so the field requires only a catalogue
+  // role; the service closes its tool catalogue with the same user token and re-authorises each read.
+  assistantAnswer: null,
+  // CU26: the report publishes workshop-wide execution figures.
+  operationsReport: 'executions:read:team',
   myAgendaHistory: 'agenda:read:self',
   teamAgendaHistory: 'agenda:read:team',
   confirmationSaga: 'confirmations:read',
@@ -172,6 +178,7 @@ export class BusinessGraphql {
     private readonly agenda: AgendaGateway,
     private readonly intelligence?: IntelligenceGateway,
     private readonly sync?: SyncGateway,
+    private readonly assistant?: AssistantGateway,
   ) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
   }
@@ -318,6 +325,8 @@ export class BusinessGraphql {
       orderAnalyses: (args: { orderId: string; assignmentId: string }) => this.intelligenceGateway().order(args.orderId, args.assignmentId, token),
       visionAnalysis: (args: { analysisId: string }) => this.intelligenceGateway().analysis(args.analysisId, token),
       analyzeEvidence: (args: { assignmentId: string; evidenceId: string }) => this.intelligenceGateway().analyze(args.assignmentId, args.evidenceId, token),
+      assistantAnswer: (args: { query: string }) => this.assistantGateway().ask(args.query, token),
+      operationsReport: (args: { from: string; to: string }) => this.assistantGateway().report(args.from, args.to, token),
       myAgendaHistory: (args: AgendaQuery) => this.agenda.history('self', args, token),
       teamAgendaHistory: (args: AgendaQuery) => this.agenda.history('team', args, token),
       retryEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>
@@ -396,6 +405,11 @@ export class BusinessGraphql {
   private intelligenceGateway(): IntelligenceGateway {
     if (!this.intelligence) throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
     return this.intelligence;
+  }
+
+  private assistantGateway(): AssistantGateway {
+    if (!this.assistant) throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    return this.assistant;
   }
 
   private toBody(error: GraphQLError): GraphqlErrorBody {

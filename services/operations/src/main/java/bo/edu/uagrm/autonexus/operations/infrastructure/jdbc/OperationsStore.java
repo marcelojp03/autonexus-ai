@@ -72,6 +72,11 @@ abstract class OperationsStore {
         return false;
     }
 
+    /** Serializes a value for a jsonb column. */
+    protected String write(Object value) {
+        return json.writeValueAsString(value);
+    }
+
     protected void audit(String entity, UUID entityId, String action, String actor, int version, Object snapshot) {
         jdbc.sql("""
                 INSERT INTO operations.operations_history(id, entity, entity_id, action, actor_subject, occurred_at, version, snapshot)

@@ -60,7 +60,23 @@ mutation RetryEmployeeAccess($id: UUID!, $input: EmployeeCommandInput!) {
 La selección GraphQL puede ser parcial; REST devuelve el shape completo. No se permite acceso empresarial web directo a REST como alternativa al BFF pendiente. CU02 y CU03 web no están completados por publicar este contrato.
 
 
+## CU25/CU26 — asistente y reporte narrativo en el BFF y en la web (2026-11-06)
+
+[assistant.graphql](assistant.graphql) extiende el mismo SDL con `assistantAnswer(query: String!)` y `operationsReport(from: Date!, to: Date!)`. El BFF reenvía el **token del usuario** a `ASSISTANT_API_URL` (`POST /assistant`, `POST /report`), nunca una identidad técnica, con timeout de 120 s por llamada. 401 → `UNAUTHENTICATED`, 403 → `FORBIDDEN`, 400/422 → `VALIDATION_ERROR`, 503/5xx/timeout/cuerpo ilegible → `SERVICE_UNAVAILABLE`; los códigos del servicio se publican solo si están en el catálogo saneado.
+
+| Campo | Permiso |
+| --- | --- |
+| `assistantAnswer` | ninguno de módulo (solo rol del catálogo) |
+| `operationsReport` | `executions:read:team` |
+
+`assistantAnswer` no inventa un permiso nuevo: el catálogo cerrado no tiene uno para el asistente y el servicio cierra su catálogo de herramientas con ese mismo token, así que la denegación por permiso ocurre dentro de la respuesta (`refused`), no en el BFF. El reporte publica cifras del taller completo y por eso exige `executions:read:team`.
+
+Las cifras son deterministas y las calcula el servicio: el BFF solo proyecta campo por campo y rechaza (503) un período distinto al solicitado o una cifra mal formada en vez de mostrar un cero. No hay campos financieros. La web (`mf-employees`, ruta `/employees/assistant` y enlace en el Shell) usa `SessionPort.requestBusiness` y nunca recibe el token.
+
+Límites vigentes: el servicio propietario en `http://127.0.0.1:3099` **no está implementado en este repositorio ni estaba arrancado** al verificar; las pruebas del BFF usan transportes falsos y no acreditan LLM real, herramientas reales ni cifras reales. `SessionPort.requestBusiness` aborta a los 15 s, por debajo de los 120 s del BFF: las respuestas lentas del modelo necesitan un acuerdo aditivo de timeout en `contracts/auth/session.ts`.
+
 ## Implementación CU03 (2026-10-27)
+
 
 `integration/bff` ejecuta este SDL con `graphql` 17.0.2 sobre la API REST de Empleados (sin ORM ni SQL). Superficie cerrada a los siete campos raíz; una operación por petición; sin introspección ni fragmentos nombrados; profundidad <=6 y <=120 selecciones.
 

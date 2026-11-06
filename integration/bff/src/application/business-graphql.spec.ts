@@ -8,6 +8,7 @@ const schemaPath = resolve(process.cwd(), '../../contracts/graphql/employees.gra
 const securityPath = resolve(process.cwd(), '../../contracts/graphql/security.graphql');
 const operationsPath = resolve(process.cwd(), '../../contracts/graphql/operations.graphql');
 const financePath = resolve(process.cwd(), '../../contracts/graphql/finance.graphql');
+const assistantPath = resolve(process.cwd(), '../../contracts/graphql/assistant.graphql');
 const ADMIN = Object.freeze({ subject: 'synthetic-admin', roles: ['administrador'] as const });
 const HEAD = Object.freeze({ subject: 'synthetic-head', roles: ['jefe_taller'] as const });
 const LIMITED = Object.freeze({ subject: 'synthetic-limited', roles: ['recepcionista'] as const });
@@ -118,7 +119,11 @@ function build(rejected?: Error) {
     decideQuote: vi.fn(async () => ({ quote: { id: EMPLOYEE_ID }, orderStatusHint: 'quote_approved', replayed: false })),
   };
   const agenda = { list: vi.fn(), work: vi.fn(), employees: vi.fn(), history: vi.fn() };
-  return { gateway, operations, finance, graphql: new BusinessGraphql(gateway, operations, finance, bffEnvironment({}).schemaPaths, agenda) };
+  const assistant = {
+    ask: vi.fn(async () => ({ answer: 'Dos trabajos en curso.', refused: false, toolsUsed: ['list_orders'], model: 'qwen3.5:4b', generatedAt: '2026-11-06T12:00:00Z', references: [], provenance: [], limitations: [] })),
+    report: vi.fn(async () => ({ narrative: 'Dos trabajos cerrados.', period: { from: '2026-11-01', to: '2026-11-30' }, generatedAt: '2026-11-06T12:00:00Z', model: 'qwen3.5:4b', toolsUsed: [], figures: { byStatus: [], works: [], totalWorks: 0 }, references: [], provenance: [], limitations: [] })),
+  };
+  return { gateway, operations, finance, agenda, assistant, graphql: new BusinessGraphql(gateway, operations, finance, bffEnvironment({}).schemaPaths, agenda, undefined, undefined, assistant) };
 }
 
 describe('CU15 explicit fake upstream contract', () => {
@@ -406,6 +411,48 @@ describe('CU16 execution and evidence policy', () => {
     const denied = await graphql.run({ query: work('myExecution') }, HEAD, 'team-token');
     expect(denied.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
     expect(operations.execution).not.toHaveBeenCalled();
+  });
+});
+
+describe('CU25/CU26 assistant policy', () => {
+  const ANSWER = 'answer model generatedAt refused toolsUsed references { kind id label } provenance { service resource tool observedAt } limitations';
+  const REPORT = 'narrative period { from to } generatedAt model figures { totalWorks byStatus { status count } works { orderNumber assignmentId executionStatus advances evidenceAvailable evidencePending evidenceFailed } } references { kind id } provenance { service resource } limitations';
+  // The permission cache is keyed by subject and roles: the allowed actor is a distinct head.
+  const TEAM = Object.freeze({ subject: 'synthetic-team', roles: ['jefe_taller'] as const });
+
+  it('publishes the two assistant root fields in the SDL', () => {
+    const source = readFileSync(assistantPath, 'utf8');
+    const blocks = [...source.matchAll(/extend type (?:Query|Mutation) \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join('\n');
+    const roots = [...blocks.matchAll(/^ {2}([A-Za-z]+)[(:]/gm)].map((match) => match[1]);
+    expect(roots.sort()).toEqual(['assistantAnswer', 'operationsReport'].sort());
+    expect(source).not.toMatch(/\b(amount|total|currency|price|quoteTotal|revenue)\b\s*:/i);
+  });
+
+  it('lets any catalogue role ask the assistant with its own token and resolves no permission for it', async () => {
+    const { graphql, gateway, assistant } = build();
+    const asked = await graphql.run({ query: '{ assistantAnswer(query: "¿Qué trabajos están en curso?") { ' + ANSWER + ' } }' }, LIMITED, 'no-role-token');
+    expect(asked.errors).toBeUndefined();
+    expect(assistant.ask).toHaveBeenCalledWith('¿Qué trabajos están en curso?', 'no-role-token');
+    // No module permission is invented for CU25, so the BFF never asks for effective permissions.
+    expect(gateway.permissions).not.toHaveBeenCalled();
+  });
+
+  it('keeps the workshop report behind executions:read:team', async () => {
+    const { graphql, assistant } = build();
+    const denied = await graphql.run({ query: '{ operationsReport(from: "2026-11-01", to: "2026-11-30") { ' + REPORT + ' } }' }, HEAD, 'head-token');
+    expect(denied.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(assistant.report).not.toHaveBeenCalled();
+
+    const allowed = await graphql.run({ query: '{ operationsReport(from: "2026-11-01", to: "2026-11-30") { ' + REPORT + ' } }' }, TEAM, 'team-token');
+    expect(allowed.errors).toBeUndefined();
+    expect(assistant.report).toHaveBeenCalledWith('2026-11-01', '2026-11-30', 'team-token');
+  });
+
+  it('fails closed with SERVICE_UNAVAILABLE when the assistant owner is not wired', async () => {
+    const { gateway, operations, finance, agenda } = build();
+    const graphql = new BusinessGraphql(gateway, operations, finance, bffEnvironment({}).schemaPaths, agenda);
+    const result = await graphql.run({ query: '{ assistantAnswer(query: "¿Estado?") { answer } }' }, LIMITED, 'no-role-token');
+    expect(result.errors?.[0].extensions).toEqual({ code: 'SERVICE_UNAVAILABLE', statusCode: 503 });
   });
 });
 

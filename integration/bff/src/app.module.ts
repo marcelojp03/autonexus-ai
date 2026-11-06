@@ -6,6 +6,7 @@ import { HttpFinanceGateway } from './application/finance-gateway.js';
 import { HttpAgendaGateway } from './application/agenda-gateway.js';
 import { HttpIntelligenceGateway } from './application/intelligence-gateway.js';
 import { HttpSyncGateway } from './application/sync-gateway.js';
+import { HttpAssistantGateway } from './application/assistant-gateway.js';
 import { AccessTokenVerifier } from './infrastructure/auth/token-verifier.js';
 import { AdministratorGuard } from './infrastructure/auth/administrator.guard.js';
 import { bffEnvironment, type BffConfiguration } from './infrastructure/config/environment.js';
@@ -40,9 +41,9 @@ const configuration = (): BffConfiguration => bffEnvironment();
     },
     {
       provide: BusinessGraphql,
-      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION', HttpAgendaGateway, HttpIntelligenceGateway, HttpSyncGateway],
-      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration, agenda: HttpAgendaGateway, intelligence: HttpIntelligenceGateway, sync: HttpSyncGateway) =>
-        new BusinessGraphql(employees, operations, finance, config.schemaPaths, agenda, intelligence, sync),
+      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION', HttpAgendaGateway, HttpIntelligenceGateway, HttpSyncGateway, HttpAssistantGateway],
+      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration, agenda: HttpAgendaGateway, intelligence: HttpIntelligenceGateway, sync: HttpSyncGateway, assistant: HttpAssistantGateway) =>
+        new BusinessGraphql(employees, operations, finance, config.schemaPaths, agenda, intelligence, sync, assistant),
     },
     {
       provide: HttpSyncGateway,
@@ -53,6 +54,11 @@ const configuration = (): BffConfiguration => bffEnvironment();
       provide: HttpIntelligenceGateway,
       inject: ['BFF_CONFIGURATION'],
       useFactory: (config: BffConfiguration) => new HttpIntelligenceGateway(config.intelligenceUrl),
+    },
+    {
+      provide: HttpAssistantGateway,
+      inject: ['BFF_CONFIGURATION'],
+      useFactory: (config: BffConfiguration) => new HttpAssistantGateway(config.assistantUrl),
     },
     {
       provide: HttpAgendaGateway,

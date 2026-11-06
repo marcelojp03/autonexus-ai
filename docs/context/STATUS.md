@@ -1,5 +1,24 @@
 # Estado comprobado
 
+## CU25/CU26 — asistente y reporte narrativo expuestos en el BFF y en la web (2026-11-06)
+
+Nuevo SDL `contracts/graphql/assistant.graphql` con `assistantAnswer(query)` y `operationsReport(from,to)`, registrado por `integration/bff` sobre `ASSISTANT_API_URL` (default `http://127.0.0.1:3099`). El gateway `HttpAssistantGateway` reenvía el token del usuario —nunca una identidad técnica—, espera 120 s y publica solo códigos cerrados (401/403/400/503). `FIELD_PERMISSION`: `assistantAnswer` sin permiso de módulo (el catálogo cerrado no tiene uno para el asistente; el servicio cierra sus herramientas con el mismo token) y `operationsReport` con `executions:read:team`. La proyección es campo por campo, sin campos financieros, y falla cerrada ante período distinto o cifra mal formada.
+
+Web: `mf-employees` ruta `/employees/assistant` con dos paneles (pregunta con estado de espera, fuentes, procedencia, límites, rechazo y error; reporte con período, tabla de cifras, narrativa y procedencia) vía `SessionPort.requestBusiness`, más el enlace en el Shell. Verificación: BFF `pnpm test` 181/181, `pnpm test:e2e` 45/45, `pnpm typecheck` exit 0; `mf-employees` `tsc -p tsconfig.app.json --noEmit` exit 0 y `build:integrated` exit 0 (solo avisos previos de CommonJS/budget).
+
+Límites: el servicio del asistente en `:3099` **no existe en este repositorio y no estaba arrancado**; las pruebas usan transportes falsos y no acreditan LLM real, herramientas reales ni cifras reales. `SessionPort.requestBusiness` aborta a los 15 s frente a los 120 s del BFF, así que las respuestas lentas requieren un acuerdo aditivo de timeout en `contracts/auth/session.ts` (no modificado aquí). CU25 sigue siendo determinista en `integration/agent`: esta entrega expone el contrato, no un modelo desplegado.
+
+## CU25/CU26/CU28 — asistente con LLM, reporte narrativo e intento de flujo por evento (2026-11-06)
+
+Sobre `6819513`. **Ninguno se declara cerrado**; matriz completa en `docs/evidence/cu25-cu26-cu28-20261106.md`.
+
+CU25: asistente con LLM **real** local (Ollama 0.40.13, `qwen3.5:4b`, tool-calling nativo), 4 pasos máximo, presupuestos de tiempo por llamada y total, catálogo cerrado derivado del token y resultados inyectados como datos no confiables. Pregunta combinada real (agenda + avances) respondida en 90,4 s; mecánico denegado con 403 `NO_READ_SCOPE`; aclaración de referencia ausente; planificador determinista conservado como respaldo. Servicio en loopback 3099 con el token del usuario, sin acuñar identidades.
+
+CU26: reporte con figuras deterministas (2 trabajos `in_progress`, 21/2 avances, evidencias 11/1/4), `financialData.included=false`, referencias y procedencia; la narración se acepta solo si cada entero fue calculado y, si el modelo expira, cae a plantilla determinista (ocurrió en la corrida real).
+
+CU28: migración `V12` con Outbox insertado en la transacción de CU17, publicador con lease/backoff y workflow n8n con dedupe por `eventId` y canal local. Compila y su prueba unitaria pasa (4/4), **pero el recorrido real no se ejecutó**: falta reconstruir Operaciones con la migración y activar el workflow.
+
+Interfaz: contrato GraphQL, gateway con el token del usuario y sección Angular con enlace del Shell; BFF **181/181** y typecheck 0, sin corrida contra el servicio real. Bloqueos exactos: reconciliar `figures.totalWorks` con el contrato, tratar el 401 por expiración de token de 60 s y elevar el corte de 15 s de `SessionPort`.
 ## CU25 — asistente interno de consulta sobre CU29 y camino sin MCP (2026-11-06)
 
 Nuevo proceso `integration/agent` (TypeScript, Node 22.22.3, cliente MCP oficial 2.4.0): fuente de herramientas intercambiable — servidor MCP de CU29 (PKCE con `autonexus-mcp-local-reader`) o camino REST propio con el cliente confidencial `autonexus-n8n-reader`. Planificador **determinista** (sin LLM): pasada de seguridad, luego intención → una herramienta autorizada; ventana de agenda de 7 días `America/La_Paz`; si falta un identificador se pide, no se inventa.

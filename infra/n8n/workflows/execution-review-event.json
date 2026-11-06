@@ -1,0 +1,248 @@
+{
+  "id": "cu28ExecutionReview",
+  "name": "AutoNexus — CU28 evento de revisión al canal local",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cu28-execution-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4a01-8a01-111111111111",
+      "name": "Solicitud de revisión (webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        300
+      ],
+      "webhookId": "3e5c1d90-7a1f-4b25-9c31-0b6f7a2d4e10"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The shared secret authenticates the webhook. It is read from the container environment and is\n// never printed, echoed downstream or stored in the execution data.\nconst expected = $env.CU28_WEBHOOK_SECRET ?? '';\nconst headers = $json.headers ?? {};\nconst provided = String(headers['x-autonexus-secret'] ?? '');\nconst body = $json.body && typeof $json.body === 'object' ? $json.body : {};\nconst authorized = expected.length >= 16 && provided.length === expected.length && provided === expected;\nreturn [{\n  json: {\n    authorized,\n    eventId: typeof body.eventId === 'string' ? body.eventId : '',\n    eventType: typeof body.eventType === 'string' ? body.eventType : '',\n    envelope: body\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0002-4a02-8a02-222222222222",
+      "name": "Autenticar y sanear",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0001-4000-8000-000000000001",
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4a03-8a03-333333333333",
+      "name": "¿Secreto válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.eventId }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-4a04-8a04-444444444444",
+      "name": "Deduplicar por eventId",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        380,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:5680/channel",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.envelope) }}",
+        "options": {
+          "timeout": 5000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0005-4a05-8a05-555555555555",
+      "name": "Canal local de prueba",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        640,
+        160
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: true, eventId: $('Deduplicar por eventId').first().json.eventId }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "a1b2c3d4-0006-4a06-8a06-666666666666",
+      "name": "Aceptado en el canal",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'CU28_CHANNEL_UNAVAILABLE' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "a1b2c3d4-0007-4a07-8a07-777777777777",
+      "name": "Canal no disponible",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'CU28_UNAUTHORIZED' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "a1b2c3d4-0008-4a08-8a08-888888888888",
+      "name": "No autorizado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Solicitud de revisión (webhook)": {
+      "main": [
+        [
+          {
+            "node": "Autenticar y sanear",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Autenticar y sanear": {
+      "main": [
+        [
+          {
+            "node": "¿Secreto válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Secreto válido?": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar por eventId",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No autorizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar por eventId": {
+      "main": [
+        [
+          {
+            "node": "Canal local de prueba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Canal local de prueba": {
+      "main": [
+        [
+          {
+            "node": "Aceptado en el canal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Canal no disponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/La_Paz",
+    "saveManualExecutions": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "pinData": {}
+}

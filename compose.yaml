@@ -222,6 +222,10 @@ services:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
       AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN:-}"
+      # CU28 event flow. An empty URL keeps the Outbox publisher disabled and the review events
+      # pending in this owner's database; the private values live in the ignored environment file.
+      CU28_WEBHOOK_URL: "${CU28_WEBHOOK_URL:-}"
+      CU28_WEBHOOK_SECRET: "${CU28_WEBHOOK_SECRET:-}"
     build:
       context: "."
       dockerfile: "infra/local/docker/operations.Dockerfile"
