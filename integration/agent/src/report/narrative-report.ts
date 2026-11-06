@@ -3,18 +3,28 @@
  *
  * The numbers are computed here, deterministically, from the same read-only tools the assistant
  * uses. The local model only writes prose over those numbers; its text is dropped (and replaced by a
- * template built from the same figures) if it introduces any figure that was not computed, so a
- * number in the report is always a number the code derived from real records.
+ * template built from the same figures) unless every figure in it is (a) a computed figure and
+ * (b) attached to the indicator that figure belongs to. A number in the report is always a number
+ * this code derived from real records, published next to the indicator, period and source that
+ * produced it, so the reader can check the prose against the figures.
  */
 import {LlmError, type ChatMessage, type LlmClient} from "../llm/ollama.js";
 import type {ToolSource} from "../sources/mcp.js";
 
-export const REPORT_PROMPT_VERSION = "cu26-report-v1";
+export const REPORT_PROMPT_VERSION = "cu26-report-v2";
 const MAX_RANGE_DAYS = 31;
-const DEFAULT_MAX_WORKS = 10;
 const MAX_WORK_RANGE = 50;
 const TIME_ZONE = "America/La_Paz";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A number is bound to the nearest indicator term inside this distance. */
+const BIND_WINDOW = 60;
+/** Quantities normally precede their noun ("7 avances"), so a preceding term must be closer. */
+const PRECEDING_PENALTY = 25;
+/** A term in another clause ("…, 1 pendiente") is not the indicator of this number. */
+const CLAUSE_PENALTY = 25;
+const CLAUSE_BREAK = /[,;:.!?()«»“”"]|\by\b/;
+/** The period is checked as a period, not as a figure. */
+const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
 
 export class ReportError extends Error {
   readonly code: string;
@@ -52,43 +62,64 @@ export interface WorkFigure {
 }
 
 export interface ReportFigures {
-  readonly works: number;
+  /** Works in the period and in the figure set: equals `byStatus` sum and `perWork` length. */
+  readonly totalWorks: number;
   readonly byStatus: Readonly<Record<string, number>>;
+  /** null only when no work returned its execution figures. */
   readonly advances: number | null;
   readonly evidence: EvidenceCounts | null;
   readonly perWork: readonly WorkFigure[];
   /** True only when every work in the period returned its execution figures. */
   readonly complete: boolean;
-  readonly worksInPeriod: number;
   readonly executionsConsulted: number;
   readonly executionsFailed: number;
+}
+
+/**
+ * One quantitative statement of the report, bound to the indicator it belongs to. The prose is only
+ * published when each of its numbers matches the value of the indicator named next to it.
+ */
+export interface ReportClaim {
+  /** Stable indicator id: `works.total`, `works.byStatus.<status>`, `execution.advances`, … */
+  readonly indicator: string;
+  /** Indicator as it reads in the prose. */
+  readonly label: string;
+  readonly value: number;
+  readonly unit: string;
+  readonly period: {readonly from: string; readonly to: string};
+  readonly source: "operations";
+  /** Closed tool of the catalogue that produced the figure. */
+  readonly tool: string;
+  readonly recordRefs: readonly RecordReference[];
+}
+
+/** Owner read that produced a figure, published as provenance. */
+export interface SourceProvenance {
+  readonly service: "operations";
+  readonly resource: string;
+  readonly tool: string;
+  readonly observedAt: string | null;
 }
 
 export interface NarrativeReport {
   readonly report: "operations-narrative";
   readonly period: {readonly from: string; readonly to: string; readonly timeZone: string};
   readonly generatedAt: string;
+  readonly promptVersion: string;
   readonly figures: ReportFigures;
-  readonly sections: {
-    readonly works: {readonly total: number; readonly byStatus: Readonly<Record<string, number>>; readonly references: readonly RecordReference[]};
-    readonly execution: {readonly advances: number | null; readonly evidence: EvidenceCounts | null; readonly references: readonly RecordReference[]};
-  };
+  readonly claims: readonly ReportClaim[];
   readonly narrative: {
     readonly text: string;
     readonly path: "llm" | "deterministic";
     readonly model: string | null;
-    readonly promptVersion: string;
     readonly verified: boolean;
+    /** False for the template: prose built from the computed figures is not generative evidence. */
+    readonly generative: boolean;
   };
-  readonly provenance: {
-    readonly source: "operations";
-    readonly tools: readonly string[];
-    readonly model: string | null;
-    readonly promptVersion: string;
-    readonly figuresComputedBy: "deterministic";
-  };
+  readonly references: readonly RecordReference[];
+  readonly provenance: readonly SourceProvenance[];
   readonly financialData: {readonly included: false; readonly note: string};
-  readonly warnings: readonly string[];
+  readonly limitations: readonly string[];
 }
 
 const record = (value: unknown): Record<string, unknown> =>
@@ -131,19 +162,24 @@ function countBy(values: readonly (string | null)[]): Record<string, number> {
 export interface AggregateOptions {
   readonly period: {readonly from: string; readonly to: string};
   readonly source: ToolSource;
+  /** Hard bound on the works the report itemises; exceeding it fails closed instead of sampling. */
   readonly maxWorks?: number;
 }
 
 export interface AggregateResult {
   readonly figures: ReportFigures;
   readonly tools: readonly string[];
-  readonly warnings: readonly string[];
+  readonly limitations: readonly string[];
+  readonly provenance: readonly SourceProvenance[];
 }
 
-/** Deterministic aggregation: agenda first, then one execution read per assignment, bounded. */
+/**
+ * Deterministic aggregation: agenda first, then one execution read per assignment. Every work of the
+ * period is itemised: a partial figure set would publish a total the reader cannot check.
+ */
 export async function aggregate(options: AggregateOptions): Promise<AggregateResult> {
   const tools: string[] = ["autonexus_list_team_agenda"];
-  const warnings: string[] = [];
+  const limitations: string[] = [];
   const agenda = await options.source.call("autonexus_list_team_agenda",
     {from: options.period.from, to: options.period.to, limit: MAX_WORK_RANGE, responseFormat: "json"});
   if (!agenda.ok) {
@@ -151,14 +187,25 @@ export async function aggregate(options: AggregateOptions): Promise<AggregateRes
       agenda.error?.status ?? null);
   }
   const agendaBody = record(agenda.data);
+  const agendaPage = record(agendaBody["page"]);
+  const observedAgenda = str(agendaBody["observedAt"]);
   const items = list(agendaBody["data"]).map(record);
-  const maxWorks = Math.max(1, Math.min(options.maxWorks ?? DEFAULT_MAX_WORKS, items.length === 0 ? 1 : items.length));
-  const selected = items.slice(0, maxWorks);
+  const reported = int(agendaPage["total"]);
+  if (reported !== null && reported !== items.length) {
+    throw new ReportError("AGENDA_INCOMPLETE",
+      "La agenda informó " + String(reported) + " trabajos y devolvió " + String(items.length) +
+      ": el reporte no publica un total parcial.", null);
+  }
+  const bound = Math.max(1, options.maxWorks ?? MAX_WORK_RANGE);
+  if (items.length > bound) {
+    throw new ReportError("FIGURE_RANGE_EXCEEDED",
+      "El período tiene " + String(items.length) + " trabajos y el límite de detalle es " + String(bound) + ".", 400);
+  }
 
   const perWork: WorkFigure[] = [];
   let executionsConsulted = 0;
   let executionsFailed = 0;
-  for (const item of selected) {
+  for (const item of items) {
     const assignmentId = str(item["assignmentId"]);
     const orderId = str(item["orderId"]);
     const references: RecordReference[] = [];
@@ -168,7 +215,7 @@ export async function aggregate(options: AggregateOptions): Promise<AggregateRes
       executionStatus: str(item["executionStatus"]), startsAt: str(item["startsAt"]), references};
 
     if (assignmentId === null) {
-      warnings.push("assignment_missing");
+      limitations.push("assignment_missing");
       perWork.push({...base, advances: null, evidence: null});
       continue;
     }
@@ -177,7 +224,7 @@ export async function aggregate(options: AggregateOptions): Promise<AggregateRes
       {assignmentId, advanceLimit: MAX_WORK_RANGE, responseFormat: "json"});
     if (!execution.ok) {
       executionsFailed += 1;
-      warnings.push("execution_unavailable:" + String(execution.error?.code ?? "TOOL_ERROR"));
+      limitations.push("execution_unavailable:" + String(execution.error?.code ?? "TOOL_ERROR"));
       perWork.push({...base, advances: null, evidence: null});
       continue;
     }
@@ -198,25 +245,171 @@ export async function aggregate(options: AggregateOptions): Promise<AggregateRes
   };
 
   const figures: ReportFigures = {
-    works: items.length,
-    byStatus: countBy(selected.map(item => str(item["executionStatus"]))),
+    totalWorks: items.length,
+    byStatus: countBy(perWork.map(work => work.executionStatus)),
     advances: advancesKnown.length === 0 ? null : advancesKnown.reduce((total, work) => total + (work.advances ?? 0), 0),
     evidence,
     perWork,
-    complete: executionsFailed === 0 && selected.length === items.length,
-    worksInPeriod: items.length,
+    complete: executionsFailed === 0,
     executionsConsulted,
     executionsFailed,
   };
-  return {figures, tools: [...new Set(tools)], warnings: [...new Set(warnings)]};
+  assertCoherentFigures(figures);
+
+  const provenance: SourceProvenance[] = [
+    {service: "operations", resource: "/agenda/team", tool: "autonexus_list_team_agenda", observedAt: observedAgenda},
+  ];
+  if (executionsConsulted > 0) {
+    provenance.push({service: "operations", resource: "/executions/team/{assignmentId}",
+      tool: "autonexus_get_team_execution", observedAt: null});
+  }
+  return {figures, tools: [...new Set(tools)], limitations: [...new Set(limitations)], provenance};
+}
+
+/**
+ * The three totals the report publishes must be the same set of works. A mismatch means the figures
+ * describe different populations, so the report fails closed instead of publishing a total the rest
+ * of the document contradicts (and never fills the gap with a zero).
+ */
+export function assertCoherentFigures(figures: ReportFigures): void {
+  const statusSum = Object.values(figures.byStatus).reduce((total, count) => total + count, 0);
+  const reasons: string[] = [];
+  if (statusSum !== figures.totalWorks) reasons.push("byStatus=" + String(statusSum) + " totalWorks=" + String(figures.totalWorks));
+  if (figures.perWork.length !== figures.totalWorks) reasons.push("perWork=" + String(figures.perWork.length) + " totalWorks=" + String(figures.totalWorks));
+  const unclassified = figures.perWork.filter(work => work.executionStatus === null).length;
+  if (unclassified > 0) reasons.push("works_without_status=" + String(unclassified));
+  const unidentified = figures.perWork.filter(work => work.orderNumber === null).length;
+  if (unidentified > 0) reasons.push("works_without_order_number=" + String(unidentified));
+  if (reasons.length > 0) {
+    throw new ReportError("INCOHERENT_FIGURES",
+      "Las cifras del reporte no son coherentes (" + reasons.join("; ") + "): se rechaza el reporte en lugar de rellenar ceros.", null);
+  }
+}
+
+interface ClaimPattern extends ReportClaim {
+  readonly terms: readonly RegExp[];
+}
+
+const escapeTerm = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** The raw status published by Operations, tolerant to the separator and to a Spanish rendering. */
+const statusTerms = (status: string): RegExp[] => {
+  const terms = [new RegExp("\\b" + escapeTerm(status).replace(/_/g, "[ _]") + "\\b", "gi")];
+  const aliases = STATUS_ALIASES[status] ?? [];
+  for (const alias of aliases) terms.push(new RegExp("\\b" + escapeTerm(alias), "gi"));
+  return terms;
+};
+const STATUS_ALIASES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  not_started: ["sin iniciar", "no iniciad", "sin empezar"],
+  in_progress: ["en ejecución", "en ejecucion", "en progreso", "en curso", "en marcha"],
+  confirmed: ["confirmad"],
+  completed: ["completad", "finalizad", "terminad"],
+  cancelled: ["cancelad", "anulad"],
+  pending_verification: ["pendiente de verificación", "pendientes de verificación", "por verificar"],
+});
+
+const referencesOf = (works: readonly WorkFigure[]): RecordReference[] => works.flatMap(work => work.references);
+
+/** Every figure of the report as a claim, with the prose terms that name its indicator. */
+export function claimPatterns(figures: ReportFigures, period: {from: string; to: string}): ClaimPattern[] {
+  const patterns: ClaimPattern[] = [];
+  const push = (claim: Omit<ClaimPattern, "period" | "source" | "terms">, terms: readonly RegExp[]): void => {
+    patterns.push({...claim, period: {from: period.from, to: period.to}, source: "operations", terms});
+  };
+  push({indicator: "works.total", label: "trabajos programados", value: figures.totalWorks, unit: "trabajos",
+    tool: "autonexus_list_team_agenda", recordRefs: referencesOf(figures.perWork)}, [/\btrabajos?\b/gi, /\bprogramad[oa]s?\b/gi]);
+  for (const [status, count] of Object.entries(figures.byStatus)) {
+    push({indicator: "works.byStatus." + status, label: "trabajos en " + status, value: count, unit: "trabajos",
+      tool: "autonexus_list_team_agenda",
+      recordRefs: referencesOf(figures.perWork.filter(work => work.executionStatus === status))}, statusTerms(status));
+  }
+  const executionRefs = referencesOf(figures.perWork.filter(work => work.assignmentId !== null));
+  if (figures.advances !== null) {
+    push({indicator: "execution.advances",
+      label: figures.complete ? "avances" : "avances en las ejecuciones consultadas",
+      value: figures.advances, unit: "avances", tool: "autonexus_get_team_execution", recordRefs: executionRefs},
+      [/\bavances?\b/gi, /\bprogresos?\b/gi]);
+  }
+  if (figures.evidence !== null) {
+    const evidenceClaim = (state: string, label: string, value: number, term: RegExp): void => {
+      push({indicator: "evidence." + state, label, value, unit: "evidencias",
+        tool: "autonexus_get_team_execution", recordRefs: executionRefs}, [term]);
+    };
+    evidenceClaim("available", "evidencias disponibles", figures.evidence.available, /\bdisponibles?\b/gi);
+    evidenceClaim("pending", "evidencias pendientes", figures.evidence.pending, /\bpendientes?\b/gi);
+    evidenceClaim("failed", "evidencias fallidas", figures.evidence.failed, /\bfallid[ao]s?\b/gi);
+  }
+  push({indicator: "executions.consulted", label: "ejecuciones consultadas", value: figures.executionsConsulted,
+    unit: "ejecuciones", tool: "autonexus_get_team_execution", recordRefs: executionRefs},
+    [/\bejecuciones? consultadas?\b/gi, /\bconsultad[oa]s?\b/gi]);
+  push({indicator: "executions.failed", label: "ejecuciones con error", value: figures.executionsFailed,
+    unit: "ejecuciones", tool: "autonexus_get_team_execution", recordRefs: executionRefs},
+    [/\bcon error\b/gi, /\bejecuciones? fallidas?\b/gi]);
+  return patterns;
+}
+
+export interface ClaimBinding {
+  readonly ok: boolean;
+  readonly problems: readonly string[];
+  readonly indicators: readonly string[];
+}
+
+const published = (pattern: ClaimPattern): ReportClaim => ({
+  indicator: pattern.indicator, label: pattern.label, value: pattern.value, unit: pattern.unit,
+  period: pattern.period, source: pattern.source, tool: pattern.tool, recordRefs: pattern.recordRefs,
+});
+
+/**
+ * Binds every number of the prose to the indicator named next to it. A number that matches a
+ * computed figure but is attached to another indicator ("7 avances" written as "7 trabajos") is a
+ * wrong claim even when the integer was computed, so it is rejected.
+ */
+export function verifyClaimBinding(text: string, patterns: readonly ClaimPattern[]): ClaimBinding {
+  const cleaned = text.replace(ISO_DATE, " ");
+  const problems: string[] = [];
+  const indicators: string[] = [];
+  const occurrences: Array<{start: number; end: number; pattern: ClaimPattern}> = [];
+  for (const pattern of patterns) {
+    for (const term of pattern.terms) {
+      term.lastIndex = 0;
+      for (const match of cleaned.matchAll(term)) {
+        if (typeof match.index !== "number" || match[0].length === 0) continue;
+        occurrences.push({start: match.index, end: match.index + match[0].length, pattern});
+      }
+    }
+  }
+  for (const match of cleaned.matchAll(/\d+(?:[.,]\d+)?/g)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    const literal = match[0];
+    if (cleaned.slice(end, end + 1) === "%") { problems.push("figure_percentage:" + literal); continue; }
+    const value = Number(literal.split(/[.,]/)[0]);
+    const scored = occurrences
+      .map(occurrence => {
+        const following = occurrence.start >= end;
+        const gap = following ? cleaned.slice(end, occurrence.start) : cleaned.slice(occurrence.end, start);
+        const distance = following ? occurrence.start - end : Math.max(0, start - occurrence.end) + PRECEDING_PENALTY;
+        return {pattern: occurrence.pattern, score: distance + (CLAUSE_BREAK.test(gap) ? CLAUSE_PENALTY : 0)};
+      })
+      .filter(candidate => candidate.score <= BIND_WINDOW);
+    if (scored.length === 0) { problems.push("figure_without_indicator:" + literal); continue; }
+    const best = Math.min(...scored.map(candidate => candidate.score));
+    const nearest = scored.filter(candidate => candidate.score <= best + 6);
+    const matched = nearest.find(candidate => candidate.pattern.value === value);
+    if (!matched) {
+      const named = [...new Set(nearest.map(candidate => candidate.pattern.indicator + "=" + String(candidate.pattern.value)))];
+      problems.push("figure_bound_to_wrong_indicator:" + literal + "[" + named.join("|") + "]");
+      continue;
+    }
+    if (!indicators.includes(matched.pattern.indicator)) indicators.push(matched.pattern.indicator);
+  }
+  return {ok: problems.length === 0, problems, indicators};
 }
 
 /** Every integer a sentence may legitimately contain: the computed figures plus the period. */
 export function allowedNumbers(figures: ReportFigures, period: {from: string; to: string}): ReadonlySet<number> {
   const allowed = new Set<number>();
   const add = (value: number | null): void => { if (value !== null) allowed.add(value); };
-  add(figures.works); add(figures.advances); add(figures.worksInPeriod);
-  add(figures.executionsConsulted); add(figures.executionsFailed);
+  add(figures.totalWorks); add(figures.advances); add(figures.executionsConsulted); add(figures.executionsFailed);
   add(figures.evidence?.pending ?? null); add(figures.evidence?.available ?? null); add(figures.evidence?.failed ?? null);
   for (const value of Object.values(figures.byStatus)) add(value);
   for (const work of figures.perWork) {
@@ -227,7 +420,7 @@ export function allowedNumbers(figures: ReportFigures, period: {from: string; to
   return allowed;
 }
 
-/** A sentence is accepted only if every number in it was computed above. */
+/** Coarse check kept next to the binding: a number that no computation produced is not publishable. */
 export function verifyNumbers(text: string, allowed: ReadonlySet<number>): {ok: boolean; offending: readonly string[]} {
   const offending: string[] = [];
   for (const match of text.matchAll(/\d+(?:[.,]\d+)?/g)) {
@@ -250,7 +443,7 @@ function statusSentence(figures: ReportFigures): string {
 export function deterministicNarrative(report: {period: {from: string; to: string; timeZone: string}; figures: ReportFigures}): string {
   const lines: string[] = [];
   lines.push("Entre el " + report.period.from + " y el " + report.period.to + " (" + report.period.timeZone +
-    "), la agenda autorizada registró " + String(report.figures.works) + " trabajos programados.");
+    "), la agenda autorizada registró " + String(report.figures.totalWorks) + " trabajos programados.");
   lines.push(statusSentence(report.figures));
   const advances = report.figures.advances;
   const evidence = report.figures.evidence;
@@ -272,6 +465,7 @@ export function deterministicNarrative(report: {period: {from: string; to: strin
 const NARRATIVE_SYSTEM = [
   "Redactas el resumen narrativo de un reporte de taller.",
   "Usa exclusivamente las cifras del JSON entregado: no agregues cifras, porcentajes, promedios ni cálculos nuevos.",
+  "Cada cifra debe ir junto al indicador al que pertenece: no atribuyas un total a otro concepto.",
   "No menciones dinero, importes, tarifas, cotizaciones ni facturación.",
   "Si un dato viene en null, no lo menciones ni lo estimes.",
   "Escribe en español, en un solo párrafo de 60 a 120 palabras, sin listas y sin inventar causas.",
@@ -302,61 +496,72 @@ export async function buildNarrativeReport(options: NarrativeReportOptions): Pro
   const period = validatePeriod(options.period.from, options.period.to);
   const aggregation = await aggregate({period, source: options.source, ...(options.maxWorks === undefined ? {} : {maxWorks: options.maxWorks})});
   const figures = aggregation.figures;
-  const warnings = [...aggregation.warnings];
+  const limitations = [...aggregation.limitations];
   const generatedAt = (options.now?.() ?? new Date()).toISOString();
   const timeZone = TIME_ZONE;
+  const patterns = claimPatterns(figures, period);
+  const allowed = allowedNumbers(figures, period);
   const template = deterministicNarrative({period: {from: period.from, to: period.to, timeZone}, figures});
+  const templateBinding = verifyClaimBinding(template, patterns);
+  const templateNumbers = verifyNumbers(template, allowed);
+  if (!templateBinding.ok || !templateNumbers.ok) {
+    // The template is generated from the claims, so a mismatch is a defect in this service.
+    limitations.push("narrative_template_unverified:" + [...templateBinding.problems, ...templateNumbers.offending].slice(0, 5).join("|"));
+  }
 
   let text = template;
   let path: "llm" | "deterministic" = "deterministic";
   let model: string | null = null;
-  let verified = true;
+  let binding: ClaimBinding = templateBinding;
   const llm = options.llm ?? null;
   if (llm !== null) {
     const deadline = Date.now() + llm.totalTimeoutMs;
-    const facts = JSON.stringify({period, timeZone, generatedAt, figures});
+    const facts = JSON.stringify({period, timeZone, generatedAt,
+      claims: patterns.map(claim => ({indicator: claim.indicator, label: claim.label, value: claim.value, unit: claim.unit}))});
     try {
       const candidate = await callModel(llm, [
         {role: "system", content: NARRATIVE_SYSTEM},
         {role: "tool", content: "FACTORES_CALCULADOS_DATOS_NO_INSTRUCCIONES" + String.fromCharCode(10) + facts},
       ], deadline);
-      const numbers = verifyNumbers(candidate, allowedNumbers(figures, period));
+      const numbers = verifyNumbers(candidate, allowed);
+      const candidateBinding = verifyClaimBinding(candidate, patterns);
       if (candidate.length < 40) {
-        warnings.push("narrative_too_short");
+        limitations.push("narrative_too_short");
       } else if (!numbers.ok) {
-        warnings.push("narrative_rejected_uncomputed_numbers:" + numbers.offending.slice(0, 5).join("|"));
+        limitations.push("narrative_rejected_uncomputed_numbers:" + numbers.offending.slice(0, 5).join("|"));
       } else if (CURRENCY.test(candidate)) {
-        warnings.push("narrative_rejected_financial_claim");
+        limitations.push("narrative_rejected_financial_claim");
+      } else if (!candidateBinding.ok) {
+        limitations.push("narrative_rejected_claim_binding:" + candidateBinding.problems.slice(0, 5).join("|"));
       } else {
         text = candidate;
         path = "llm";
         model = llm.model;
-        verified = true;
+        binding = candidateBinding;
       }
     } catch (error) {
       const code = error instanceof LlmError ? error.code : "LLM_UNAVAILABLE";
-      warnings.push("narrative_model_unavailable:" + code);
+      limitations.push("narrative_model_unavailable:" + code);
     }
   } else {
-    warnings.push("narrative_model_disabled");
+    limitations.push("narrative_model_disabled");
   }
 
-  const references = [...figures.perWork.flatMap(work => work.references)];
+  const asserted = new Set(binding.indicators);
+  const claims = patterns.filter(pattern => asserted.has(pattern.indicator)).map(published);
+  const references = figures.perWork.flatMap(work => work.references);
   return {
     report: "operations-narrative",
     period: {from: period.from, to: period.to, timeZone},
     generatedAt,
+    promptVersion: REPORT_PROMPT_VERSION,
     figures,
-    sections: {
-      works: {total: figures.works, byStatus: figures.byStatus,
-        references: references.filter(reference => reference.kind === "order")},
-      execution: {advances: figures.advances, evidence: figures.evidence,
-        references: references.filter(reference => reference.kind === "assignment")},
-    },
-    narrative: {text, path, model, promptVersion: REPORT_PROMPT_VERSION, verified},
-    provenance: {source: "operations", tools: aggregation.tools, model,
-      promptVersion: REPORT_PROMPT_VERSION, figuresComputedBy: "deterministic"},
+    claims,
+    narrative: {text, path, model, verified: binding.ok && templateNumbers.ok,
+      generative: path === "llm"},
+    references,
+    provenance: aggregation.provenance,
     financialData: {included: false, note: FINANCIAL_NOTE},
-    warnings,
+    limitations,
   };
 }

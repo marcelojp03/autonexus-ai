@@ -171,8 +171,8 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           const from = input["from"], to = input["to"];
           const report = await buildNarrativeReport({period: {from: String(from ?? ""), to: String(to ?? "")},
             source, llm, now, ...(typeof input["maxWorks"] === "number" ? {maxWorks: input["maxWorks"] as number} : {})});
-          complete(200, {outcome: "report", narrativePath: report.narrative.path,
-            works: report.figures.works, warnings: report.warnings.length});
+          complete(200, {outcome: "report", narrativePath: report.narrative.path, generative: report.narrative.generative,
+            totalWorks: report.figures.totalWorks, claims: report.claims.length, limitations: report.limitations.length});
           sendJson(response, 200, report as unknown as Json);
         } finally {
           await source.close();

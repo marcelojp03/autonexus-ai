@@ -1,8 +1,9 @@
 // Unit tests for CU26: the figures must be the deterministic computation, and the model may only
-// write prose about them. The model and the tool source are controlled doubles.
+// write prose about them — each figure attached to the indicator it belongs to. The model and the
+// tool source are controlled doubles.
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {buildNarrativeReport, ReportError, allowedNumbers} from "../dist/report/narrative-report.js";
+import {buildNarrativeReport, ReportError, allowedNumbers, claimPatterns, verifyClaimBinding} from "../dist/report/narrative-report.js";
 import {LlmError} from "../dist/llm/ollama.js";
 
 const PERIOD = {from: "2026-11-05", to: "2026-11-11"};
@@ -25,7 +26,7 @@ const EXECUTIONS = {
   "33333333-3333-4333-8333-333333333333": {ok: false, error: {code: "OWNER_UNAVAILABLE", status: 503}},
 };
 
-function stubSource() {
+function stubSource(items = AGENDA, page = {total: items.length, limit: 50, offset: 0}) {
   const calls = [];
   return {
     calls,
@@ -33,8 +34,8 @@ function stubSource() {
     async call(name, args) {
       calls.push({name, args});
       if (name === "autonexus_list_team_agenda") {
-        return {ok: true, data: {source: "operations", data: AGENDA, period: {...PERIOD, timeZone: "America/La_Paz"},
-          page: {total: AGENDA.length, limit: 50, offset: 0}}};
+        return {ok: true, data: {source: "operations", data: items, period: {...PERIOD, timeZone: "America/La_Paz"},
+          observedAt: "2026-11-11T18:29:00.000Z", page}};
       }
       if (name === "autonexus_get_team_execution") return EXECUTIONS[args.assignmentId] ?? {ok: false, error: {code: "OWNER_NOT_FOUND"}};
       return {ok: false, error: {code: "TOOL_NOT_AVAILABLE", status: 404}};
@@ -50,7 +51,7 @@ const build = (llm, extra = {}) => buildNarrativeReport({period: PERIOD, source:
 
 test("figures are the deterministic computation over the agenda and the executions", async () => {
   const report = await build(stubLlm("Resumen."), {});
-  assert.equal(report.figures.works, 3);
+  assert.equal(report.figures.totalWorks, 3);
   assert.deepEqual(report.figures.byStatus, {in_progress: 2, confirmed: 1});
   assert.equal(report.figures.advances, 7, "4 + 3 advances; the failed execution is omitted, not estimated");
   assert.deepEqual(report.figures.evidence, {pending: 1, available: 5, failed: 1});
@@ -58,9 +59,13 @@ test("figures are the deterministic computation over the agenda and the executio
   assert.equal(report.figures.executionsFailed, 1);
   assert.equal(report.figures.complete, false);
   assert.deepEqual(report.figures.perWork.map(work => work.advances), [4, 3, null]);
+  // The published total is the same population as the status counts and the itemised works.
+  const statusSum = Object.values(report.figures.byStatus).reduce((total, count) => total + count, 0);
+  assert.equal(statusSum, report.figures.totalWorks);
+  assert.equal(report.figures.perWork.length, report.figures.totalWorks);
 });
 
-test("model prose is accepted only when every figure in it was computed", async () => {
+test("model prose is accepted only when every figure is bound to its own indicator", async () => {
   const text = "Entre el 2026-11-05 y el 2026-11-11 se programaron 3 trabajos: 2 en ejecución y 1 confirmado. " +
     "Se registraron 7 avances y 5 evidencias disponibles, con 1 pendiente y 1 fallida.";
   const report = await build(stubLlm(text));
@@ -68,17 +73,49 @@ test("model prose is accepted only when every figure in it was computed", async 
   assert.equal(report.narrative.model, "qwen3.5:4b");
   assert.equal(report.narrative.text, text);
   assert.equal(report.narrative.verified, true);
+  assert.equal(report.narrative.generative, true);
   const allowed = allowedNumbers(report.figures, report.period);
   for (const match of report.narrative.text.matchAll(/\d+/g)) {
     assert.ok(allowed.has(Number(match[0])), "uncomputed figure in the narrative: " + match[0]);
   }
+  // The structured claims say which indicator each figure belongs to, and where it came from.
+  assert.deepEqual(report.claims.map(claim => claim.indicator),
+    ["works.total", "works.byStatus.in_progress", "works.byStatus.confirmed", "execution.advances",
+      "evidence.available", "evidence.pending", "evidence.failed"]);
+  for (const claim of report.claims) {
+    assert.deepEqual(claim.period, {from: PERIOD.from, to: PERIOD.to});
+    assert.equal(claim.source, "operations");
+    assert.match(claim.tool, /^autonexus_/);
+    assert.ok(Array.isArray(claim.recordRefs));
+    assert.ok(Number.isInteger(claim.value));
+  }
+  assert.equal(report.claims.find(claim => claim.indicator === "works.total").value, 3);
+  assert.equal(report.claims.find(claim => claim.indicator === "execution.advances").value, 7);
+});
+
+test("prose that attaches a computed figure to the wrong indicator is discarded", async () => {
+  // 7 is the advances total and 3 the works total: swapping them is a wrong claim even though both
+  // integers were computed, so the text must not be published.
+  const report = await build(stubLlm("En el período se registraron 7 trabajos y 3 avances en total."));
+  assert.equal(report.narrative.path, "deterministic");
+  assert.equal(report.narrative.model, null);
+  assert.equal(report.narrative.generative, false);
+  assert.ok(report.limitations.some(entry => entry.startsWith("narrative_rejected_claim_binding")),
+    "the rejection reason names the misbound figure: " + JSON.stringify(report.limitations));
+  assert.ok(!report.narrative.text.includes("7 trabajos"));
+});
+
+test("prose with a computed figure that names no indicator is discarded", async () => {
+  const report = await build(stubLlm("Se contabilizaron 7 en total durante los días revisados."));
+  assert.equal(report.narrative.path, "deterministic");
+  assert.ok(report.limitations.some(entry => entry.includes("figure_without_indicator")), JSON.stringify(report.limitations));
 });
 
 test("prose with a figure that was not computed is discarded for the template", async () => {
   const report = await build(stubLlm("Se programaron 12 trabajos y 40 avances en el período."));
   assert.equal(report.narrative.path, "deterministic");
   assert.equal(report.narrative.model, null);
-  assert.ok(report.warnings.some(warning => warning.startsWith("narrative_rejected_uncomputed_numbers")));
+  assert.ok(report.limitations.some(entry => entry.startsWith("narrative_rejected_uncomputed_numbers")));
   assert.ok(!report.narrative.text.includes("12 trabajos"));
   assert.match(report.narrative.text, /7 avances/);
 });
@@ -86,33 +123,41 @@ test("prose with a figure that was not computed is discarded for the template", 
 test("a financial claim in the prose is rejected: the report declares no financial data", async () => {
   const report = await build(stubLlm("Se programaron 3 trabajos y se facturaron $ 1.200 en el período."));
   assert.equal(report.narrative.path, "deterministic");
-  assert.ok(report.warnings.includes("narrative_rejected_financial_claim"));
+  assert.ok(report.limitations.includes("narrative_rejected_financial_claim"));
   assert.equal(report.financialData.included, false);
   assert.match(report.financialData.note, /no incluye datos financieros/i);
   assert.ok(!report.narrative.text.includes("$"));
 });
 
-test("an unavailable model still produces the deterministic report", async () => {
+test("an unavailable model still produces the deterministic report, marked as not generative", async () => {
   const llm = {model: "qwen3.5:4b", totalTimeoutMs: 50, calls: [],
     async chat() { throw new LlmError("LLM_TIMEOUT", "no respondió"); }};
   const report = await build(llm);
   assert.equal(report.narrative.path, "deterministic");
-  assert.ok(report.warnings.includes("narrative_model_unavailable:LLM_TIMEOUT"));
+  assert.equal(report.narrative.generative, false);
+  assert.equal(report.narrative.model, null);
+  assert.ok(report.limitations.includes("narrative_model_unavailable:LLM_TIMEOUT"));
   assert.equal(report.figures.advances, 7);
+  // The template is generated from the claims, so it must pass its own binding check.
+  assert.equal(report.narrative.verified, true);
+  assert.deepEqual(report.limitations.filter(entry => entry.startsWith("narrative_template_unverified")), []);
+  assert.ok(report.claims.length >= 5);
 });
 
-test("period, generatedAt, per-section references and provenance are preserved", async () => {
+test("period, generatedAt, references and provenance are preserved", async () => {
   const report = await build(stubLlm("Sin novedades destacables en el período consultado."));
-  assert.deepEqual(report.period, {from: "2026-11-05", to: "2026-11-11", timeZone: "America/La_Paz"});
+  assert.deepEqual(report.period, {from: PERIOD.from, to: PERIOD.to, timeZone: "America/La_Paz"});
   assert.equal(report.generatedAt, NOW.toISOString());
-  assert.deepEqual(report.sections.works.references.map(reference => reference.id),
-    ["aaaaaaaa-1111-4111-8111-111111111111", "bbbbbbbb-2222-4222-8222-222222222222", "cccccccc-3333-4333-8333-333333333333"]);
-  assert.deepEqual(report.sections.execution.references.map(reference => reference.id), AGENDA.map(item => item.assignmentId));
-  assert.equal(report.provenance.source, "operations");
-  assert.equal(report.provenance.figuresComputedBy, "deterministic");
-  assert.deepEqual(report.provenance.tools, ["autonexus_list_team_agenda", "autonexus_get_team_execution"]);
-  assert.equal(report.provenance.promptVersion, "cu26-report-v1");
   assert.equal(report.report, "operations-narrative");
+  assert.equal(report.promptVersion, "cu26-report-v2");
+  // Every work contributes its order and assignment reference, in agenda order.
+  assert.deepEqual(report.references.map(reference => reference.id),
+    AGENDA.flatMap(item => [item.orderId, item.assignmentId]));
+  assert.deepEqual(report.provenance.map(entry => entry.tool),
+    ["autonexus_list_team_agenda", "autonexus_get_team_execution"]);
+  assert.equal(report.provenance[0].resource, "/agenda/team");
+  assert.equal(report.provenance[0].observedAt, "2026-11-11T18:29:00.000Z");
+  for (const entry of report.provenance) assert.equal(entry.service, "operations");
 });
 
 test("period validation rejects malformed, inverted and oversized ranges", async () => {
@@ -128,4 +173,32 @@ test("an agenda failure is an honest error, never an empty report", async () => 
     async close() { }};
   await assert.rejects(() => buildNarrativeReport({period: PERIOD, source: failing, llm: null, now: () => NOW}),
     error => error instanceof ReportError && error.code === "AGENDA_UNAVAILABLE" && error.status === 403);
+});
+
+test("an agenda page that reports more works than it returned fails closed", async () => {
+  await assert.rejects(() => buildNarrativeReport({period: PERIOD, source: stubSource(AGENDA, {total: 9, limit: 50, offset: 0}),
+    llm: null, now: () => NOW}),
+    error => error instanceof ReportError && error.code === "AGENDA_INCOMPLETE");
+});
+
+test("a work without status fails closed instead of inventing a bucket", async () => {
+  const items = AGENDA.map((item, index) => (index === 2 ? {...item, executionStatus: null} : item));
+  await assert.rejects(() => buildNarrativeReport({period: PERIOD, source: stubSource(items), llm: null, now: () => NOW}),
+    error => error instanceof ReportError && error.code === "INCOHERENT_FIGURES" && /works_without_status/.test(error.message));
+});
+
+test("a period with more works than the detail bound fails closed instead of sampling", async () => {
+  await assert.rejects(() => buildNarrativeReport({period: PERIOD, source: stubSource(), llm: null, now: () => NOW, maxWorks: 2}),
+    error => error instanceof ReportError && error.code === "FIGURE_RANGE_EXCEEDED");
+});
+
+test("the claim patterns and the binding checker reject a swapped indicator on their own", () => {
+  const figures = {totalWorks: 2, byStatus: {in_progress: 2}, advances: 5, evidence: null,
+    perWork: [], complete: true, executionsConsulted: 3, executionsFailed: 0};
+  const patterns = claimPatterns(figures, PERIOD);
+  assert.equal(verifyClaimBinding("Se registraron 5 avances en 3 ejecuciones consultadas.", patterns).ok, true);
+  // 5 is the advances total, not the works total: the integer was computed but the claim is wrong.
+  const swapped = verifyClaimBinding("Se registraron 5 trabajos en el período.", patterns);
+  assert.equal(swapped.ok, false);
+  assert.match(swapped.problems.join("|"), /figure_bound_to_wrong_indicator:5/);
 });

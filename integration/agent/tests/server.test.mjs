@@ -178,7 +178,7 @@ test("the assistant keeps working when the model is unavailable", async () => {
 });
 
 test("the report is served over the caller's token with deterministic figures", async () => {
-  const started = await start({sourceFactory: () => {
+  const started = await start({llm: null, sourceFactory: () => {
     const base = source();
     return {...base, async call(name, args) {
       if (name === "autonexus_list_team_agenda") return {ok: true, data: {data: [{
@@ -192,10 +192,13 @@ test("the report is served over the caller's token with deterministic figures", 
     const response = await post("/report", {from: "2026-11-05", to: "2026-11-11"}, CHIEF, started.url);
     assert.equal(response.status, 200);
     assert.equal(response.body.report, "operations-narrative");
-    assert.equal(response.body.figures.works, 1);
+    assert.equal(response.body.figures.totalWorks, 1);
     assert.equal(response.body.figures.advances, 3);
     assert.deepEqual(response.body.period, {from: "2026-11-05", to: "2026-11-11", timeZone: "America/La_Paz"});
     assert.equal(response.body.financialData.included, false);
+    assert.equal(response.body.narrative.path, "deterministic");
+    assert.equal(response.body.narrative.generative, false);
+    assert.ok(response.body.claims.some(claim => claim.indicator === "works.total" && claim.value === 1));
   } finally { await new Promise(ready => started.created.close(ready)); }
 });
 
