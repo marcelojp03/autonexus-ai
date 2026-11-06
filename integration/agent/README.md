@@ -30,8 +30,17 @@ Las identidades son sintéticas y provienen de los fixtures privados locales; el
 imprime tokens. La auditoría se escribe en `output/agent/audit.jsonl` (ignorada) con actor, fuente, herramienta,
 resultado, duración y un SHA-256 de la consulta; nunca el texto de la consulta, tokens ni cuerpos.
 
+## Reporte y trabajos (CU26)
+
+POST /report devuelve el documento completo (cifras deterministas, afirmaciones, procedencia y
+narrativa). Como la generación tarda minutos, POST /report/jobs crea un trabajo con el
+operationId del cliente y GET /report/jobs/{jobId} publica estado y documento: repetir la
+creación con el mismo identificador devuelve el mismo trabajo y no genera otra vez. El documento
+terminado se guarda en output/agent/jobs (retención de 50); el token del usuario nunca se escribe,
+así que un trabajo interrumpido por un reinicio se cierra como interrupted y no se reanuda.
+
 ## Límites
 
-Solo lectura: no ejecuta CU30, no administra clientes (CU31) y no genera reportes (CU26). El
-planificador no es un LLM y no amplía alcances por inferencia. El camino REST cubre órdenes, agenda
-de equipo y ejecución de equipo. Sin despliegue cloud.
+Solo lectura: no ejecuta CU30, no administra clientes (CU31) y el reporte no incluye datos
+financieros. El planificador determinista no es un LLM y no amplía alcances por inferencia. El camino
+REST cubre órdenes, agenda de equipo y ejecución de equipo. Sin despliegue cloud.

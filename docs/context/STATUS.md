@@ -1,5 +1,36 @@
 # Estado comprobado
 
+## CU25/CU26 — reporte asíncrono con identificador estable y contrato reconciliado (2026-11-06)
+
+El reporte se genera como **trabajo**: `startOperationsReport(from,to,operationId)` responde en
+milisegundos y `operationsReportJob(jobId)` publica estado y documento. Creación medida por la cadena real
+288–2 364 ms; repetirla con el mismo `operationId` devuelve el mismo `jobId` (41–102 ms) sin volver a
+consultar a los propietarios. Estados `QUEUED`→`RUNNING`→`SUCCEEDED`/`FAILED`/`INTERRUPTED`; el documento
+terminado se persiste en disco y se lee tras recargar o reiniciar, mientras que el **token nunca se
+escribe**, así que un trabajo interrumpido se cierra como `INTERRUPTED` y no se reanuda. Cada lectura
+verifica token y pertenencia (un identificador ajeno responde 404 como uno inexistente) y una autorización
+vencida durante la generación termina en `AUTHORIZATION_EXPIRED` sin reinicio ciego. La sesión sigue en el
+Shell y el BFF no recibe el refresh token.
+
+Contrato reconciliado con la respuesta real: `figures.totalWorks = 2`, coherente con `byStatus` y
+`perWork`, 8 `claims`, 0 violaciones (`integration/agent/scripts/check-report-contract.mjs`, validador
+compartido con la prueba unitaria; un campo ausente se informa, nunca se convierte en 0). La interfaz se
+alineó con el SDL (cifras anulables mostradas como «sin dato», `claims`, `narrativePath`,
+`financialData`, `timeZone`) y exporta el documento en JSON y las afirmaciones en CSV.
+
+Narración generada realmente por Ollama: trabajo `57c99960…`, `narrativePath: "llm"`, modelo
+`qwen3.5:4b`, 8 afirmaciones verificadas, 0 violaciones. Medición que cambió la llamada: con la traza de
+razonamiento activa el modelo devolvió contenido vacío en 99 s; con `think:false`, el párrafo en 20 s. El
+verificador rechaza prosa sin cifras calculadas (`narrative_rejected_missing_total`) y cifras mal
+vinculadas; cuando el modelo no cumple, se publica la plantilla rotulada `deterministic`/`generative:
+false` con el código en `limitations`. El corte de lectura al propietario pasó de 8 s a 20 s
+(`OWNER_TIMEOUT_MS`) tras una falla real `OWNER_UNAVAILABLE`.
+
+Pruebas: servicio del asistente **77/77**, BFF **196/196** y typecheck 0, microfrontend **6/6**, tipos 0 y
+`build:integrated` 0. Detalle en `docs/evidence/cu25-cu26-shell-20261106.md`; decisión en
+`docs/decisions/026-cu25-cu26-trabajo-asincrono.md`. CU25/CU26 siguen **parciales**: el asistente es un
+proceso local y no se declara precisión del modelo.
+
 ## CU28 — recorrido por evento sobre la línea base, con dos defectos de transporte corregidos (2026-11-06)
 
 El recorrido de negocio evento → entrega → efecto se completó **sobre el estado existente**, sin borrar registros ni reiniciar el canal. Dos defectos reales se encontraron midiendo: el cliente HTTP del publicador se colgaba porque n8n acepta el `upgrade` a HTTP/2 en claro y no responde (mismo destino: `HttpTimeoutException` a los 20 s con la versión por omisión, 1,4–2,6 s con `HTTP_1_1`) y el presupuesto de 5 s era menor que el receptor en frío (7,33 s medidos, 0,85–0,91 s en caliente). Corregido con `HTTP_1_1` fijado y `CU28_WEBHOOK_TIMEOUT_SECONDS` (15 s por omisión, 2–60); un timeout sigue sin ser rechazo confirmado. Operaciones **201/201** pruebas, CU28 **9/9**. Imagen y contenedor reconstruidos desde el worktree; workflow `cu28ExecutionReview` activo.

@@ -74,8 +74,10 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.fre
   // CU25: the closed catalogue has no assistant permission, so the field requires only a catalogue
   // role; the service closes its tool catalogue with the same user token and re-authorises each read.
   assistantAnswer: null,
-  // CU26: the report publishes workshop-wide execution figures.
+  // CU26: the report publishes workshop-wide execution figures, and its job is the same document.
   operationsReport: 'executions:read:team',
+  operationsReportJob: 'executions:read:team',
+  startOperationsReport: 'executions:read:team',
   myAgendaHistory: 'agenda:read:self',
   teamAgendaHistory: 'agenda:read:team',
   confirmationSaga: 'confirmations:read',
@@ -327,6 +329,9 @@ export class BusinessGraphql {
       analyzeEvidence: (args: { assignmentId: string; evidenceId: string }) => this.intelligenceGateway().analyze(args.assignmentId, args.evidenceId, token),
       assistantAnswer: (args: { query: string }) => this.assistantGateway().ask(args.query, token),
       operationsReport: (args: { from: string; to: string }) => this.assistantGateway().report(args.from, args.to, token),
+      operationsReportJob: (args: { jobId: string }) => this.assistantGateway().reportJob(args.jobId, token),
+      startOperationsReport: (args: { from: string; to: string; operationId: string }) =>
+        this.assistantGateway().startReport(args.from, args.to, args.operationId, token),
       myAgendaHistory: (args: AgendaQuery) => this.agenda.history('self', args, token),
       teamAgendaHistory: (args: AgendaQuery) => this.agenda.history('team', args, token),
       retryEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>

@@ -50,6 +50,19 @@ test("requests are non-streaming, model comes from config and num_predict stays 
   assert.equal(result.evalCount, 7);
 });
 
+test("the reasoning trace is off unless the caller or the environment asks for it", async () => {
+  respond = response => {
+    response.writeHead(200, {"content-type": "application/json"});
+    response.end(JSON.stringify({message: {role: "assistant", content: "ok"}}));
+  };
+  const client = createOllamaClient({baseUrl});
+  // Measured: with the trace on, the model spent every token thinking and returned no answer at all.
+  await client.chat({messages: [{role: "user", content: "x"}]});
+  assert.equal(lastBody.think, false, "por omisión se pide solo la respuesta");
+  await client.chat({messages: [{role: "user", content: "x"}], think: true});
+  assert.equal(lastBody.think, true, "una petición puede pedir la traza");
+});
+
 test("a JSON-string argument object is accepted and identifiers are preserved", async () => {
   respond = response => {
     response.writeHead(200, {"content-type": "application/json"});

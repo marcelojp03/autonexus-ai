@@ -194,14 +194,17 @@ export function createBrowserSession(sdk: BrowserOidcAdapter, options: { origin:
         throw new Error('No se pudo contactar al servicio técnico. Reintenta la comprobación.');
       } finally { clearTimeout(timeout); requests.delete(controller); }
     },
-    async requestBusiness(query, variables): Promise<BusinessResult> {
+    async requestBusiness(query, variables, options): Promise<BusinessResult> {
       if (typeof query !== 'string' || !query.trim() || query.length > 4000) throw new Error('Solicitud empresarial inválida.');
       if (variables !== undefined && (typeof variables !== 'object' || variables === null || Array.isArray(variables))) throw new Error('Solicitud empresarial inválida.');
+      const asked = options?.timeoutMs;
+      // Bounded, so a caller cannot keep a request open indefinitely with a huge value.
+      const budget = typeof asked === 'number' && Number.isFinite(asked) && asked >= 1000 && asked <= 180_000 ? asked : 15_000;
       await refresh();
       const version = epoch;
       const controller = new AbortController();
       requests.add(controller);
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), budget);
       try {
         const response = await fetch(deployment?.graphqlUrl ?? 'http://127.0.0.1:3004/graphql', {
           method: 'POST',

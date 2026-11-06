@@ -340,6 +340,10 @@ services:
     volumes: ["config-bff:/run/config:ro"]
     environment:
       SYNC_API_URL: "http://sync:3005"
+      # CU25/CU26: the assistant runs on the host loopback during local proof, so the gateway reaches
+      # it through the host gateway instead of its own container. The service still authenticates every
+      # call with the user's token and closes its tool catalogue with it.
+      ASSISTANT_API_URL: "${ASSISTANT_API_URL:-http://host.docker.internal:3099}"
     depends_on:
       employees:
         condition: "service_healthy"

@@ -12,13 +12,37 @@
 # sí declara `executions:read:team` porque sus cifras son del taller completo.
 #
 # Cifras: el servicio las calcula de forma determinista desde las herramientas y el LLM solo redacta
-# sobre ellas. El BFF proyecta campo por campo y no suma, resta ni deriva ningún total. No hay campos
+# sobre ellas. El BFF proyecta campo por campo, no suma, resta ni deriva ningún total, y falla cerrado
+# si el propietario omite una cifra: nunca publica un 0 en lugar de un dato ausente. No hay campos
 # financieros: el reporte no inventa importes, cotizaciones ni facturación.
 #
 # Cuerpo esperado del servicio (propietario externo en ASSISTANT_API_URL):
-#   POST /assistant {"query": String}      -> { answer, refused?, toolsUsed?, model, generatedAt, references?, provenance?, limitations? }
-#   POST /report    {"from": Date, "to": Date} -> { narrative, period:{from,to}, generatedAt, model, toolsUsed?, figures:{byStatus?, works?, totalWorks?}, references?, provenance?, limitations? }
+#   POST /assistant {"query": String}
+#     -> { answer, refused?, toolsUsed?, model, generatedAt, references?, provenance?, limitations? }
+#   POST /report    {"from": Date, "to": Date}
+#     -> { report, promptVersion, period:{from,to,timeZone}, generatedAt,
+#          figures:{ totalWorks, byStatus:{<status>: Int}, advances, evidence:{pending,available,failed}|null,
+#                    perWork:[{orderNumber, assignmentId, executionStatus, advances, evidence, references}],
+#                    complete, executionsConsulted, executionsFailed },
+#          claims:[{indicator, label, value, unit, period:{from,to}, source, tool, recordRefs:[{kind,id}]}],
+#          narrative:{ text, path:"llm"|"deterministic", model, promptVersion, verified, generative },
+#          references?, provenance:[{service, resource, tool, observedAt}], financialData, limitations? }
 #   Ambos con Authorization: Bearer <token del usuario>. 401/403/503 y timeout se publican saneados.
+#
+# Proyección servicio -> GraphQL (una sola correspondencia por campo, sin cálculos):
+#   figures.perWork[]          -> figures.works[]
+#   perWork.evidence.available -> works[].evidenceAvailable   (pending/failed igual)
+#   figures.byStatus{status:n} -> figures.byStatus[{status, count}]   (orden alfabético por status)
+#   figures.advances/evidence  -> figures.advances/evidence{Available,Pending,Failed}
+#   figures.executionsConsulted/failed -> figures.consultedExecutions/failedExecutions
+#   narrative.text             -> narrative
+#   narrative.path             -> narrativePath
+#   narrative.model            -> model            (`null` si redactó la plantilla determinista)
+#   narrative.verified         -> narrativeVerified
+#   narrative.promptVersion    -> promptVersion
+#   financialData              -> financialData
+#   report (discriminador constante) y narrative.generative (= narrativePath === "llm") no se publican
+#   porque se deducen del documento; son los dos únicos campos del DTO sin campo GraphQL.
 
 "Referencia a un registro citado por la respuesta o el reporte."
 type AssistantRecordReference {
@@ -75,38 +99,125 @@ type OperationsWorkFigure {
   "Asignación del trabajo; `null` si el servicio no la publicó."
   assignmentId: UUID
   executionStatus: String!
-  "Avances registrados en el período."
-  advances: Int!
-  evidenceAvailable: Int!
-  evidencePending: Int!
-  evidenceFailed: Int!
+  "Avances registrados en el período; `null` si el propietario no devolvió la ejecución (nunca un 0)."
+  advances: Int
+  evidenceAvailable: Int
+  evidencePending: Int
+  evidenceFailed: Int
 }
 
 "Cifras deterministas del período; nunca financieras."
 type OperationsFigures {
   byStatus: [OperationsStatusCount!]!
   works: [OperationsWorkFigure!]!
-  "Cantidad de trabajos incluidos; igual al cálculo del servicio."
+  "Cantidad de trabajos incluidos; igual al cálculo del servicio y a la suma de `byStatus`."
   totalWorks: Int!
+  "Avances sumados sobre las ejecuciones consultadas; `null` si ninguna devolvió sus cifras."
+  advances: Int
+  evidenceAvailable: Int
+  evidencePending: Int
+  evidenceFailed: Int
+  "Verdadero solo si todos los trabajos del período devolvieron sus cifras de ejecución."
+  complete: Boolean!
+  consultedExecutions: Int!
+  failedExecutions: Int!
 }
 
 "Período civil del reporte, en la zona del taller."
 type ReportPeriod {
   from: Date!
   to: Date!
+  "Zona horaria del taller, declarada por el propietario (por ejemplo `America/La_Paz`)."
+  timeZone: String!
+}
+
+"""
+Afirmación cuantitativa del texto, ligada al indicador que la produjo. Permite verificar la prosa
+del reporte contra las cifras: `indicator` nombra la cifra, `value` es su valor, `period` acota el
+período y `tool` la herramienta del catálogo cerrado que la obtuvo.
+"""
+type ReportClaim {
+  "Indicador estable: `works.total`, `works.byStatus.<estado>`, `execution.advances`, `evidence.available`, …"
+  indicator: String!
+  "El indicador tal como se lee en la narración."
+  label: String!
+  value: Int!
+  "Unidad publicada por el indicador: trabajos, avances, evidencias, ejecuciones."
+  unit: String!
+  period: ReportPeriod!
+  "Servicio propietario que produjo la cifra."
+  source: String!
+  "Herramienta del catálogo cerrado que la obtuvo."
+  tool: String!
+  "Registros que respaldan la cifra."
+  recordRefs: [AssistantRecordReference!]!
+}
+
+"Declaración de alcance del reporte: sus cifras no incluyen datos financieros."
+type ReportFinancialDeclaration {
+  included: Boolean!
+  note: String!
 }
 
 "Reporte narrativo de un período: las cifras son deterministas y el texto solo las redacta."
 type OperationsReport {
   period: ReportPeriod!
   generatedAt: DateTime!
-  model: String!
+  "Ruta de redacción del texto: `llm` (modelo local) o `deterministic` (plantilla sobre las cifras)."
+  narrativePath: String!
+  "Modelo que redactó el texto; `null` cuando lo escribió la plantilla determinista."
+  model: String
+  "Verdadero solo si se verificó que cada cifra del texto es calculada y pertenece a su indicador."
+  narrativeVerified: Boolean!
+  "Versión del prompt y de la plantilla que produjo el texto."
+  promptVersion: String!
   "Narración del período; no sustituye las cifras ni agrega importes."
   narrative: String!
   figures: OperationsFigures!
+  "Afirmaciones cuantitativas del texto publicado; vacío si la narración no cita cifras."
+  claims: [ReportClaim!]!
   references: [AssistantRecordReference!]!
   provenance: [AssistantProvenance!]!
+  "Límites declarados por el servicio: ejecución ausente, modelo no disponible, plantilla usada."
   limitations: [String!]!
+  financialData: ReportFinancialDeclaration!
+}
+
+"""
+Estado de un trabajo de reporte. `QUEUED` y `RUNNING` son transitorios; `SUCCEEDED` publica el
+documento, y `FAILED`/`INTERRUPTED` publican el código de término. `INTERRUPTED` es terminal: el
+servicio no reanuda un trabajo cuya sesión se perdió, porque no guarda el token del usuario.
+"""
+enum OperationsReportJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  INTERRUPTED
+}
+
+"""
+Trabajo de generación del reporte. La creación responde en milisegundos con un identificador estable;
+la interfaz consulta ese mismo identificador hasta que el trabajo termina, de modo que recargar la
+página no inicia una segunda generación.
+"""
+type OperationsReportJob {
+  "Identificador estable del trabajo, publicado por el servicio."
+  jobId: ID!
+  status: OperationsReportJobStatus!
+  "Período solicitado; no cambia entre consultas del mismo trabajo."
+  period: ReportPeriod!
+  requestedAt: DateTime!
+  "Instante en que el servicio empezó a generar; `null` mientras espera turno."
+  startedAt: DateTime
+  "Instante de término; `null` mientras el trabajo sigue abierto."
+  finishedAt: DateTime
+  "Documento completo; `null` hasta que el estado es `SUCCEEDED`."
+  report: OperationsReport
+  "Código de término cuando el trabajo no produjo documento."
+  failureCode: String
+  "Mensaje saneado del código anterior, redactado por el BFF."
+  failureMessage: String
 }
 
 extend type Query {
@@ -114,4 +225,14 @@ extend type Query {
   assistantAnswer(query: String!): AssistantAnswer!
   "Reporte del período con cifras deterministas. Requiere `executions:read:team` y el token del usuario."
   operationsReport(from: Date!, to: Date!): OperationsReport!
+  "Estado o resultado del trabajo de reporte. Solo la cuenta que lo creó puede consultarlo."
+  operationsReportJob(jobId: ID!): OperationsReportJob!
+}
+
+extend type Mutation {
+  """
+  Inicia el reporte del período y devuelve su trabajo. `operationId` lo genera el cliente y hace la
+  creación idempotente: repetirla devuelve el mismo trabajo en lugar de generar de nuevo.
+  """
+  startOperationsReport(from: Date!, to: Date!, operationId: UUID!): OperationsReportJob!
 }

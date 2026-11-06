@@ -9,7 +9,12 @@ import type {ToolInfo, ToolOutcome} from "../agent.js";
 import type {ToolSource} from "../sources/mcp.js";
 
 const DEFAULT_OPERATIONS = "http://127.0.0.1:8081";
-const DEFAULT_TIMEOUT_MS = 8_000;
+/**
+ * Budget for one owner read. A month of team agenda or a work with many advances is a heavier read than
+ * a single order, and 8 s turned a slow answer into OWNER_UNAVAILABLE during the report (measured
+ * 2026-11-06). It stays bounded because every call is also bounded by the caller's own deadline.
+ */
+const DEFAULT_TIMEOUT_MS = 20_000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -81,7 +86,10 @@ export interface TokenSourceOptions {
 
 export function createTokenSource(accessToken: string, options: TokenSourceOptions = {}): ToolSource {
   const base = (options.operationsUrl ?? process.env["OPERATIONS_URL"] ?? DEFAULT_OPERATIONS).replace(/\/+$/, "");
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // Configurable for a slower machine; a value that is not a positive integer keeps the documented default.
+  const configured = Number(process.env["OWNER_TIMEOUT_MS"]);
+  const timeoutMs = options.timeoutMs
+    ?? (Number.isFinite(configured) && configured >= 1_000 ? configured : DEFAULT_TIMEOUT_MS);
   const tools = catalogueForToken(accessToken);
 
   const get = async (path: string): Promise<ToolOutcome> => {

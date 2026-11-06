@@ -11,10 +11,10 @@
 import {LlmError, type ChatMessage, type LlmClient} from "../llm/ollama.js";
 import type {ToolSource} from "../sources/mcp.js";
 
-export const REPORT_PROMPT_VERSION = "cu26-report-v2";
+export const REPORT_PROMPT_VERSION = "cu26-report-v3";
 const MAX_RANGE_DAYS = 31;
 const MAX_WORK_RANGE = 50;
-const TIME_ZONE = "America/La_Paz";
+export const TIME_ZONE = "America/La_Paz";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** A number is bound to the nearest indicator term inside this distance. */
 const BIND_WINDOW = 60;
@@ -336,11 +336,15 @@ export function claimPatterns(figures: ReportFigures, period: {from: string; to:
     };
     evidenceClaim("available", "evidencias disponibles", figures.evidence.available, /\bdisponibles?\b/gi);
     evidenceClaim("pending", "evidencias pendientes", figures.evidence.pending, /\bpendientes?\b/gi);
-    evidenceClaim("failed", "evidencias fallidas", figures.evidence.failed, /\bfallid[ao]s?\b/gi);
+    // "fallidas" and the verb form the prompt invites ("4 evidencias fallaron") both name the figure:
+    // without the verb form the figure binds to the previous indicator and the paragraph is rejected.
+    evidenceClaim("failed", "evidencias fallidas", figures.evidence.failed, /\bfallid[ao]s?\b|\bfall(?:aron|an|ó|o)\b/gi);
   }
   push({indicator: "executions.consulted", label: "ejecuciones consultadas", value: figures.executionsConsulted,
     unit: "ejecuciones", tool: "autonexus_get_team_execution", recordRefs: executionRefs},
-    [/\bejecuciones? consultadas?\b/gi, /\bconsultad[oa]s?\b/gi]);
+    // "ejecuciones consultadas" and the verb form the prose uses ("se consultaron 2 ejecuciones") both
+    // name the figure; without the verb the number stayed unbound and the paragraph was rejected.
+    [/\bejecuciones? consultadas?\b/gi, /\bconsultad[oa]s?\b/gi, /\bconsult(?:aron|an|ó|o)\b/gi]);
   push({indicator: "executions.failed", label: "ejecuciones con error", value: figures.executionsFailed,
     unit: "ejecuciones", tool: "autonexus_get_team_execution", recordRefs: executionRefs},
     [/\bcon error\b/gi, /\bejecuciones? fallidas?\b/gi]);
@@ -464,8 +468,11 @@ export function deterministicNarrative(report: {period: {from: string; to: strin
 
 const NARRATIVE_SYSTEM = [
   "Redactas el resumen narrativo de un reporte de taller.",
+  "OBLIGATORIO: escribe cada cifra con dígitos, por ejemplo 2 trabajos, 32 avances, 20 evidencias disponibles. Nunca escribas cifras con palabras.",
+  "Nombra el indicador junto a la cifra: trabajos programados, trabajos en <estado>, avances, evidencias disponibles, evidencias pendientes, evidencias fallidas, ejecuciones consultadas.",
   "Usa exclusivamente las cifras del JSON entregado: no agregues cifras, porcentajes, promedios ni cálculos nuevos.",
   "Cada cifra debe ir junto al indicador al que pertenece: no atribuyas un total a otro concepto.",
+  "No menciones fechas ni el período: el reporte ya lo muestra aparte.",
   "No menciones dinero, importes, tarifas, cotizaciones ni facturación.",
   "Si un dato viene en null, no lo menciones ni lo estimes.",
   "Escribe en español, en un solo párrafo de 60 a 120 palabras, sin listas y sin inventar causas.",
@@ -479,7 +486,9 @@ async function callModel(llm: LlmClient, messages: readonly ChatMessage[], deadl
     timer = setTimeout(() => reject(new LlmError("LLM_TIMEOUT", "The report deadline elapsed.")), remaining);
   });
   try {
-    const turn = await Promise.race([llm.chat({messages, deadlineMs}), guard]);
+    // The trace is off for this task: the paragraph is verified against the figures anyway, and with the
+    // trace on the model spent the whole token budget reasoning and returned no text.
+    const turn = await Promise.race([llm.chat({messages, deadlineMs, think: false}), guard]);
     return turn.content.trim();
   } finally {
     if (timer !== undefined) clearTimeout(timer);
@@ -525,6 +534,12 @@ export async function buildNarrativeReport(options: NarrativeReportOptions): Pro
       ], deadline);
       const numbers = verifyNumbers(candidate, allowed);
       const candidateBinding = verifyClaimBinding(candidate, patterns);
+      if (process.env["CU26_LOG_CANDIDATE"] === "1") {
+        // Operator aid: the paragraph is the report's own text, never a token or a private record.
+        process.stderr.write(JSON.stringify({at: new Date().toISOString(), outcome: "narrative-candidate",
+          length: candidate.length, binding: candidateBinding.problems.slice(0, 5),
+          indicators: candidateBinding.indicators, candidate}) + String.fromCharCode(10));
+      }
       if (candidate.length < 40) {
         limitations.push("narrative_too_short");
       } else if (!numbers.ok) {
@@ -533,6 +548,10 @@ export async function buildNarrativeReport(options: NarrativeReportOptions): Pro
         limitations.push("narrative_rejected_financial_claim");
       } else if (!candidateBinding.ok) {
         limitations.push("narrative_rejected_claim_binding:" + candidateBinding.problems.slice(0, 5).join("|"));
+      } else if (figures.totalWorks > 0 && !candidateBinding.indicators.includes("works.total")) {
+        // A paragraph that names no computed figure cannot be checked against the report: it may be
+        // true prose, but it is not evidence of the figures, so the deterministic text is published.
+        limitations.push("narrative_rejected_missing_total");
       } else {
         text = candidate;
         path = "llm";

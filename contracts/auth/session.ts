@@ -45,8 +45,13 @@ export interface SessionPort {
   login(returnTo?: string): Promise<void>;
   logout(): Promise<void>;
   requestTechnical(service: TechnicalService, resource: TechnicalResource): Promise<TechnicalResult>;
-  /** Executes an allowlisted BFF GraphQL request with the RAM-only token; never exposes it. */
-  requestBusiness(query: string, variables?: Readonly<Record<string, unknown>>): Promise<BusinessResult>;
+  /**
+   * Executes an allowlisted BFF GraphQL request with the RAM-only token; never exposes it.
+   * `options.timeoutMs` is for the slowest reads (the assistant turn), which need a longer budget than
+   * the default: the caller states how long it is willing to wait instead of every call inheriting it.
+   */
+  requestBusiness(query: string, variables?: Readonly<Record<string, unknown>>,
+    options?: { readonly timeoutMs?: number }): Promise<BusinessResult>;
   /** Transfers evidence bytes to an already authorized URL; attaches no token and decides nothing. */
   uploadEvidence(target: EvidenceUploadTarget, body: Blob | ArrayBuffer): Promise<EvidenceUploadOutcome>;
 }

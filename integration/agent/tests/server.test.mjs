@@ -115,11 +115,17 @@ test("a token without a read role is rejected with 403", async () => {
 test("the caller's own token is the one forwarded to the tool source", async () => {
   const response = await post("/assistant", {query: "¿Qué órdenes hay?"}, CHIEF);
   assert.equal(response.status, 200);
-  assert.equal(response.body.kind, "answer");
-  assert.equal(response.body.path, "llm");
+  // The contract publishes the reader-facing answer, not the planner's internal record.
+  assert.equal(typeof response.body.answer, "string");
+  assert.ok(response.body.answer.length > 0);
+  assert.equal(response.body.refused, false);
+  assert.equal(response.body.model, "qwen3.5:4b");
+  assert.equal(typeof response.body.generatedAt, "string");
+  assert.ok(Array.isArray(response.body.toolsUsed));
+  assert.ok(Array.isArray(response.body.provenance));
   const forwarded = seen.find(entry => entry.factoryToken !== undefined).factoryToken;
   assert.equal(forwarded, CHIEF, "no minted identity: the caller token is forwarded verbatim");
-  assert.ok(!("fallbackFrom" in response.body));
+  assert.ok(!("fallbackFrom" in response.body), "the internal record is not published");
 });
 
 test("tokens and question text never reach the log", async () => {
@@ -172,8 +178,9 @@ test("the assistant keeps working when the model is unavailable", async () => {
   try {
     const response = await post("/assistant", {query: "¿Qué órdenes hay?"}, CHIEF, started.url);
     assert.equal(response.status, 200);
-    assert.equal(response.body.path, "deterministic");
-    assert.equal(response.body.model, null);
+    // The contract always names what wrote the text: here the planner's own version, and it says so.
+    assert.equal(response.body.model, "cu25-planner-v1");
+    assert.ok(response.body.limitations.some(entry => entry.includes("planificador")));
   } finally { await new Promise(ready => started.created.close(ready)); }
 });
 

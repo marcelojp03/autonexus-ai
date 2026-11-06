@@ -15,8 +15,8 @@
       rows="3"
       [attr.maxlength]="maxQuestion"
       [placeholder]="'¿Qué trabajos están en curso y qué avances tienen?'"
-      [ngModel]="question"
-      (ngModelChange)="question = $event"
+      [ngModel]="question()"
+      (ngModelChange)="question.set($event)"
     ></textarea>
     <button nz-button nzType="primary" type="button" id="assistant-ask" [disabled]="!canAsk()" [nzLoading]="asking()" (click)="ask()">Preguntar</button>
   </div>
@@ -65,41 +65,63 @@
     }
 
     @if (view.limitations.length) {
-      <nz-alert id="assistant-limitations" nzType="info" nzShowIcon nzMessage="Límites declarados">
-        <ul>
-          @for (limitation of view.limitations; track $index) { <li>{{ limitation }}</li> }
-        </ul>
-      </nz-alert>
+      <nz-alert id="assistant-limitations" nzType="info" nzShowIcon nzMessage="Límites declarados"
+        [nzDescription]="view.limitations.join(' · ')"></nz-alert>
     }
   }
 </nz-card>
 
 <nz-card nzTitle="Reporte narrativo del período">
-  <p class="note">Las cifras las calcula el servidor de forma determinista; el modelo solo redacta sobre ellas. El reporte no incluye importes ni datos financieros.</p>
+  <p class="note">Las cifras las calcula el servidor de forma determinista; el modelo solo redacta sobre ellas. El reporte se genera en el servidor: podés recargar la página y el trabajo continúa con el mismo identificador.</p>
   <div class="toolbar">
-    <label class="field" for="assistant-from">Desde<input nz-input id="assistant-from" type="date" [(ngModel)]="from" /></label>
-    <label class="field" for="assistant-to">Hasta<input nz-input id="assistant-to" type="date" [(ngModel)]="to" /></label>
+    <label class="field" for="assistant-from">Desde<input nz-input id="assistant-from" type="date" [ngModel]="from()" (ngModelChange)="from.set($event)" /></label>
+    <label class="field" for="assistant-to">Hasta<input nz-input id="assistant-to" type="date" [ngModel]="to()" (ngModelChange)="to.set($event)" /></label>
     <button nz-button nzType="primary" type="button" id="assistant-generate" [disabled]="!canGenerate() || (permissionKnown() && !reportAllowed())" [nzLoading]="generating()" (click)="generate()">Generar reporte</button>
+    @if (report() && !jobRunning()) {
+      <button nz-button type="button" id="assistant-export-json" (click)="exportJson()">Exportar JSON</button>
+      <button nz-button type="button" id="assistant-export-csv" (click)="exportCsv()">Exportar CSV</button>
+    }
   </div>
 
   @if (permissionKnown() && !reportAllowed()) {
     <nz-alert id="assistant-report-forbidden" nzType="warning" nzShowIcon nzMessage="Esta cuenta no puede generar el reporte del taller" nzDescription="El reporte cubre todos los trabajos del período y requiere el permiso de lectura del equipo. La pregunta al asistente sigue disponible."></nz-alert>
   }
-  @if (generating()) {
-    <nz-alert id="assistant-report-loading" nzType="info" nzShowIcon nzMessage="Generando el reporte…"></nz-alert>
+
+  @if (resumed() && generating()) {
+    <nz-alert id="assistant-report-resumed" nzType="info" nzShowIcon nzMessage="Se retomó el reporte que ya estaba en curso" nzDescription="La recarga no inició una generación nueva: se consulta el mismo trabajo del servidor."></nz-alert>
+  }
+  @if (generating() && jobRunning()) {
+    <nz-alert id="assistant-report-loading" nzType="info" nzShowIcon
+      [nzMessage]="jobStatusLabel(jobStatus()) + '… ' + elapsed() + ' s'"
+      [nzDescription]="jobId() ? ('Trabajo ' + jobId()) : 'Creando el trabajo en el servidor.'"></nz-alert>
+  }
+  @if (pollWarning()) {
+    <nz-alert id="assistant-report-poll-warning" nzType="warning" nzShowIcon [nzMessage]="pollWarning()!"></nz-alert>
   }
   @if (reportError()) {
-    <nz-alert id="assistant-report-error" nzType="error" nzShowIcon [nzMessage]="reportError()!" nzDescription="El reporte es de solo lectura: reintentar no modifica ningún registro."></nz-alert>
+    <nz-alert id="assistant-report-error" nzType="error" nzShowIcon [nzMessage]="reportError()!"
+      nzDescription="El reporte es de solo lectura: reintentar no modifica ningún registro.">
+      <button nz-button nzSize="small" type="button" id="assistant-report-retry" (click)="retry()">Volver a intentar</button>
+    </nz-alert>
   }
 
   @if (report(); as view) {
     <div class="row">
       <nz-tag nzColor="purple">{{ view.period.from }} → {{ view.period.to }}</nz-tag>
-      <nz-tag nzColor="blue">{{ view.model }}</nz-tag>
-      <span class="when">generado {{ time(view.generatedAt) }} · {{ view.figures.totalWorks }} trabajos</span>
+      @if (narrativeIsModel()) {
+        <nz-tag nzColor="blue" id="assistant-report-path">Modelo {{ view.model }}</nz-tag>
+      } @else {
+        <nz-tag nzColor="default" id="assistant-report-path">Plantilla determinista</nz-tag>
+      }
+      @if (view.narrativeVerified) { <nz-tag nzColor="green">cifras verificadas</nz-tag> }
+      <span class="when">generado {{ time(view.generatedAt) }} · {{ view.figures.totalWorks }} trabajos · {{ view.promptVersion }}</span>
     </div>
 
     <p class="answer" id="assistant-report-narrative">{{ view.narrative }}</p>
+
+    @if (figuresNote()) {
+      <nz-alert id="assistant-report-incomplete" nzType="warning" nzShowIcon [nzMessage]="figuresNote()!"></nz-alert>
+    }
 
     <h4>Trabajos por estado</h4>
     @if (!view.figures.byStatus.length) {
@@ -129,10 +151,38 @@
             <tr>
               <td>{{ work.orderNumber }}</td>
               <td>{{ statusLabel(work.executionStatus) }}</td>
-              <td>{{ work.advances }}</td>
-              <td>{{ work.evidenceAvailable }}</td>
-              <td>{{ work.evidencePending }}</td>
-              <td>{{ work.evidenceFailed }}</td>
+              <td>{{ figure(work.advances) }}</td>
+              <td>{{ figure(work.evidenceAvailable) }}</td>
+              <td>{{ figure(work.evidencePending) }}</td>
+              <td>{{ figure(work.evidenceFailed) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <h4>Cifras citadas por la narración</h4>
+    @if (!view.claims.length) {
+      <p class="when">La narración no citó cifras.</p>
+    } @else {
+      <table id="assistant-report-claims">
+        <thead>
+          <tr>
+            <th scope="col">Indicador</th>
+            <th scope="col">Valor</th>
+            <th scope="col">Unidad</th>
+            <th scope="col">Fuente</th>
+            <th scope="col">Herramienta</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (claim of view.claims; track claim.indicator) {
+            <tr>
+              <td>{{ claim.label }}</td>
+              <td>{{ claim.value }}</td>
+              <td>{{ claim.unit }}</td>
+              <td>{{ claim.source }}</td>
+              <td>{{ claim.tool }}</td>
             </tr>
           }
         </tbody>
@@ -148,12 +198,11 @@
       </div>
     }
 
+    <p class="note" id="assistant-report-financial">{{ view.financialData.note }}</p>
+
     @if (view.limitations.length) {
-      <nz-alert id="assistant-report-limitations" nzType="info" nzShowIcon nzMessage="Límites declarados">
-        <ul>
-          @for (limitation of view.limitations; track $index) { <li>{{ limitation }}</li> }
-        </ul>
-      </nz-alert>
+      <nz-alert id="assistant-report-limitations" nzType="info" nzShowIcon nzMessage="Límites declarados"
+        [nzDescription]="view.limitations.join(' · ')"></nz-alert>
     }
   }
 </nz-card>

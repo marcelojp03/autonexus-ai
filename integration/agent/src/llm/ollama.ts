@@ -65,6 +65,13 @@ export interface ChatRequest {
   readonly tools?: readonly OllamaToolDefinition[];
   /** Absolute epoch ms for the whole conversation; a step never outlives it. */
   readonly deadlineMs?: number;
+  /**
+   * Reasoning trace for models that emit one. Omitted keeps the model's own default; `false` asks for
+   * the answer only, which is what a task that must produce a bounded text needs: with the trace on,
+   * qwen3.5:4b spent the whole `num_predict` budget thinking and returned an empty answer (measured
+   * 2026-11-06, 99 s and 512 tokens vs 20 s and 98 tokens with the trace off).
+   */
+  readonly think?: boolean;
 }
 
 export interface ChatResult {
@@ -148,6 +155,13 @@ export function createOllamaClient(overrides: OllamaConfig = {}): LlmClient {
     DEFAULT_NUM_PREDICT, MIN_NUM_PREDICT, MAX_NUM_PREDICT);
   const temperature = overrides.temperature ?? 0;
   const keepAlive = overrides.keepAlive ?? "10m";
+  /**
+   * Reasoning trace off by default: measured 2026-11-06, qwen3.5:4b spent the whole `num_predict`
+   * budget reasoning and returned an empty answer (99 s, 512 tokens) where asking for the answer alone
+   * produced it in 20 s and 98 tokens. `OLLAMA_THINK=1` restores the model's own default, and a single
+   * request can still override it.
+   */
+  const thinkByDefault = process.env["OLLAMA_THINK"] === "1" ? undefined : false;
 
   const chat = async (request: ChatRequest): Promise<ChatResult> => {
     const started = Date.now();
@@ -160,6 +174,8 @@ export function createOllamaClient(overrides: OllamaConfig = {}): LlmClient {
       messages: request.messages,
       stream: false,
       ...(request.tools === undefined || request.tools.length === 0 ? {} : {tools: request.tools}),
+      ...(request.think === undefined ? {} : {think: request.think}),
+      ...(request.think === undefined && thinkByDefault !== undefined ? {think: thinkByDefault} : {}),
       keep_alive: keepAlive,
       options: {temperature, num_predict: numPredict},
     };

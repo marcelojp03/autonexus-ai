@@ -1,4 +1,4 @@
-/** CU25/CU26 contract: assistant answer and narrative report through the BFF GraphQL surface. */
+/** CU25/CU26 contract: assistant answer, narrative report and its generation job through the BFF. */
 
 export interface AssistantRecordReference {
   readonly kind: string;
@@ -29,31 +29,77 @@ export interface OperationsStatusCount {
   readonly count: number;
 }
 
+/** A figure the owner could not publish stays `null`: the interface never renders it as a zero. */
 export interface OperationsWorkFigure {
   readonly orderNumber: string;
   readonly assignmentId: string | null;
   readonly executionStatus: string;
-  readonly advances: number;
-  readonly evidenceAvailable: number;
-  readonly evidencePending: number;
-  readonly evidenceFailed: number;
+  readonly advances: number | null;
+  readonly evidenceAvailable: number | null;
+  readonly evidencePending: number | null;
+  readonly evidenceFailed: number | null;
 }
 
 export interface OperationsFigures {
   readonly byStatus: readonly OperationsStatusCount[];
   readonly works: readonly OperationsWorkFigure[];
+  /** Same population as `byStatus` and `works`; the server rejects a report where they disagree. */
   readonly totalWorks: number;
+  readonly advances: number | null;
+  readonly evidenceAvailable: number | null;
+  readonly evidencePending: number | null;
+  readonly evidenceFailed: number | null;
+  readonly complete: boolean;
+  readonly consultedExecutions: number;
+  readonly failedExecutions: number;
+}
+
+/** A quantitative statement of the narrative, bound to the figure that produced it. */
+export interface ReportClaim {
+  readonly indicator: string;
+  readonly label: string;
+  readonly value: number;
+  readonly unit: string;
+  readonly period: { readonly from: string; readonly to: string };
+  readonly source: string;
+  readonly tool: string;
+  readonly recordRefs: readonly AssistantRecordReference[];
+}
+
+export interface ReportFinancialDeclaration {
+  readonly included: boolean;
+  readonly note: string;
 }
 
 export interface OperationsReport {
-  readonly period: { readonly from: string; readonly to: string };
+  readonly period: { readonly from: string; readonly to: string; readonly timeZone: string };
   readonly generatedAt: string;
-  readonly model: string;
+  /** `llm` when the local model wrote the text, `deterministic` when the template did. */
+  readonly narrativePath: string;
+  readonly model: string | null;
+  readonly narrativeVerified: boolean;
+  readonly promptVersion: string;
   readonly narrative: string;
   readonly figures: OperationsFigures;
+  readonly claims: readonly ReportClaim[];
   readonly references: readonly AssistantRecordReference[];
   readonly provenance: readonly AssistantProvenance[];
   readonly limitations: readonly string[];
+  readonly financialData: ReportFinancialDeclaration;
+}
+
+export type ReportJobStatus = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'INTERRUPTED';
+
+export interface ReportJob {
+  readonly jobId: string;
+  readonly status: ReportJobStatus;
+  readonly period: { readonly from: string; readonly to: string; readonly timeZone: string };
+  readonly requestedAt: string;
+  readonly startedAt: string | null;
+  readonly finishedAt: string | null;
+  readonly report: OperationsReport | null;
+  readonly failureCode: string | null;
+  readonly failureMessage: string | null;
 }
 
 /** The period report covers the whole workshop, so the BFF keeps it behind this permission. */
@@ -62,11 +108,31 @@ export const REPORT_PERMISSION = 'executions:read:team';
 /** A prompt, not a document: the BFF rejects longer input before reaching the assistant. */
 export const MAX_QUESTION = 2000;
 
+/** How often the interface asks for the state of a job: short reads, never a new generation. */
+export const JOB_POLL_INTERVAL_MS = 2000;
+
+/** Where the open job is remembered so a reload resumes it instead of starting another run. */
+export const JOB_STORAGE_KEY = 'anx.cu26.report.job';
+
 export const ASSISTANT_ANSWER_FIELDS =
   'answer refused toolsUsed model generatedAt references { kind id label } provenance { service resource tool observedAt } limitations';
 
 export const OPERATIONS_REPORT_FIELDS =
-  'period { from to } generatedAt model narrative figures { totalWorks byStatus { status count } works { orderNumber assignmentId executionStatus advances evidenceAvailable evidencePending evidenceFailed } } references { kind id label } provenance { service resource tool observedAt } limitations';
+  'period { from to timeZone } generatedAt narrativePath model narrativeVerified promptVersion narrative ' +
+  'figures { totalWorks byStatus { status count } works { orderNumber assignmentId executionStatus advances evidenceAvailable evidencePending evidenceFailed } ' +
+  'advances evidenceAvailable evidencePending evidenceFailed complete consultedExecutions failedExecutions } ' +
+  'claims { indicator label value unit period { from to } source tool recordRefs { kind id label } } ' +
+  'references { kind id label } provenance { service resource tool observedAt } limitations ' +
+  'financialData { included note }';
+
+export const REPORT_JOB_FIELDS =
+  'jobId status requestedAt startedAt finishedAt period { from to timeZone } failureCode failureMessage ' +
+  'report { ' + OPERATIONS_REPORT_FIELDS + ' }';
+
+/** True when the job will not change any more, so the interface can stop polling. */
+export function jobIsTerminal(status: ReportJobStatus | null): boolean {
+  return status === 'SUCCEEDED' || status === 'FAILED' || status === 'INTERRUPTED';
+}
 
 /** First and last day of the current month in the workshop time zone. */
 export function currentMonth(now: Date = new Date()): { from: string; to: string } {
@@ -93,4 +159,45 @@ export function assistantError(failure: { code?: string; statusCode?: number } |
     default:
       return 'No se pudo completar la consulta al asistente.';
   }
+}
+
+/** What the pane says about a job that ended without a document. */
+export function jobFailureText(job: Pick<ReportJob, 'status' | 'failureCode' | 'failureMessage'>): string {
+  if (job.failureMessage && job.failureMessage.trim()) return job.failureMessage;
+  if (job.status === 'INTERRUPTED') return 'El servicio se reinició durante la generación; el trabajo no puede reanudarse.';
+  if (job.status === 'FAILED') return 'La generación del reporte no se completó.';
+  return '';
+}
+
+const REQUIRED_FIGURES = 'Las cifras de este reporte no están completas: no se presentan ceros en lugar de datos ausentes.';
+
+/** Labels the figures so a missing value is shown as such, never as a zero. */
+export function figureText(value: number | null): string {
+  return value === null ? 'sin dato' : String(value);
+}
+
+export function figuresComplete(figures: OperationsFigures): boolean {
+  return figures.complete && figures.advances !== null;
+}
+
+export const FIGURES_INCOMPLETE_NOTE = REQUIRED_FIGURES;
+
+/** The whole document as a downloadable JSON: the same object the interface rendered. */
+export function reportAsJson(report: OperationsReport): string {
+  return JSON.stringify(report, null, 2);
+}
+
+/**
+ * The claims as CSV: one line per quantitative statement, with its indicator, value, period, source and
+ * tool. A spreadsheet of the figures without the prose, which is what a reader can check.
+ */
+export function reportAsCsv(report: OperationsReport): string {
+  const header = ['indicador', 'etiqueta', 'valor', 'unidad', 'desde', 'hasta', 'fuente', 'herramienta'];
+  const escape = (value: string) => (/[",\n]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value);
+  const lines = [header.join(',')];
+  for (const claim of report.claims) {
+    lines.push([claim.indicator, claim.label, String(claim.value), claim.unit,
+      claim.period.from, claim.period.to, claim.source, claim.tool].map(escape).join(','));
+  }
+  return lines.join('\n') + '\n';
 }

@@ -5,7 +5,7 @@
  * never talks MCP. Tokens and question text are never logged; only digests, lengths and outcomes.
  */
 import {createServer, type IncomingMessage, type Server, type ServerResponse} from "node:http";
-import {createHash} from "node:crypto";
+import {createHash, randomUUID} from "node:crypto";
 import {resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createOllamaClient, type LlmClient} from "./llm/ollama.js";
@@ -13,6 +13,8 @@ import {ASSISTANT_PROMPT_VERSION, askWithLlm, type AssistantAnswer} from "./assi
 import {answerDeterministically} from "./assistant/deterministic.js";
 import {createTokenSource} from "./assistant/token-source.js";
 import {buildNarrativeReport, ReportError} from "./report/narrative-report.js";
+import {ReportJobStore, type ReportJob} from "./report/jobs.js";
+import {publicJob, QUEUE_FULL, ReportJobRunner} from "./report/job-runner.js";
 import type {ToolSource} from "./sources/mcp.js";
 
 export const DEFAULT_PORT = 3099;
@@ -21,6 +23,8 @@ const LOOPBACK = "127.0.0.1";
 const BEARER = /^Bearer ([A-Za-z0-9._~+/=-]{20,})$/;
 const MIN_QUERY = 3;
 const MAX_QUERY = 1_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const JOB_PATH = /^\/report\/jobs\/([0-9a-f-]{36})$/i;
 
 export interface ServerDeps {
   /** null disables the model: every request then answers through the deterministic planner. */
@@ -29,6 +33,12 @@ export interface ServerDeps {
   readonly now?: () => Date;
   readonly logger?: (entry: Readonly<Record<string, unknown>>) => void;
   readonly maxBodyBytes?: number;
+  /** Where the report jobs are persisted; defaults to `output/agent/jobs` under the working directory. */
+  readonly jobDirectory?: string;
+  /** Jobs kept on disk before the oldest finished ones are dropped. */
+  readonly jobRetention?: number;
+  /** Jobs waiting plus running before the caller is told to come back later. */
+  readonly jobCapacity?: number;
 }
 
 interface Json {readonly [key: string]: unknown}
@@ -69,20 +79,58 @@ async function readBody(request: IncomingMessage, cap: number): Promise<string |
   });
 }
 
-type Claims = {readonly exp?: number; readonly roles: readonly string[]};
+type Claims = {readonly sub: string | null; readonly exp?: number; readonly roles: readonly string[]};
 
 /** Shape check only: the owner validates the signature and the audiences. */
 function readClaims(token: string): Claims | null {
   try {
     const payload = token.split(".")[1];
     if (payload === undefined) return null;
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString()) as {exp?: unknown; realm_access?: {roles?: unknown}};
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString()) as
+      {sub?: unknown; exp?: unknown; realm_access?: {roles?: unknown}};
     const roles = Array.isArray(parsed.realm_access?.roles) ? parsed.realm_access.roles.filter((r): r is string => typeof r === "string") : [];
-    return {roles, ...(typeof parsed.exp === "number" ? {exp: parsed.exp} : {})};
+    return {sub: typeof parsed.sub === "string" ? parsed.sub : null,
+      roles, ...(typeof parsed.exp === "number" ? {exp: parsed.exp} : {})};
   } catch { return null; }
 }
 
 const READ_ROLES = ["mcp_read_team", "mcp_read_self"];
+
+/** The owner resource each catalogue tool reads; provenance names the source, not the payload. */
+const TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
+  autonexus_list_orders: "/orders",
+  autonexus_get_order: "/orders/{orderId}",
+  autonexus_list_my_agenda: "/agenda/me",
+  autonexus_list_team_agenda: "/agenda/team",
+  autonexus_get_my_execution: "/executions/review-self/{assignmentId}",
+  autonexus_get_team_execution: "/executions/team/{assignmentId}",
+});
+
+/**
+ * Publishes the contract answer. The planner's internal record carries the reasoning steps and the
+ * safety verdict; the contract publishes the reader-facing fields, and a template answer declares no
+ * model because none wrote it.
+ */
+export function publishedAnswer(answer: AssistantAnswer, at: Date): Record<string, unknown> {
+  const answered = answer.kind === "answer" || answer.kind === "clarification";
+  return {
+    answer: answer.text,
+    refused: answer.kind === "refused" || answer.kind === "unavailable",
+    toolsUsed: [...new Set(answer.tools.filter(tool => tool.ok).map(tool => tool.tool))],
+    // The contract always names what wrote the text: the model, or the planner's own version.
+    model: answer.path === "llm" ? (answer.model ?? answer.promptVersion) : answer.promptVersion,
+    generatedAt: at.toISOString(),
+    references: [],
+    provenance: [...new Set(answer.tools.filter(tool => tool.ok).map(tool => tool.tool))]
+      .map(tool => ({service: "operations", resource: TOOL_RESOURCES[tool] ?? tool, tool, observedAt: at.toISOString()})),
+    limitations: [
+      ...answer.warnings,
+      ...(answered ? [] : ["La respuesta no se completó dentro de los límites del asistente."]),
+      ...(answer.path === "llm" ? [] : ["La respuesta la redactó el planificador determinista"
+        + (answer.fallbackFrom === undefined ? " (modelo deshabilitado)." : " (el modelo no respondió: " + answer.fallbackFrom + ").")]),
+    ],
+  };
+}
 
 export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage, response: ServerResponse) => void {
   const sourceFactory = deps.sourceFactory ?? ((token: string): ToolSource => createTokenSource(token));
@@ -90,6 +138,15 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
   const maxBodyBytes = deps.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const now = deps.now ?? ((): Date => new Date());
   const llm = deps.llm === undefined ? createOllamaClient() : deps.llm;
+
+  const jobDirectory = deps.jobDirectory ?? process.env["REPORT_JOBS_DIR"] ?? resolve(process.cwd(), "output/agent/jobs");
+  const jobStore = new ReportJobStore({directory: jobDirectory,
+    ...(deps.jobRetention === undefined ? {} : {keep: deps.jobRetention})});
+  const jobs = new ReportJobRunner({store: jobStore, sourceFactory, build: buildNarrativeReport, llm, now,
+    logger: entry => logger(entry), ...(deps.jobCapacity === undefined ? {} : {capacity: deps.jobCapacity})});
+  // A job left open by a previous process cannot resume: its token was never written down.
+  const interrupted = jobs.recover();
+  if (interrupted > 0) logger({at: now().toISOString(), outcome: "jobs-interrupted-on-start", count: interrupted});
 
   const assist = async (query: string, source: ToolSource): Promise<AssistantAnswer> => {
     const tools = await source.listTools();
@@ -115,18 +172,21 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
       error(response, status, code, message, headers);
     };
     const challenge = {"www-authenticate": "Bearer realm=\"autonexus-agent\", error=\"invalid_token\""};
+    const jobPath = JOB_PATH.exec(path);
+    const known = path === "/assistant" || path === "/report" || path === "/report/jobs" || jobPath !== null;
 
     void (async () => {
       try {
         if (path === "/health" && method === "GET") {
           complete(200, {outcome: "health"});
           sendJson(response, 200, {ok: true, service: "autonexus-agent", llm: llm !== null,
-            model: llm?.model ?? null, promptVersion: ASSISTANT_PROMPT_VERSION});
+            model: llm?.model ?? null, promptVersion: ASSISTANT_PROMPT_VERSION, pendingJobs: jobs.pending});
           return;
         }
-        if (path !== "/assistant" && path !== "/report") { fail(404, "NOT_FOUND", "Ruta no disponible."); return; }
-        if (method !== "POST") {
-          fail(405, "METHOD_NOT_ALLOWED", "Solo POST.", {allow: "POST"});
+        if (!known) { fail(404, "NOT_FOUND", "Ruta no disponible."); return; }
+        const allowed = path === "/report/jobs" ? "POST" : jobPath !== null ? "GET" : "POST";
+        if (method !== allowed) {
+          fail(405, "METHOD_NOT_ALLOWED", "Solo " + allowed + ".", {allow: allowed});
           return;
         }
         if (token === null) { fail(401, "TOKEN_REQUIRED", "Falta el token del usuario.", challenge); return; }
@@ -141,6 +201,20 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           return;
         }
 
+        // Reading a job is an access like any other: the token must be valid and the job must be the
+        // caller's. A job of another account is answered as not found, never as forbidden, so the
+        // endpoint does not confirm that an identifier exists.
+        if (jobPath !== null) {
+          const job = jobStore.load(jobPath[1] ?? "");
+          if (job === null || claims.sub === null || job.subject !== claims.sub) {
+            fail(404, "JOB_NOT_FOUND", "No hay un trabajo con ese identificador para esta cuenta.");
+            return;
+          }
+          complete(200, {outcome: "job-status", jobId: job.jobId, jobStatus: job.status});
+          sendJson(response, 200, publicJob(job));
+          return;
+        }
+
         const raw = await readBody(request, maxBodyBytes);
         if (raw === null) { fail(413, "BODY_TOO_LARGE", "El cuerpo supera el límite permitido."); return; }
         let input: Json;
@@ -149,6 +223,38 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("NOT_OBJECT");
           input = parsed as Json;
         } catch { fail(400, "INVALID_BODY", "Se espera un objeto JSON."); return; }
+
+        if (path === "/report/jobs") {
+          const operationId = typeof input["operationId"] === "string" ? input["operationId"].trim() : "";
+          if (!UUID.test(operationId)) {
+            fail(400, "INVALID_OPERATION_ID", "Se espera un operationId UUID del cliente para no duplicar la generación.");
+            return;
+          }
+          if (claims.sub === null) { fail(401, "INVALID_TOKEN", "El token no identifica a una cuenta.", challenge); return; }
+          const existing = jobStore.findByOperation(claims.sub, operationId);
+          if (existing !== null) {
+            complete(200, {outcome: "job-reused", jobId: existing.jobId, jobStatus: existing.status});
+            sendJson(response, 200, {...publicJob(existing), reused: true});
+            return;
+          }
+          const requestedAt = now().toISOString();
+          const job: ReportJob = {jobId: randomUUID(), operationId, subject: claims.sub,
+            from: String(input["from"] ?? ""), to: String(input["to"] ?? ""),
+            tokenExpiresAt: claims.exp === undefined ? null : claims.exp * 1_000,
+            requestedAt, startedAt: null, finishedAt: null, status: "queued",
+            document: null, failure: null};
+          // Written before it is queued: a reload must find the same identifier, not a new generation.
+          jobStore.save(job);
+          if (!jobs.submit(job, token)) {
+            jobStore.save({...job, status: "failed", finishedAt: now().toISOString(),
+              failure: {code: QUEUE_FULL, message: "Hay trabajos pendientes; vuelva a intentarlo en unos minutos."}});
+            fail(503, QUEUE_FULL, "Hay trabajos pendientes; vuelva a intentarlo en unos minutos.");
+            return;
+          }
+          complete(202, {outcome: "job-created", jobId: job.jobId});
+          sendJson(response, 202, {...publicJob(job), reused: false});
+          return;
+        }
 
         const source = sourceFactory(token);
         try {
@@ -164,7 +270,7 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
             const forbidden = answer.tools.some(tool => tool.error === "OWNER_FORBIDDEN");
             complete(forbidden ? 403 : 200, {outcome: answer.kind, answerPath: answer.path, steps: answer.steps,
               stopReason: answer.stopReason, querySha256: sha(query).slice(0, 16), queryLength: query.length});
-            sendJson(response, forbidden ? 403 : 200, answer as unknown as Json);
+            sendJson(response, forbidden ? 403 : 200, publishedAnswer(answer, now()) as Json);
             return;
           }
 

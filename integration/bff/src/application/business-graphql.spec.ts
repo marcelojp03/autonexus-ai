@@ -121,7 +121,9 @@ function build(rejected?: Error) {
   const agenda = { list: vi.fn(), work: vi.fn(), employees: vi.fn(), history: vi.fn() };
   const assistant = {
     ask: vi.fn(async () => ({ answer: 'Dos trabajos en curso.', refused: false, toolsUsed: ['list_orders'], model: 'qwen3.5:4b', generatedAt: '2026-11-06T12:00:00Z', references: [], provenance: [], limitations: [] })),
-    report: vi.fn(async () => ({ narrative: 'Dos trabajos cerrados.', period: { from: '2026-11-01', to: '2026-11-30' }, generatedAt: '2026-11-06T12:00:00Z', model: 'qwen3.5:4b', toolsUsed: [], figures: { byStatus: [], works: [], totalWorks: 0 }, references: [], provenance: [], limitations: [] })),
+    report: vi.fn(async () => ({ narrative: 'Dos trabajos cerrados.', period: { from: '2026-11-01', to: '2026-11-30', timeZone: 'America/La_Paz' }, generatedAt: '2026-11-06T12:00:00Z', narrativePath: 'deterministic', model: null, narrativeVerified: true, promptVersion: 'cu26-report-v2', figures: { byStatus: [], works: [], totalWorks: 0, advances: null, evidenceAvailable: null, evidencePending: null, evidenceFailed: null, complete: true, consultedExecutions: 0, failedExecutions: 0 }, claims: [], references: [], provenance: [], limitations: [], financialData: { included: false, note: 'Sin datos financieros.' } })),
+    startReport: vi.fn(async () => ({ jobId: EMPLOYEE_ID, status: 'QUEUED', period: { from: '2026-11-01', to: '2026-11-30', timeZone: 'America/La_Paz' }, requestedAt: '2026-11-06T12:00:00Z', startedAt: null, finishedAt: null, report: null, failureCode: null, failureMessage: null })),
+    reportJob: vi.fn(async () => ({ jobId: EMPLOYEE_ID, status: 'QUEUED', period: { from: '2026-11-01', to: '2026-11-30', timeZone: 'America/La_Paz' }, requestedAt: '2026-11-06T12:00:00Z', startedAt: null, finishedAt: null, report: null, failureCode: null, failureMessage: null })),
   };
   return { gateway, operations, finance, agenda, assistant, graphql: new BusinessGraphql(gateway, operations, finance, bffEnvironment({}).schemaPaths, agenda, undefined, undefined, assistant) };
 }
@@ -416,16 +418,36 @@ describe('CU16 execution and evidence policy', () => {
 
 describe('CU25/CU26 assistant policy', () => {
   const ANSWER = 'answer model generatedAt refused toolsUsed references { kind id label } provenance { service resource tool observedAt } limitations';
-  const REPORT = 'narrative period { from to } generatedAt model figures { totalWorks byStatus { status count } works { orderNumber assignmentId executionStatus advances evidenceAvailable evidencePending evidenceFailed } } references { kind id } provenance { service resource } limitations';
+  const JOB = 'jobId status requestedAt startedAt finishedAt period { from to timeZone } failureCode failureMessage report { narrative narrativePath model narrativeVerified promptVersion figures { totalWorks } }';
+  const REPORT = 'narrative narrativePath model narrativeVerified promptVersion period { from to timeZone } generatedAt figures { totalWorks byStatus { status count } works { orderNumber assignmentId executionStatus advances evidenceAvailable evidencePending evidenceFailed } advances evidenceAvailable evidencePending evidenceFailed complete consultedExecutions failedExecutions } claims { indicator label value unit period { from to timeZone } source tool recordRefs { kind id label } } references { kind id } provenance { service resource } limitations financialData { included note }';
   // The permission cache is keyed by subject and roles: the allowed actor is a distinct head.
   const TEAM = Object.freeze({ subject: 'synthetic-team', roles: ['jefe_taller'] as const });
 
-  it('publishes the two assistant root fields in the SDL', () => {
+  it('publishes the assistant root fields in the SDL and no financial field', () => {
     const source = readFileSync(assistantPath, 'utf8');
     const blocks = [...source.matchAll(/extend type (?:Query|Mutation) \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join('\n');
     const roots = [...blocks.matchAll(/^ {2}([A-Za-z]+)[(:]/gm)].map((match) => match[1]);
-    expect(roots.sort()).toEqual(['assistantAnswer', 'operationsReport'].sort());
+    expect(roots.sort()).toEqual(['assistantAnswer', 'operationsReport', 'operationsReportJob', 'startOperationsReport'].sort());
     expect(source).not.toMatch(/\b(amount|total|currency|price|quoteTotal|revenue)\b\s*:/i);
+  });
+
+  it('creates the report job with the client operationId and reads it behind the same permission', async () => {
+    const { graphql, assistant } = build();
+    const started = await graphql.run({ query: 'mutation { startOperationsReport(from: "2026-11-01", to: "2026-11-30", operationId: "' + EMPLOYEE_ID + '") { ' + JOB + ' } }' },
+      TEAM, 'team-token');
+    expect(started.errors).toBeUndefined();
+    expect(assistant.startReport).toHaveBeenCalledWith('2026-11-01', '2026-11-30', EMPLOYEE_ID, 'team-token');
+    expect((started.data as Record<string, unknown> | undefined)?.['startOperationsReport'])
+      .toMatchObject({ jobId: EMPLOYEE_ID, status: 'QUEUED' });
+
+    const read = await graphql.run({ query: '{ operationsReportJob(jobId: "' + EMPLOYEE_ID + '") { ' + JOB + ' } }' }, TEAM, 'team-token');
+    expect(read.errors).toBeUndefined();
+    expect(assistant.reportJob).toHaveBeenCalledWith(EMPLOYEE_ID, 'team-token');
+
+    // The job is the same workshop-wide document, so the head cannot read it either.
+    const denied = await graphql.run({ query: '{ operationsReportJob(jobId: "' + EMPLOYEE_ID + '") { ' + JOB + ' } }' }, HEAD, 'head-token');
+    expect(denied.errors?.[0].extensions).toEqual({ code: 'FORBIDDEN', statusCode: 403 });
+    expect(assistant.reportJob).toHaveBeenCalledTimes(1);
   });
 
   it('lets any catalogue role ask the assistant with its own token and resolves no permission for it', async () => {

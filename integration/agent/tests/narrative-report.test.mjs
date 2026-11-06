@@ -149,7 +149,7 @@ test("period, generatedAt, references and provenance are preserved", async () =>
   assert.deepEqual(report.period, {from: PERIOD.from, to: PERIOD.to, timeZone: "America/La_Paz"});
   assert.equal(report.generatedAt, NOW.toISOString());
   assert.equal(report.report, "operations-narrative");
-  assert.equal(report.promptVersion, "cu26-report-v2");
+  assert.equal(report.promptVersion, "cu26-report-v3");
   // Every work contributes its order and assignment reference, in agenda order.
   assert.deepEqual(report.references.map(reference => reference.id),
     AGENDA.flatMap(item => [item.orderId, item.assignmentId]));
@@ -201,4 +201,38 @@ test("the claim patterns and the binding checker reject a swapped indicator on t
   const swapped = verifyClaimBinding("Se registraron 5 trabajos en el período.", patterns);
   assert.equal(swapped.ok, false);
   assert.match(swapped.problems.join("|"), /figure_bound_to_wrong_indicator:5/);
+});
+
+test("a paragraph that names no computed figure is not published as the narrative", async () => {
+  // Prose without a single computed figure can be true and still acredita nothing: the deterministic
+  // text, which cites the figures, is published instead.
+  const report = await build(stubLlm("El taller tuvo una semana tranquila, sin incidencias relevantes en el periodo analizado por el equipo."), {});
+  assert.equal(report.narrative.path, "deterministic");
+  assert.equal(report.narrative.generative, false);
+  assert.ok(report.limitations.includes("narrative_rejected_missing_total"));
+});
+
+test("the verb form of a failed evidence count binds to its own indicator", () => {
+  const figures = {totalWorks: 2, byStatus: {in_progress: 1, pending_verification: 1}, advances: 32,
+    evidence: {pending: 1, available: 20, failed: 4}, perWork: [], complete: true,
+    executionsConsulted: 2, executionsFailed: 0};
+  const patterns = claimPatterns(figures, PERIOD);
+  const binding = verifyClaimBinding(
+    "Se registraron 2 trabajos, con 20 evidencias disponibles, 1 evidencia pendiente y 4 evidencias fallaron en 32 avances.",
+    patterns);
+  assert.equal(binding.ok, true, binding.problems.join("|"));
+  assert.ok(binding.indicators.includes("evidence.failed"));
+});
+
+test("the verb form of consulting executions binds the consulted count", () => {
+  const figures = {totalWorks: 2, byStatus: {in_progress: 1, pending_verification: 1}, advances: 32,
+    evidence: {pending: 1, available: 20, failed: 4}, perWork: [], complete: true,
+    executionsConsulted: 2, executionsFailed: 0};
+  const patterns = claimPatterns(figures, PERIOD);
+  // The paragraph a real model produced, verb included: the count must not stay unbound.
+  const binding = verifyClaimBinding(
+    "En el periodo se registraron 2 trabajos programados y 1 evidencia permaneció pendiente, mientras que 4 fallaron. Además, se consultaron 2 ejecuciones sin errores.",
+    patterns);
+  assert.equal(binding.ok, true, binding.problems.join("|"));
+  assert.ok(binding.indicators.includes("executions.consulted"));
 });
