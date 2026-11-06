@@ -24,7 +24,15 @@ public final class ReviewEventPublisher {
 
     static final int MAX_ATTEMPTS = 10;
     static final Duration LEASE = Duration.ofSeconds(30);
-    static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
+    /**
+     * Budget for the whole delivery exchange. The receiver is n8n running the workflow's Code nodes in
+     * task runners: a warm execution answers in ~0.9 s, but the first execution after the runner went
+     * idle costs ~7 s (measured 2026-11-06, see docs/evidence/cu28-20261106.md), so the 5 s budget in
+     * use before turned every cold delivery into a false CU28_WEBHOOK_UNAVAILABLE and exhausted the row.
+     */
+    static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    static final Duration MIN_REQUEST_TIMEOUT = Duration.ofSeconds(2);
+    static final Duration MAX_REQUEST_TIMEOUT = Duration.ofSeconds(60);
     private static final long BASE_DELAY_MILLIS = 1000;
     private static final long MAX_DELAY_MILLIS = 10000;
 
@@ -32,19 +40,41 @@ public final class ReviewEventPublisher {
     private final TransactionTemplate tx;
     private final String webhookUrl;
     private final String secret;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    private final Duration requestTimeout;
+    /**
+     * HTTP/1.1 is pinned because the receiver accepts the cleartext HTTP/2 upgrade of the JDK client
+     * and never answers it: the same request measured from this container hung until the client
+     * timeout with the default version and answered in ~1-3 s with HTTP/1.1 (2026-11-06). The whole
+     * exchange is a single small POST, so nothing is lost by not negotiating HTTP/2.
+     */
+    final HttpClient http = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(Duration.ofSeconds(2))
+            .build();
 
     public ReviewEventPublisher(JdbcClient db, TransactionTemplate tx, String webhookUrl, String secret) {
+        this(db, tx, webhookUrl, secret, REQUEST_TIMEOUT);
+    }
+
+    /** A shorter budget hides a slow receiver behind false unavailability; a longer one hides a dead one. */
+    public ReviewEventPublisher(JdbcClient db, TransactionTemplate tx, String webhookUrl, String secret,
+            Duration requestTimeout) {
         if (secret == null || secret.isBlank()) throw new IllegalStateException("CU28_WEBHOOK_SECRET must be configured and non-empty");
         URI uri = URI.create(webhookUrl);
         if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) || uri.getHost() == null
                 || uri.getRawUserInfo() != null || uri.getRawFragment() != null) {
             throw new IllegalStateException("Invalid configuration: CU28_WEBHOOK_URL");
         }
+        if (requestTimeout == null || requestTimeout.compareTo(MIN_REQUEST_TIMEOUT) < 0
+                || requestTimeout.compareTo(MAX_REQUEST_TIMEOUT) > 0) {
+            throw new IllegalStateException("Invalid configuration: CU28_WEBHOOK_TIMEOUT_SECONDS must be between "
+                    + MIN_REQUEST_TIMEOUT.toSeconds() + " and " + MAX_REQUEST_TIMEOUT.toSeconds());
+        }
         this.db = db;
         this.tx = tx;
         this.webhookUrl = webhookUrl;
         this.secret = secret;
+        this.requestTimeout = requestTimeout;
     }
 
     /** Never throws: a deferred delivery is retried, never turned into a business failure. */
@@ -87,11 +117,11 @@ public final class ReviewEventPublisher {
         });
     }
 
-    private Outcome send(String payload) {
+    Outcome send(String payload) {
         HttpRequest request;
         try {
             request = HttpRequest.newBuilder(URI.create(webhookUrl))
-                    .timeout(REQUEST_TIMEOUT)
+                    .timeout(requestTimeout)
                     .header("content-type", "application/json")
                     .header("x-autonexus-secret", secret)
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
@@ -144,5 +174,5 @@ public final class ReviewEventPublisher {
 
     private record Claim(UUID eventId, String payload, int attempts, UUID owner) {}
 
-    private record Outcome(boolean delivered, String errorCode) {}
+    record Outcome(boolean delivered, String errorCode) {}
 }

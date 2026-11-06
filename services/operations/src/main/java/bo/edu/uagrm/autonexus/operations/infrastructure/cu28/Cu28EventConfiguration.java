@@ -22,8 +22,10 @@ public class Cu28EventConfiguration {
     @Bean
     ReviewEventPublisher reviewEventPublisher(JdbcClient db, TransactionTemplate tx,
             @Value("${CU28_WEBHOOK_URL}") String webhookUrl,
-            @Value("${CU28_WEBHOOK_SECRET:}") String webhookSecret) {
-        return new ReviewEventPublisher(db, tx, webhookUrl, webhookSecret);
+            @Value("${CU28_WEBHOOK_SECRET:}") String webhookSecret,
+            @Value("${CU28_WEBHOOK_TIMEOUT_SECONDS:15}") int webhookTimeoutSeconds) {
+        return new ReviewEventPublisher(db, tx, webhookUrl, webhookSecret,
+                java.time.Duration.ofSeconds(webhookTimeoutSeconds));
     }
 
     @Bean

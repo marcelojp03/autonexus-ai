@@ -14,21 +14,21 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -360,
+        -600,
         300
       ],
       "webhookId": "3e5c1d90-7a1f-4b25-9c31-0b6f7a2d4e10"
     },
     {
       "parameters": {
-        "jsCode": "// The shared secret authenticates the webhook. It is read from the container environment and is\n// never printed, echoed downstream or stored in the execution data.\nconst expected = $env.CU28_WEBHOOK_SECRET ?? '';\nconst headers = $json.headers ?? {};\nconst provided = String(headers['x-autonexus-secret'] ?? '');\nconst body = $json.body && typeof $json.body === 'object' ? $json.body : {};\nconst authorized = expected.length >= 16 && provided.length === expected.length && provided === expected;\nreturn [{\n  json: {\n    authorized,\n    eventId: typeof body.eventId === 'string' ? body.eventId : '',\n    eventType: typeof body.eventType === 'string' ? body.eventType : '',\n    envelope: body\n  }\n}];"
+        "jsCode": "// The shared secret authenticates the webhook. It is read from the container environment\n// (N8N_BLOCK_ENV_ACCESS_IN_NODE=false is required in n8n 2.x) and is never printed, echoed\n// downstream or stored in the execution data: only the verdict leaves this node.\nconst expected = String($env.CU28_WEBHOOK_SECRET ?? '');\nconst headers = $json.headers ?? {};\nconst provided = String(headers['x-autonexus-secret'] ?? '');\nconst body = $json.body && typeof $json.body === 'object' ? $json.body : {};\nconst authorized = expected.length >= 16 && provided.length === expected.length && provided === expected;\nreturn [{\n  json: {\n    authorized,\n    eventId: typeof body.eventId === 'string' ? body.eventId : '',\n    eventType: typeof body.eventType === 'string' ? body.eventType : '',\n    envelope: body\n  }\n}];"
       },
       "id": "a1b2c3d4-0002-4a02-8a02-222222222222",
       "name": "Autenticar y sanear",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -120,
+        -360,
         300
       ]
     },
@@ -62,24 +62,72 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        120,
+        -120,
         300
       ]
     },
     {
       "parameters": {
-        "operation": "removeItemsSeenInPreviousExecutions",
-        "logic": "removeItemsWithAlreadySeenKeyValues",
-        "dedupeValue": "={{ $json.eventId }}",
-        "options": {}
+        "jsCode": "// Delivered eventIds live in the workflow static data. This node only reads that state and always\n// emits exactly one item, so the webhook answers even when the delivery is a duplicate: n8n's\n// Remove Duplicates node drops the item instead and, in responseMode responseNode, the publisher\n// would wait for a response that never comes.\nconst record = $getWorkflowStaticData('global');\nconst delivered = record.delivered && typeof record.delivered === 'object' ? record.delivered : {};\nconst eventId = String($json.eventId ?? '');\nconst duplicate = eventId.length > 0 && Object.prototype.hasOwnProperty.call(delivered, eventId);\nreturn [{ json: { eventId, duplicate, alreadyDeliveredAt: duplicate ? delivered[eventId] : null, envelope: $json.envelope } }];"
       },
       "id": "a1b2c3d4-0004-4a04-8a04-444444444444",
-      "name": "Deduplicar por eventId",
-      "type": "n8n-nodes-base.removeDuplicates",
+      "name": "¿Ya entregado? (estado duradero)",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        200
+        140,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0002-4000-8000-000000000002",
+              "leftValue": "={{ $json.duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-4a05-8a05-555555555555",
+      "name": "¿Duplicado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'duplicate', eventId: $json.eventId, deliveredAt: $json.alreadyDeliveredAt }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1b2c3d4-0006-4a06-8a06-666666666666",
+      "name": "Duplicado ya entregado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        80
       ]
     },
     {
@@ -103,31 +151,44 @@
           }
         }
       },
-      "id": "a1b2c3d4-0005-4a05-8a05-555555555555",
+      "id": "a1b2c3d4-0007-4a07-8a07-777777777777",
       "name": "Canal local de prueba",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        640,
-        160
+        680,
+        320
       ],
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {
+        "jsCode": "// The eventId is remembered only after the channel accepted it, so a failed delivery is retried\n// instead of being answered as an already delivered duplicate. The map is capped to the last 500\n// ids so the workflow state cannot grow without limit.\nconst record = $getWorkflowStaticData('global');\nconst delivered = record.delivered && typeof record.delivered === 'object' ? record.delivered : {};\nconst eventId = String($('¿Ya entregado? (estado duradero)').first().json.eventId ?? '');\nif (eventId.length > 0) delivered[eventId] = new Date().toISOString();\nconst ids = Object.keys(delivered);\nif (ids.length > 500) {\n  ids.sort((a, b) => String(delivered[a]).localeCompare(String(delivered[b])));\n  for (const stale of ids.slice(0, ids.length - 500)) delete delivered[stale];\n}\nrecord.delivered = delivered;\nreturn [{ json: { eventId, recorded: true, remembered: Object.keys(delivered).length } }];"
+      },
+      "id": "a1b2c3d4-0008-4a08-8a08-888888888888",
+      "name": "Recordar entrega",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        320
+      ]
+    },
+    {
+      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ accepted: true, eventId: $('Deduplicar por eventId').first().json.eventId }) }}",
+        "responseBody": "={{ JSON.stringify({ status: 'recorded', eventId: $json.eventId }) }}",
         "options": {
           "responseCode": 202
         }
       },
-      "id": "a1b2c3d4-0006-4a06-8a06-666666666666",
+      "id": "a1b2c3d4-0009-4a09-8a09-999999999999",
       "name": "Aceptado en el canal",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        900,
-        80
+        1200,
+        320
       ]
     },
     {
@@ -138,13 +199,13 @@
           "responseCode": 502
         }
       },
-      "id": "a1b2c3d4-0007-4a07-8a07-777777777777",
+      "id": "a1b2c3d4-0010-4a10-8a10-aaaaaaaaaaaa",
       "name": "Canal no disponible",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        900,
-        260
+        940,
+        560
       ]
     },
     {
@@ -155,13 +216,13 @@
           "responseCode": 401
         }
       },
-      "id": "a1b2c3d4-0008-4a08-8a08-888888888888",
+      "id": "a1b2c3d4-0011-4a11-8a11-bbbbbbbbbbbb",
       "name": "No autorizado",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        380,
-        460
+        140,
+        480
       ]
     }
   ],
@@ -192,7 +253,7 @@
       "main": [
         [
           {
-            "node": "Deduplicar por eventId",
+            "node": "¿Ya entregado? (estado duradero)",
             "type": "main",
             "index": 0
           }
@@ -206,8 +267,26 @@
         ]
       ]
     },
-    "Deduplicar por eventId": {
+    "¿Ya entregado? (estado duradero)": {
       "main": [
+        [
+          {
+            "node": "¿Duplicado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Duplicado?": {
+      "main": [
+        [
+          {
+            "node": "Duplicado ya entregado",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Canal local de prueba",
@@ -221,7 +300,7 @@
       "main": [
         [
           {
-            "node": "Aceptado en el canal",
+            "node": "Recordar entrega",
             "type": "main",
             "index": 0
           }
@@ -229,6 +308,17 @@
         [
           {
             "node": "Canal no disponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recordar entrega": {
+      "main": [
+        [
+          {
+            "node": "Aceptado en el canal",
             "type": "main",
             "index": 0
           }

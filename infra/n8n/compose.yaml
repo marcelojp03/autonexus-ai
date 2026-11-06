@@ -27,6 +27,9 @@ services:
       # CU28: the review event webhook authenticates the shared secret from this environment; an
       # empty value makes an imported workflow reject every delivery instead of accepting it.
       CU28_WEBHOOK_SECRET: "${CU28_WEBHOOK_SECRET:-}"
+      # n8n 2.x denies $env inside Code nodes by default, so the workflow could not read the secret
+      # above; the only secret exposed here is the one this flow already needs.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       N8N_RUNNERS_ENABLED: "true"
     # The workflow reaches Operations by service name on the project network.
     networks: ["autonexus"]
