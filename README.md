@@ -31,6 +31,8 @@ Cliente y vehículo → Recepción → Orden → Cotización y aprobación
 - Confirmar el servicio mediante una Saga que coordina Operaciones, Empleados y Finanzas.
 - Consultar la agenda propia o del equipo y el detalle autorizado de trabajos globalmente confirmados, en línea.
 - Iniciar y documentar la ejecución de un trabajo asignado, registrar avances y solicitar evidencias. La carga y descarga de archivos requiere configurar AWS S3 privado; sin esa configuración no se presentan como disponibles.
+- Preguntar al asistente interno con el propio acceso: responde combinando consultas autorizadas y devuelve fuentes, procedencia y límites declarados. Un modelo local (Ollama) redacta; si no responde o no cita las cifras calculadas, la respuesta lo declara en lugar de inventar datos.
+- Generar el reporte narrativo de un período: las cifras las calcula el servidor de forma determinista y la narración sólo las redacta, con afirmaciones ligadas a su indicador, período y fuente, sin datos financieros. El reporte se produce como trabajo con identificador estable —recargar la página no inicia otra generación— y se puede exportar en JSON y CSV.
 
 Una cotización aprobada no es todavía un servicio confirmado. La coordinación conserva sus pasos y se recupera ante interrupciones; las asignaciones provisionales no se muestran como trabajos confirmados.
 
@@ -74,7 +76,11 @@ La propuesta para llevar el sistema a proveedores administrados está en [prepar
 
 La agenda web, ejecución/finalización y sincronización offline cuentan con evidencia funcional por caso de uso. CU27 verificó PWA y Android físico: preparación sin red, fotos/inferencia local, recuperación de respuestas perdidas sin duplicación y rechazo por permiso conservando evidencia; ver [resultados y límites](docs/evidence/cu27-20261105.md). La comparación visual está diferida.
 
-El modelo visual continúa experimental/no validado: ejecutarlo localmente no acredita calidad diagnóstica ni permiso de redistribución de sus artefactos. MCP de consulta y n8n sobre órdenes, agenda y avances son el siguiente bloque; no dependen de cobros ni indicadores. La lectura humana de notificaciones y otros recorridos no se declaran terminados por estas pruebas.
+El asistente y el reporte narrativo (CU25/CU26) están **parciales y publicados**: pregunta con modelo local, aclaración, denegación por permiso, reporte con trabajo asíncrono y exportación, verificados en el navegador real; ver [evidencia y límites](docs/evidence/cu25-cu26-shell-20261106.md). El asistente es todavía un proceso local en *loopback*, no un componente desplegado, y no se declara calidad del modelo.
+
+CU28 verificó **un** flujo por evento real —solicitud de revisión de CU17 hasta el canal local, con reentrega, fallo, recuperación y agotamiento de reintentos—; los otros cuatro flujos acordados siguen pendientes, igual que la programación con identidad técnica y los avisos externos. MCP de consulta (CU29) está integrado contra las APIs reales; CU30/CU31 quedan después.
+
+El modelo visual continúa experimental/no validado: ejecutarlo localmente no acredita calidad diagnóstica ni permiso de redistribución de sus artefactos. La lectura humana de notificaciones y otros recorridos no se declaran terminados por estas pruebas.
 
 ## Documentación
 

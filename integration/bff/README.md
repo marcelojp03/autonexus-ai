@@ -1,5 +1,30 @@
 # BFF
 
+## CU25/CU26 — asistente y reporte narrativo
+
+`contracts/graphql/assistant.graphql` publica cuatro campos raíz. `assistantAnswer(query)` no declara
+permiso de módulo: el catálogo cerrado no tiene uno para el asistente y el servicio cierra sus
+herramientas con el mismo token del usuario, de modo que la denegación ocurre dentro de la respuesta.
+`operationsReport(from,to)`, `startOperationsReport(from,to,operationId)` y `operationsReportJob(jobId)`
+sí exigen `executions:read:team`, porque sus cifras son del taller completo.
+
+El gateway `HttpAssistantGateway` reenvía el bearer humano —nunca una identidad técnica ni el refresh
+token, que no recibe— y proyecta el documento campo por campo: `perWork` → `works`, `byStatus` objeto →
+lista ordenada, `narrative.text` → `narrative`, `narrative.path` → `narrativePath`. Falla cerrado si el
+propietario omite una cifra (`figures.totalWorks` o cualquier otra): no publica un 0 en lugar de un dato
+ausente, y rechaza un total que no coincida con la suma de `byStatus` y con `perWork`. Tampoco publica un
+mensaje del propietario: cada `failureCode` del trabajo se traduce a un texto escrito por este BFF.
+
+Presupuestos: 120 s para el turno del asistente y 15 s para crear el trabajo y para leer su estado, que
+son lecturas cortas por diseño. El trabajo es un autómata: `QUEUED`/`RUNNING` no traen documento ni
+código, `SUCCEEDED` trae el documento, y `FAILED`/`INTERRUPTED` traen código y mensaje. Un estado que
+contradice sus propios campos se rechaza.
+
+Verificación: 196 pruebas unitarias y de contrato y `typecheck` conforme, incluidas las del job. La
+cadena real (nginx → BFF → servicio del asistente → Operaciones) se ejerció con token de usuario: reporte
+`SUCCEEDED` con 8 afirmaciones y 0 violaciones del contrato. Evidencia en
+`docs/evidence/cu25-cu26-shell-20261106.md` desde la raíz.
+
 ## CU27 — puente de sincronización del Shell
 
 El SDL sync.graphql compone los cuatro campos registerOfflineSync, pushOfflineSync,
@@ -67,7 +92,7 @@ Variables admitidas (todas con default local; no hay secretos):
 
 ## Superficie
 
-`POST /graphql` con `{query, variables?, operationName?}` y `Authorization: Bearer`. Campos raíz permitidos: `employees`, `employee`, `employeeHistory`, `createEmployee`, `updateEmployee`, `deactivateEmployee`, `retryEmployeeAccess`. Una operación por petición; sin introspección ni fragmentos nombrados; profundidad máxima 6; 120 selecciones; consulta de hasta 4000 caracteres y variables de hasta 64 KB.
+`POST /graphql` con `{query, variables?, operationName?}` y `Authorization: Bearer`. Los campos raíz publicados son los de los SDL de `contracts/graphql` — empleados, horarios, seguridad, agenda, operaciones, finanzas, confirmaciones, inteligencia, sincronización y asistente —; esta sección histórica solo enumeraba los de empleados. Una operación por petición; sin introspección ni fragmentos nombrados; profundidad máxima 6; 120 selecciones; consulta de hasta 4000 caracteres y variables de hasta 64 KB.
 
 `GET /health/live` responde `{status:'UP'}` siempre; `GET /health/ready` comprueba alcanzabilidad de Empleados y devuelve 503 `DOWN` si no responde.
 

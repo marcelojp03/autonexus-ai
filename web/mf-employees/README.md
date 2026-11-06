@@ -1,5 +1,29 @@
 # MF01 Empleados
 
+## CU25/CU26 — asistente y reporte narrativo (`/employees/assistant`)
+
+Ruta `assistant` montada por el Shell con `sessionGuard`. Dos paneles sobre `SessionPort.requestBusiness`,
+sin token en el componente: pregunta al asistente y reporte del período. Cada respuesta viaja con sus
+fuentes, procedencia y límites; una cifra que el propietario no publicó se muestra como «sin dato», nunca
+como 0.
+
+El reporte se genera como **trabajo**: la página crea el trabajo con un `operationId` propio, guarda el
+`jobId` en `sessionStorage` y consulta su estado cada 2 s. Recargar retoma ese identificador —aviso «Se
+retomó el reporte que ya estaba en curso»— en lugar de pedir otra generación, y el reintento de una
+creación fallida reutiliza el mismo `operationId`. Estados visibles: en cola, generando con segundos
+transcurridos, listo, falló e interrumpido; un fallo muestra el mensaje saneado del BFF y ofrece volver a
+intentar, y sólo un trabajo terminado sin documento pide un `operationId` nuevo.
+
+La narración se rotula según `narrativePath`: «Modelo qwen3.5:4b» si la escribió el modelo o «Plantilla
+determinista» si la escribió la plantilla, para que una plantilla no se lea como generación. El documento
+se exporta en JSON y las afirmaciones en CSV (`indicador, etiqueta, valor, unidad, desde, hasta, fuente,
+herramienta`), construidos desde el documento devuelto.
+
+Verificación: 49 pruebas del microfrontend y `tsc` conforme; los siete escenarios (pregunta combinada,
+aclaración, denegación, recarga sin duplicar, renovación de sesión, narración del modelo y reserva
+determinista) se ejercieron en el navegador real sobre la cadena completa. Evidencia en
+`docs/evidence/cu25-cu26-shell-20261106.md` desde la raíz.
+
 CU03 dispone de backend propietario y contratos en feat/cu03-employees, pero el BFF del participante2 todavía no está generado. Por eso estas vistas conservan NG-ALAIN y sus demos: no son CRUD empresarial ni integración CU03 web. No se agregó conexión directa a REST empresarial. Consultar contracts/graphql/employees.graphql y contracts/auth/employees.md desde raíz para la integración futura.
 
 ## Runtime vigente de CU01 integrado

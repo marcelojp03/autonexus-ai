@@ -1,12 +1,18 @@
 # Cierre y continuidad de sesión
 
-Traspaso vigente: [CU28 evento + asistente/reportes asíncronos](../handoffs/2026-11-06-cu28-event-and-async-jobs.md). Orden de trabajo fijado por el usuario; CU25/CU26/CU28 siguen parciales.`n`nTraspaso CU29 — MCP de consulta verificado; n8n importado sin ejecutar](../handoffs/2026-11-05-cu29-mcp-consultation.md). Siguiente pendiente real: consentimiento OAuth2 y ejecución del flujo n8n; CU28/CU31 incompletos.`n`nTraspaso CU27: [CU27 — aceptación funcional completa y publicada; siguiente MCP/n8n](../handoffs/2026-11-05-cu27-functional-continuation.md). Runtime canónico 4286; conservar perfil/cola/fotos. Entrega9b60f98 revisada, integrada y publicada en ambas ramas. Los traspasos siguientes son históricos.
+Traspaso vigente: [CU25/CU26 como reporte asíncrono, contrato conciliado y verificación en el Shell](../handoffs/2026-11-06-cu25-cu26-async-report.md). HEAD `73faf56` publicado en `main` y `work/marcelo`; CU25/CU26 siguen parciales y CU30/CU31 quedan después.
+
+Traspaso CU28 evento: [CU28 evento + asistente/reportes asíncronos](../handoffs/2026-11-06-cu28-event-and-async-jobs.md). Orden de trabajo fijado por el usuario; CU25/CU26/CU28 siguen parciales.
+
+Traspaso CU29: [MCP de consulta verificado; n8n importado sin ejecutar](../handoffs/2026-11-05-cu29-mcp-consultation.md). CU28/CU31 incompletos.
+
+Traspaso CU27: [CU27 — aceptación funcional completa y publicada; siguiente MCP/n8n](../handoffs/2026-11-05-cu27-functional-continuation.md). Runtime canónico 4286; conservar perfil/cola/fotos. Entrega `9b60f98` revisada, integrada y publicada en ambas ramas. Los traspasos siguientes son históricos.
 
 Traspaso de infraestructura: [Docker Compose local — verificado y revisado](../handoffs/2026-10-29-local-compose.md). T25 tiene aceptación funcional/revisión completas y cierre Git registrado en STATUS al ejecutarse; CU05 G2 visual sigue bloqueado por separado.
 
 Traspaso de CU05: [F1/G1 corregidos, revisión visual pendiente](../handoffs/2026-10-29-cu05-review.md). CU05 no se declara cerrado; continúa pendiente la revisión visual (G2) hasta contar con un canal de píxeles reales.
 
-Traspaso más reciente: [CU23 — análisis visual del servidor entregado](../handoffs/2026-11-01-cu23-visual-intelligence.md). Modelo real, MongoDB, BFF, microfrontend y verificación API/navegador; la conversión web (TFJS) queda para CU22.
+Traspaso más reciente de CU23: [CU23 — análisis visual del servidor entregado](../handoffs/2026-11-01-cu23-visual-intelligence.md). Modelo real, MongoDB, BFF, microfrontend y verificación API/navegador; la conversión web (TFJS) queda para CU22.
 Traspaso anterior: [CU16 — ejecución y evidencias cerradas contra AWS S3 real](../handoffs/2026-10-30-cu16-close.md).
 Traspaso anterior: [CU15 — Saga de confirmación entregada y publicada](../handoffs/2026-10-28-cu15-confirmation-saga.md).
 Traspaso anterior: [T21 — React, recepción, órdenes y cotizaciones](../handoffs/2026-10-28-t21-react-finance.md).
