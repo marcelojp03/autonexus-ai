@@ -79,3 +79,4 @@ services/sync/*.tsbuildinfo
 
 # CU27 self-hosted generated runtime/model; sources remain in the preparation script.
 /web/shell/public/offline-model/
+/integration/agent/output/
