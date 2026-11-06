@@ -11,7 +11,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.AUTONEXUS_OPERATIONS_URL }}/orders",
+        "url": "http://operations:8081/orders",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "sendQuery": true,
@@ -32,14 +32,14 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.AUTONEXUS_OPERATIONS_URL }}/agenda/team",
+        "url": "http://operations:8081/agenda/team",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "from", "value": "={{ $now.minus({ days: 6 }).toFormat('yyyy-MM-dd') }}" },
-            { "name": "to", "value": "={{ $now.toFormat('yyyy-MM-dd') }}" },
+            { "name": "from", "value": "={{ $now.toFormat('yyyy-MM-dd') }}" },
+            { "name": "to", "value": "={{ $now.plus({ days: 6 }).toFormat('yyyy-MM-dd') }}" },
             { "name": "limit", "value": "50" }
           ]
         },

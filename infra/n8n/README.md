@@ -23,6 +23,22 @@ docker exec cu16-proof-n8n-1 n8n import:workflow --input=/tmp/wf.json
 docker exec cu16-proof-n8n-1 n8n list:workflow
 ```
 
+## Ejecución real observada (2026-11-06)
+
+El consentimiento OAuth2 se completó con la cuenta sintética `chief` usando
+`scripts/n8n/consent.mjs`, que valida cliente, redirección, `state` e `iss` antes de canjear el
+código. La credencial quedó cifrada por n8n en su volumen; el archivo privado con tokens vive en
+`output/mcp-read/fixture/` y no se versiona.
+
+`E8ystehdinzop4fl` se ejecutó por CLI en un contenedor aislado sobre la red `cu16-proof_default`
+(`--entrypoint n8n … execute --id=… --rawOutput`, con `N8N_RUNNERS_ENABLED=false` para no chocar
+con el broker del proceso principal): dos corridas `success` con resumen idéntico (2 órdenes
+`confirmed`, 2 trabajos `in_progress`), sin duplicados. La variante con intervalo invertido terminó
+en `error` con HTTP 400 del propietario y sin resumen. El token delegado se renovó por
+`refresh_token` después de vencer el access token inicial.
+
+Detalle y requisitos pendientes: `docs/evidence/cu28-20261106.md`.
+
 ## Pendiente para ejecutar
 
 La credencial OAuth2 del cliente confidencial `autonexus-n8n-reader` exige un primer

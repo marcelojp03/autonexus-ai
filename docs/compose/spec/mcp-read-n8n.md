@@ -86,7 +86,7 @@ despliegue cloud y cambios a autorización propietaria. No implica completar tod
 
 - [x] T1: Contratos cerrados de consulta/identidad/proyección — acceptance: rutas/permisos/scopes/errores y límites publicados (covers: S2.2,S2.3,S2.4).
 - [x] T2: Proceso MCP independiente con SDK oficial y GETs de propietario — acceptance: build/tests y cliente MCP descubre/invoca herramientas autorizadas (covers: S2.1,S2.2,S2.3).
-- [ ] T3: n8n manual sin secretos ni dependencia MCP — acceptance: ejecución real consulta registros existentes y conserva resultado, con MCP detenido (covers: S2.4).
+- [x] T3: n8n manual sin secretos ni dependencia MCP — acceptance: ejecución real consulta registros existentes y conserva resultado, con MCP detenido (covers: S2.4).
 - [x] T4: Negativos reales/auditoría/revisión/documentación — acceptance: denegaciones y proyección observadas, secretos ausentes, revisión focalizada y evidencia distinguen creado/compilado/integrado/probado (covers: S2.5).
 ## Journey log
 

@@ -1,5 +1,12 @@
 # Estado comprobado
 
+## CU28 — recorrido n8n real con identidad delegada; automatización pendiente (2026-11-06)
+
+Sobre `43a1231`. Consentimiento OAuth2 completado con la cuenta sintética `chief` tras verificar cliente (`autonexus-n8n-reader`), redirección exacta a n8n y scopes antes de aceptar: token con `azp` del cliente, audiencias de Operaciones/Empleados, rol `mcp_read_team` y ningún rol administrativo. No se usó cuenta personal.
+
+`E8ystehdinzop4fl` se ejecutó de verdad contra Operaciones en un contenedor aislado sobre la red del proyecto: **dos corridas exitosas** con resumen idéntico (período 2026-11-05→2026-11-11 `America/La_Paz`, 2 órdenes `confirmed`, 2 trabajos `in_progress` con IDs únicos), sin duplicados ni escrituras. Una variante con intervalo invertido terminó en **error** con HTTP 400 del propietario y **sin** resumen: falla cerrada. El access token del consentimiento venció a las `00:01:52Z` y ambas corridas son posteriores, así que n8n renovó con `refresh_token` + `client_secret`.
+
+Estado de CU28: **parcial**. Cumplidos: flujo de lectura con credencial limitada, ejecución con resultado registrado, ausencia de efectos que revertir. **Pendientes exactos**: los otros cuatro flujos (recordatorio de cita, orden finalizada, asignación de mecánico, cotización pendiente), publicación Outbox→webhook n8n, deduplicación por `eventId`, canal de prueba para avisos, programación con identidad técnica (los contratos exigen empleado activo vinculado) y resumen semanal vía agente CU26. El refresh delegado funciona más allá del access token, pero depende de la sesión SSO del usuario: **no** se declara ejecución autónoma. Detalle en `docs/evidence/cu28-20261106.md`.
 ## CU29 — MCP de consulta integrado contra APIs reales; n8n importado sin ejecutar (2026-11-05)
 
 Incremento sobre `8bb0ca9`. Proceso MCP independiente en TypeScript con SDK oficial v2 (`server`/`client` 2.4.0, `node` 2.1.2, `express` 2.0.2), Express 5.2.1, Zod 4.6.7, jose 6.2.13 y TS 6.0.3 sobre Node 22.22.3. Solo seis consultas GET de órdenes, agenda y avances; sin base de negocio ni escrituras CU30.
