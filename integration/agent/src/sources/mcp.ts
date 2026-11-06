@@ -45,8 +45,10 @@ export async function connectMcp(account: "chief" | "mechanicA"): Promise<ToolSo
         }
         return {ok: true, data: structured ?? null};
       } catch (error) {
+        const name = (error as {name?: string}).name ?? "";
         const required = (error as {requiredScope?: string}).requiredScope;
-        return {ok: false, error: required ? {code: "INSUFFICIENT_SCOPE", status: 403} : {code: "TOOL_CALL_FAILED"}};
+        const denied = required !== undefined || name === "InsufficientScopeError" || /insufficient_scope/i.test(String((error as Error).message ?? ""));
+        return {ok: false, error: denied ? {code: "INSUFFICIENT_SCOPE", status: 403} : {code: "TOOL_CALL_FAILED"}};
       }
     },
     async close() { await client.close(); },

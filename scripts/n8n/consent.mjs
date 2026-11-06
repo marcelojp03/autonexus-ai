@@ -77,6 +77,7 @@ const claims = JSON.parse(Buffer.from(tokens.access_token.split(".")[1], "base64
 ensure(claims.iss === ISSUER && claims.azp === CLIENT_ID, "TOKEN_IDENTITY_MISMATCH");
 for (const audience of ["autonexus-operations-api", "autonexus-employees-api"]) ensure(claims.aud.includes(audience), "TOKEN_AUDIENCE_MISSING");
 ensure((claims.realm_access?.roles ?? []).includes("mcp_read_team"), "READ_ROLE_MISSING");
+ensure(String(claims.scope ?? "").split(" ").includes("n8n:api:read"), "GRANTED_SCOPE_MISMATCH");
 ensure(!(claims.realm_access?.roles ?? []).includes("administrador"), "PRIVILEGED_ROLE_PRESENT");
 ensure(typeof tokens.refresh_token === "string", "REFRESH_TOKEN_MISSING");
 

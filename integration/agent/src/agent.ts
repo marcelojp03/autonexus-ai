@@ -6,6 +6,7 @@
  * the planner never derives new capabilities, never writes, and never follows instructions
  * embedded in payloads. Every refusal or answer states which source produced the data.
  */
+import {createHash} from "node:crypto";
 import {connectMcp, type ToolSource} from "./sources/mcp.js";
 import {createRestSource} from "./sources/rest.js";
 import {plan} from "./planner.js";
@@ -43,6 +44,11 @@ function auditPath(): string {
   return file;
 }
 
+/** Queries are free text and may carry personal data: only a digest and length are stored. */
+function queryDigest(query: string): {querySha256: string; queryLength: number} {
+  return {querySha256: createHash("sha256").update(query).digest("hex"), queryLength: query.length};
+}
+
 function audit(entry: Record<string, unknown>): void {
   writeFileSync(auditPath(), JSON.stringify({at: new Date().toISOString(), ...entry}) + String.fromCharCode(10), {encoding: "utf8", flag: "a", mode: 0o600});
 }
@@ -51,7 +57,7 @@ export async function assist(options: AssistOptions): Promise<Answer> {
   const started = Date.now();
   const clearance = plan({query: options.query, tools: [], phase: "safety"});
   if (clearance.kind === "refuse") {
-    audit({query: options.query, account: options.account, outcome: "REFUSED", reason: clearance.reason});
+    audit({...queryDigest(options.query), account: options.account, outcome: "REFUSED", reason: clearance.reason});
     return {query: options.query, source: null, refused: {reason: clearance.reason}, tools: [], text: clearance.message};
   }
 
@@ -62,19 +68,19 @@ export async function assist(options: AssistOptions): Promise<Answer> {
     const tools = await active.listTools();
     const decision = plan({query: options.query, tools: tools.map(t => t.name), phase: "intent", ...(options.assignmentId ? {assignmentId: options.assignmentId} : {})});
     if (decision.kind === "refuse") {
-      audit({query: options.query, account: options.account, source: options.source, outcome: "REFUSED", reason: decision.reason});
+      audit({...queryDigest(options.query), account: options.account, source: options.source, outcome: "REFUSED", reason: decision.reason});
       return {query: options.query, source: options.source, refused: {reason: decision.reason}, tools: [], text: decision.message};
     }
     if (decision.kind === "continue") throw Object.assign(new Error("UNEXPECTED_CONTINUE"), {code: "PLANNER_STATE"});
     const outcome = await active.call(decision.tool, decision.arguments);
     const result: ToolResult = {...outcome, tool: decision.tool, arguments: decision.arguments, source: options.source};
     const text = compose(result);
-    audit({query: options.query, account: options.account, source: options.source, tool: decision.tool,
+    audit({...queryDigest(options.query), account: options.account, source: options.source, tool: decision.tool,
       outcome: outcome.ok ? "OK" : outcome.error?.code ?? "ERROR", durationMs: Date.now() - started});
     return {query: options.query, source: options.source, tools: [result], text};
   } catch (error) {
     const code = (error as {code?: string}).code ?? "TOOL_SOURCE_UNAVAILABLE";
-    audit({query: options.query, account: options.account, source: options.source, outcome: code, durationMs: Date.now() - started});
+    audit({...queryDigest(options.query), account: options.account, source: options.source, outcome: code, durationMs: Date.now() - started});
     return {query: options.query, source: options.source, tools: [],
       text: "No pude consultar datos autorizados: la fuente de herramientas no está disponible (" + code + "). No invento resultados."};
   } finally {

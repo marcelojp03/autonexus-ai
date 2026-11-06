@@ -27,7 +27,7 @@ intercambiable y el planificador no conoce el transporte.
 
 Cada consulta se ejecuta con una identidad sintética delegada: MCP usa PKCE con
 `autonexus-mcp-local-reader`; el camino REST usa el cliente confidencial `autonexus-n8n-reader`. El
-catálogo de herramientas se descubre con el token real y el propietario revalida permiso y registro
+catálogo de herramientas se descubre con el token real —el catálogo REST se deriva de los roles del token— y el propietario revalida permiso y registro
 en cada llamada. El agente no reutiliza ni imprime tokens.
 
 ### [S2.3] Planificación y respuesta
@@ -45,8 +45,8 @@ lo usa para elegir otra herramienta o ampliar alcance.
 
 ### [S2.5] Auditoría
 
-Una línea por consulta con actor, fuente, herramienta, resultado y duración. Sin tokens,
-argumentos libres, cuerpos ni datos personales.
+Una línea por consulta con actor, fuente, herramienta, resultado y duración. La consulta se guarda
+como SHA-256 y longitud (es texto libre y puede contener datos personales); nunca tokens ni cuerpos.
 
 ## [S3] Out of Scope
 

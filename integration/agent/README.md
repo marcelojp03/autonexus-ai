@@ -27,8 +27,8 @@ node --test tests/planner.test.mjs
 ```
 
 Las identidades son sintéticas y provienen de los fixtures privados locales; el asistente no lee ni
-imprime tokens. La auditoría se escribe en `output/agent/audit.jsonl` (ignorada) con actor, fuente,
-herramienta, resultado y duración, sin argumentos libres ni cuerpos.
+imprime tokens. La auditoría se escribe en `output/agent/audit.jsonl` (ignorada) con actor, fuente, herramienta,
+resultado, duración y un SHA-256 de la consulta; nunca el texto de la consulta, tokens ni cuerpos.
 
 ## Límites
 
