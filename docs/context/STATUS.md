@@ -1,5 +1,12 @@
 # Estado comprobado
 
+## CU25 — asistente interno de consulta sobre CU29 y camino sin MCP (2026-11-06)
+
+Nuevo proceso `integration/agent` (TypeScript, Node 22.22.3, cliente MCP oficial 2.4.0): fuente de herramientas intercambiable — servidor MCP de CU29 (PKCE con `autonexus-mcp-local-reader`) o camino REST propio con el cliente confidencial `autonexus-n8n-reader`. Planificador **determinista** (sin LLM): pasada de seguridad, luego intención → una herramienta autorizada; ventana de agenda de 7 días `America/La_Paz`; si falta un identificador se pide, no se inventa.
+
+Recorrido real observado con Keycloak y Operaciones: agenda de equipo (2 trabajos `in_progress` con avances y evidencias), órdenes con `list_orders`, ejecución de equipo (10 de 21 avances, 8 evidencias), mecánico **rechazado** al pedir órdenes por alcance, intento de escalamiento de permisos **rechazado** con «solo lectura», ejecución inexistente como `OWNER_NOT_FOUND`, consulta de avances sin identificador rechazada. **Con MCP detenido** la misma consulta responde por REST y, si se fuerza la fuente MCP, falla cerrado sin inventar datos. Pruebas del planificador **6/6**; compilación estricta exit 0. Evidencia: `docs/evidence/cu25-20261106.md`.
+
+Límites: el asistente es de consulta y no habilita acciones por inferencia; no implementa CU30/CU31 ni reportes de CU26; el planificador no es un modelo de lenguaje; el alcance REST cubre órdenes, agenda y ejecución de equipo, y las variantes propias se ejercitan por MCP. Sin despliegue cloud.
 ## CU28 — recorrido n8n real con identidad delegada; automatización pendiente (2026-11-06)
 
 Sobre `43a1231`. Consentimiento OAuth2 completado con la cuenta sintética `chief` tras verificar cliente (`autonexus-n8n-reader`), redirección exacta a n8n y scopes antes de aceptar: token con `azp` del cliente, audiencias de Operaciones/Empleados, rol `mcp_read_team` y ningún rol administrativo. No se usó cuenta personal.
