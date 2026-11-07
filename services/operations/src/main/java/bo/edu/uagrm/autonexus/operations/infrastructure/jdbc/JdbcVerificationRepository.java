@@ -4,6 +4,7 @@ import bo.edu.uagrm.autonexus.operations.application.VerificationPorts;
 import bo.edu.uagrm.autonexus.operations.domain.Execution;
 import bo.edu.uagrm.autonexus.operations.domain.OperationsError;
 import bo.edu.uagrm.autonexus.operations.domain.Verification;
+import bo.edu.uagrm.autonexus.operations.infrastructure.cu28.OrderFinalizedEvent;
 import bo.edu.uagrm.autonexus.operations.infrastructure.cu28.ReviewRequestedEvent;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -180,6 +181,9 @@ public class JdbcVerificationRepository extends OperationsStore implements Verif
                 if (order != 1) throw persistence();
                 audit("work-order", current.orderId(), "completed", actor, current.version() + 1,
                         Map.of("status", Verification.COMPLETED, "executionId", current.id().toString()));
+                // CU28 "orden finalizada": the notice belongs to the catalogue, so its intent is committed
+                // with the same transition and delivered by the same publisher as the review request.
+                finalized(current, expectedVersion + 1, now, operationId);
             }
             review(current, approved ? "approved" : "returned", actor, reason, expectedVersion + 1, now);
             audit("work-execution", current.id(), approved ? "approved" : "returned", actor, expectedVersion + 1,
@@ -189,6 +193,22 @@ public class JdbcVerificationRepository extends OperationsStore implements Verif
         } catch (DataAccessException failure) {
             throw persistence();
         }
+    }
+
+    /**
+     * CU28 "orden finalizada". Same transaction, same Outbox and same publisher as the review request,
+     * but its own event type and id so a consumer sees two different events of the same work.
+     */
+    private void finalized(Execution execution, int executionVersion, Instant now, UUID operationId) {
+        Map<String, Object> event = OrderFinalizedEvent.envelope(execution, executionVersion, executionVersion, now, operationId);
+        jdbc.sql("""
+                INSERT INTO operations.cu28_outbox(event_id,event_type,aggregate_type,aggregate_id,
+                    aggregate_version,correlation_id,causation_id,payload,occurred_at,next_attempt_at)
+                VALUES(?,?,?,?,?,?,?,?::jsonb,?,?)
+                ON CONFLICT (event_id) DO NOTHING
+                """).params(UUID.fromString((String) event.get("eventId")), OrderFinalizedEvent.TYPE,
+                OrderFinalizedEvent.AGGREGATE_TYPE, execution.orderId(), executionVersion, execution.id(), operationId,
+                write(event), Timestamp.from(now), Timestamp.from(now)).update();
     }
 
     /**
