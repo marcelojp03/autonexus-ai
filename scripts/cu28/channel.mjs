@@ -19,6 +19,11 @@ const port = Number(process.env.CU28_CHANNEL_PORT ?? '5680');
 const host = process.env.CU28_CHANNEL_HOST ?? '127.0.0.1';
 const file = resolve(workspace, process.env.CU28_CHANNEL_FILE ?? 'output/cu28/channel.jsonl');
 const maximumBody = 64 * 1024;
+const destinations = new Set((process.env.CU28_CHANNEL_DESTINATIONS ?? 'workshop').split(','));
+if ([...destinations].some((id) => !/^[a-z0-9-]{1,64}$/.test(id))) {
+  throw new Error('CU28_CHANNEL_INVALID_DESTINATIONS');
+}
+const deliveryKey = (destinationId, eventId) => `${destinationId}:${eventId}`;
 
 mkdirSync(dirname(file), { recursive: true });
 
@@ -30,7 +35,8 @@ if (existsSync(file)) {
     if (!line.trim()) continue;
     try {
       const record = JSON.parse(line);
-      if (typeof record.eventId === 'string' && !seen.has(record.eventId)) seen.set(record.eventId, record);
+      const key = deliveryKey(record.destinationId ?? 'workshop', record.eventId);
+      if (typeof record.eventId === 'string' && !seen.has(key)) seen.set(key, record);
     } catch {
       /* A torn last line is ignored: it was never acknowledged to the workflow. */
     }
@@ -43,7 +49,8 @@ export const counts = () => {
     const key = typeof record.eventType === 'string' ? record.eventType : 'unknown';
     byEventType[key] = (byEventType[key] ?? 0) + 1;
   }
-  return { file, records: seen.size, uniqueEventIds: seen.size, duplicatesDropped, byEventType };
+  const uniqueEventIds = new Set([...seen.values()].map((record) => record.eventId)).size;
+  return { file, records: seen.size, uniqueEventIds, duplicatesDropped, byEventType };
 };
 
 const json = (response, status, body) => {
@@ -66,9 +73,16 @@ const server = createServer((request, response) => {
     log('GET', path, 200, null);
     return json(response, 200, counts());
   }
-  if (request.method !== 'POST' || path !== '/channel') {
+  const destinationMatch = new RegExp("^/destinations/([a-z0-9-]{1,64})/channel$").exec(path);
+  const destinationId = path === '/channel' ? 'workshop' : destinationMatch?.[1];
+  if (request.method !== 'POST' || !destinationId) {
     log(request.method ?? 'UNKNOWN', path, 405, null);
     return json(response, 405, { error: 'CU28_CHANNEL_METHOD_NOT_ALLOWED' });
+  }
+  if (!destinations.has(destinationId)) {
+    request.resume();
+    log('POST', path, 404, null);
+    return json(response, 404, { error: 'CU28_RECIPIENT_NOT_FOUND', destinationId });
   }
 
   const chunks = [];
@@ -94,26 +108,28 @@ const server = createServer((request, response) => {
       log('POST', path, 400, null);
       return json(response, 400, { error: 'CU28_CHANNEL_EVENT_ID_REQUIRED' });
     }
-    if (seen.has(eventId)) {
+    const key = deliveryKey(destinationId, eventId);
+    if (seen.has(key)) {
       duplicatesDropped += 1;
       log('POST', path, 200, eventId);
-      return json(response, 200, { status: 'duplicate', eventId, ...counts() });
+      return json(response, 200, { status: 'duplicate', eventId, destinationId, ...counts() });
     }
     const record = {
       receivedAt: new Date().toISOString(),
       eventId,
+      destinationId,
       eventType: typeof event.eventType === 'string' ? event.eventType : null,
       event,
     };
     appendFileSync(file, JSON.stringify(record) + '\n', 'utf8');
-    seen.set(eventId, record);
+    seen.set(key, record);
     log('POST', path, 200, eventId);
-    return json(response, 200, { status: 'recorded', eventId, ...counts() });
+    return json(response, 200, { status: 'recorded', eventId, destinationId, ...counts() });
   });
 });
 
 server.listen(port, host, () => {
-  process.stdout.write(JSON.stringify({ at: new Date().toISOString(), listening: `${host}:${port}`, file, restored: seen.size }) + '\n');
+  process.stdout.write(JSON.stringify({ at: new Date().toISOString(), listening: `${host}:${server.address().port}`, file, restored: seen.size }) + '\n');
 });
 
 const stop = () => server.close(() => process.exit(0));

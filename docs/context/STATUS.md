@@ -1,5 +1,23 @@
 # Estado comprobado
 
+## CU28 — aceptación local cerrada, incluido destinatario inexistente (2026-11-07)
+
+Sobre base `24f76a9`, receptor autenticado y registro explícito de destinos locales. El mismo
+evento real ya entregado se reenvió dos veces a `never-existed-cu28`: ambos HTTP404
+`CU28_RECIPIENT_NOT_FOUND`, auditoría durable sanitizada y ninguna clave delivered.
+`workshop` devolvió duplicate antes/después, no otra entrega. Canal idéntico (16 registros,
+17.530 bytes y mismo SHA256), orden completed v4 idéntica y Outbox histórico sin cambios.
+Success nativo de n8n no se confundió con entrega al destinatario. Cero mensajes externos
+o escrituras de negocio para la prueba; se reutilizó la matriz de transporte aprobada.
+
+Suite focalizada 5/5 y replay real exit0/pass=true; revisión independiente conforme en
+cumplimiento, corrección y consistencia, sin críticos. La matriz de ocho pasos y siete
+excepciones de CU28 queda conciliada en `docs/evidence/cu28-recipient-local-20261107.md`;
+decisión028. Cierra el alcance funcional local configurado, no cloud ni autonomía indefinida.
+PLAN pasa únicamente por esos 3 puntos de **54/22/26 a 57/19/26**; CU22/CU23/CU25/CU26
+siguen parciales. Corrige además persistencia: MongoDB sirve a CU23; los trabajos y ledger
+del agente están en su volumen propio agent-jobs, sin tokens.
+
 ## CU28 — catálogo local, sesión programada limitada y conciliación del PLAN (2026-11-07)
 
 Base `7baf72b`, continuación en `work/marcelo`. Orden finalizada era **1/5** del catálogo; solicitud

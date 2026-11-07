@@ -143,6 +143,21 @@ consentimiento interactivo en el navegador (PKCE, redirect
 ejecución real del flujo. Crear la credencial desde la UI con el id/secret del archivo privado,
 reemplazar el `id` de credencial en el JSON exportado y ejecutar el flujo manualmente.
 
+## Destinatarios del canal de aceptación
+
+El receptor `cu28ExecutionReview` autentica antes de validar `x-autonexus-destination`.
+Es un ID local, por defecto `workshop`, no una dirección externa. El canal de
+`scripts/cu28/channel.mjs` usa `CU28_CHANNEL_DESTINATIONS=workshop` por defecto, recibe
+`/destinations/{id}/channel` y conserva `/channel` como alias. `CU28_CHANNEL_FILE` debe
+seguir apuntando al mismo JSONL: no vaciar/rotar el archivo para demostrar deduplicación.
+
+Un destino no registrado devuelve 404 `CU28_RECIPIENT_NOT_FOUND`, auditado sin cuerpos
+ni cabeceras y nunca recordado como delivered. El recibo válido debe coincidir en
+estado, evento y destino. Evidencia de dos rechazos reales, repetición del destino válido
+y preservación de negocio/Outbox: `docs/evidence/cu28-recipient-local-20261107.md`.
+La suite acotada es `node --test scripts/cu28/destination.test.mjs` desde la raíz; sus
+dobles de nodos no sustituyen el replay real. No requiere enviar mensajes externos.
+
 ## Límites del antecedente manual
 
 En ese antecedente no había flujo programado ni por evento: los contratos de agenda y ejecuciones exigen empleado activo

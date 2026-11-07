@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// The shared secret authenticates the webhook. It is read from the container environment\n// (N8N_BLOCK_ENV_ACCESS_IN_NODE=false is required in n8n 2.x) and is never printed, echoed\n// downstream or stored in the execution data: only the verdict leaves this node.\nconst expected = String($env.CU28_WEBHOOK_SECRET ?? '');\nconst headers = $json.headers ?? {};\nconst provided = String(headers['x-autonexus-secret'] ?? '');\nconst body = $json.body && typeof $json.body === 'object' ? $json.body : {};\nconst authorized = expected.length >= 16 && provided.length === expected.length && provided === expected;\nreturn [{\n  json: {\n    authorized,\n    eventId: typeof body.eventId === 'string' ? body.eventId : '',\n    eventType: typeof body.eventType === 'string' ? body.eventType : '',\n    envelope: body\n  }\n}];"
+        "jsCode": "const expected = String($env.CU28_WEBHOOK_SECRET ?? '');\nconst headers = $json.headers ?? {};\nconst provided = headers['x-autonexus-secret'];\nconst authorized = expected.length >= 16 && typeof provided === 'string' && provided === expected;\nif (!authorized) return [{json: {authorized: false}}];\nconst destinationId = headers['x-autonexus-destination'] ?? 'workshop';\nconst destinationValid = typeof destinationId === 'string' && /^[a-z0-9-]{1,64}$/.test(destinationId);\nif (!destinationValid) return [{json: {authorized: true, destinationValid: false}}];\nconst body = $json.body && typeof $json.body === 'object' ? $json.body : {};\nreturn [{json: {authorized: true, destinationValid, destinationId, eventId: typeof body.eventId === 'string' ? body.eventId : '', envelope: body}}];"
       },
       "id": "a1b2c3d4-0002-4a02-8a02-222222222222",
       "name": "Autenticar y sanear",
@@ -68,7 +68,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Delivered eventIds live in the workflow static data. This node only reads that state and always\n// emits exactly one item, so the webhook answers even when the delivery is a duplicate: n8n's\n// Remove Duplicates node drops the item instead and, in responseMode responseNode, the publisher\n// would wait for a response that never comes.\nconst record = $getWorkflowStaticData('global');\nconst delivered = record.delivered && typeof record.delivered === 'object' ? record.delivered : {};\nconst eventId = String($json.eventId ?? '');\nconst duplicate = eventId.length > 0 && Object.prototype.hasOwnProperty.call(delivered, eventId);\nreturn [{ json: { eventId, duplicate, alreadyDeliveredAt: duplicate ? delivered[eventId] : null, envelope: $json.envelope } }];"
+        "jsCode": "const record = $getWorkflowStaticData('global');\nconst delivered = record.delivered ?? {};\nconst {eventId, destinationId, envelope} = $json;\nconst key = destinationId + ':' + eventId;\nconst own = key => Object.prototype.hasOwnProperty.call(delivered, key);\nconst legacy = destinationId === 'workshop' && own(eventId);\nconst duplicate = eventId.length > 0 && (own(key) || legacy);\nreturn [{json: {eventId, destinationId, duplicate, alreadyDeliveredAt: duplicate ? (delivered[key] ?? delivered[eventId]) : null, envelope}}];"
       },
       "id": "a1b2c3d4-0004-4a04-8a04-444444444444",
       "name": "¿Ya entregado? (estado duradero)",
@@ -116,7 +116,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'duplicate', eventId: $json.eventId, deliveredAt: $json.alreadyDeliveredAt }) }}",
+        "responseBody": "={{ JSON.stringify({ status: 'duplicate', eventId: $json.eventId, destinationId: $json.destinationId, deliveredAt: $json.alreadyDeliveredAt }) }}",
         "options": {
           "responseCode": 200
         }
@@ -133,7 +133,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://host.docker.internal:5680/channel",
+        "url": "={{ 'http://host.docker.internal:5680/destinations/' + $json.destinationId + '/channel' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.envelope) }}",
@@ -146,7 +146,9 @@
           },
           "response": {
             "response": {
-              "responseFormat": "json"
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
             }
           }
         }
@@ -163,7 +165,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// The eventId is remembered only after the channel accepted it, so a failed delivery is retried\n// instead of being answered as an already delivered duplicate. The map is capped to the last 500\n// ids so the workflow state cannot grow without limit.\nconst record = $getWorkflowStaticData('global');\nconst delivered = record.delivered && typeof record.delivered === 'object' ? record.delivered : {};\nconst eventId = String($('¿Ya entregado? (estado duradero)').first().json.eventId ?? '');\nif (eventId.length > 0) delivered[eventId] = new Date().toISOString();\nconst ids = Object.keys(delivered);\nif (ids.length > 500) {\n  ids.sort((a, b) => String(delivered[a]).localeCompare(String(delivered[b])));\n  for (const stale of ids.slice(0, ids.length - 500)) delete delivered[stale];\n}\nrecord.delivered = delivered;\nreturn [{ json: { eventId, recorded: true, remembered: Object.keys(delivered).length } }];"
+        "jsCode": "const record = $getWorkflowStaticData('global');\nconst {eventId, destinationId, accepted} = $json;\nif (!accepted) throw new Error('CU28_CHANNEL_RECEIPT_REQUIRED');\nconst delivered = record.delivered ?? {};\ndelivered[destinationId + ':' + eventId] = new Date().toISOString();\nconst ids = Object.keys(delivered);\nif (ids.length > 500) {\n  ids.sort((a, b) => String(delivered[a]).localeCompare(String(delivered[b])));\n  for (const stale of ids.slice(0, ids.length - 500)) delete delivered[stale];\n}\nrecord.delivered = delivered;\nreturn [{json: {eventId, destinationId, recorded: true}}];"
       },
       "id": "a1b2c3d4-0008-4a08-8a08-888888888888",
       "name": "Recordar entrega",
@@ -177,7 +179,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'recorded', eventId: $json.eventId }) }}",
+        "responseBody": "={{ JSON.stringify({ status: 'recorded', eventId: $json.eventId, destinationId: $json.destinationId }) }}",
         "options": {
           "responseCode": 202
         }
@@ -224,6 +226,155 @@
         140,
         480
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0002-4000-8000-000000000002",
+              "leftValue": "={{ $json.destinationValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cu28-destinationValid",
+      "name": "¿Destino válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0002-4000-8000-000000000002",
+              "leftValue": "={{ $json.accepted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cu28-accepted",
+      "name": "¿Recibo aceptado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0002-4000-8000-000000000002",
+              "leftValue": "={{ $json.recipientNotFound }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cu28-recipientNotFound",
+      "name": "¿Destinatario inexistente?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"CU28_INVALID_DESTINATION\" }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "cu28-400",
+      "name": "Destino inválido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"CU28_RECIPIENT_NOT_FOUND\" }) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "cu28-404",
+      "name": "Destinatario inexistente",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        560
+      ]
+    },
+    {
+      "id": "cu28-receipt",
+      "name": "Validar recibo y auditar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const {eventId, destinationId} = $('¿Ya entregado? (estado duradero)').first().json;\nconst body = $json.body ?? {};\nconst accepted = Number.isInteger($json.statusCode) && $json.statusCode >= 200 && $json.statusCode < 300 && ['recorded', 'duplicate'].includes(body.status) && body.eventId === eventId && body.destinationId === destinationId;\nconst recipientNotFound = $json.statusCode === 404 && body.error === 'CU28_RECIPIENT_NOT_FOUND';\nconst record = $getWorkflowStaticData('global');\nconst result = accepted ? body.status : recipientNotFound ? 'CU28_RECIPIENT_NOT_FOUND' : 'CU28_CHANNEL_UNAVAILABLE';\nrecord.audit = [...(record.audit ?? []), {eventId, destinationId, result, at: new Date().toISOString()}].slice(-500);\nreturn [{json: {eventId, destinationId, accepted, recipientNotFound}}];"
+      }
     }
   ],
   "connections": {
@@ -253,7 +404,7 @@
       "main": [
         [
           {
-            "node": "¿Ya entregado? (estado duradero)",
+            "node": "¿Destino válido?",
             "type": "main",
             "index": 0
           }
@@ -300,14 +451,14 @@
       "main": [
         [
           {
-            "node": "Recordar entrega",
+            "node": "Validar recibo y auditar",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Canal no disponible",
+            "node": "Validar recibo y auditar",
             "type": "main",
             "index": 0
           }
@@ -324,6 +475,71 @@
           }
         ]
       ]
+    },
+    "¿Destino válido?": {
+      "main": [
+        [
+          {
+            "node": "¿Ya entregado? (estado duradero)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Destino inválido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar recibo y auditar": {
+      "main": [
+        [
+          {
+            "node": "¿Recibo aceptado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Recibo aceptado?": {
+      "main": [
+        [
+          {
+            "node": "Recordar entrega",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Destinatario inexistente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Destinatario inexistente?": {
+      "main": [
+        [
+          {
+            "node": "Destinatario inexistente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Canal no disponible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -331,7 +547,7 @@
     "timezone": "America/La_Paz",
     "saveManualExecutions": false,
     "saveDataSuccessExecution": "none",
-    "saveDataErrorExecution": "all"
+    "saveDataErrorExecution": "none"
   },
   "active": false,
   "pinData": {}

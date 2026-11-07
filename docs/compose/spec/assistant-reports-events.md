@@ -1,6 +1,6 @@
 ---
 feature: assistant-reports-events
-status: delivered
+status: in-progress
 updated: 2026-11-07
 source: work/marcelo
 ---
@@ -9,8 +9,9 @@ source: work/marcelo
 
 ## Report
 
-Entrega local verificada sobre base 7baf72b, work/marcelo, 2026-11-07. Este recorte no declara
-completos todos los requisitos de CU25/CU26/CU28 ni modifica la cobertura 54/22/26 del PLAN.
+Entrega local verificada sobre base 7baf72b y cierre de destinatarios sobre 24f76a9, work/marcelo,
+2026-11-07. CU28 queda aceptado en su alcance local configurado; CU25/CU26 conservan sus
+pendientes. La cobertura cambia sólo por CU28: 54/22/26 → 57/19/26, con evidencia y revisión.
 
 **What was built** — asistente y reporte operativo en Compose, Ollama externo configurable,
 trabajos persistentes sin tokens y Shell GraphQL; los cinco flujos originales de CU28 con
@@ -188,6 +189,28 @@ Ollama configurable forma parte del producto; programación semanal pertenece a 
   usa temporalmente timeout de lectura = presupuesto HTTP CU28 + 5 s (20 s por defecto), y lo
   restaura al salir. Salud, lecturas generales y configuración global conservan socketTimeout=2 s.
 
+### [S2.13] Destinatario local inexistente y cierre acotado de CU28
+
+El canal local posee un registro explícito de destinos (workshop por defecto), no contactos
+externos. POST /destinations/{destinationId}/channel valida existencia antes de deduplicar;
+un ID desconocido devuelve 404 CU28_RECIPIENT_NOT_FOUND, sin escribir una entrega. /channel
+se conserva como alias del destino workshop para las herramientas existentes. La clave de
+deduplicación incluye destino y eventId; los registros anteriores corresponden a workshop.
+
+El receptor autenticado n8n admite x-autonexus-destination con ID local limitado (letras,
+dígitos y guiones), por defecto workshop. Nunca recibe una URL arbitraria. Sólo recuerda la
+entrega tras recibo recorded|duplicate con evento/destino coincidentes. Un 404 del registro local
+se responde como CU28_RECIPIENT_NOT_FOUND; fallos restantes siguen sin presentarse como éxito.
+El audit guarda sólo resultado, evento, destino y fecha, sin secreto/cabeceras/cuerpos.
+
+Aceptación: reutilizar el sobre real ya aprobado de una operación empresarial finalizada,
+reintentar contra un destino local que nunca existió y comparar con línea base por destino.
+Debe fallar 404, no añadir efecto ni marca delivered para ese destino y conservar sin cambios
+el estado/versión empresarial y su entrega histórica al destino válido. Repetir el fallo no lo
+convierte en duplicate exitoso. La repetición contra workshop puede devolver duplicate real.
+Se reutilizan las pruebas de transporte aprobadas y se concilian ocho pasos y siete excepciones
+del CU28; no se envían mensajes externos ni se reinicia la operación empresarial.
+
 ## [S3] Out of Scope
 
 CU30 (escrituras), CU31 (administración web de clientes), notificaciones externas, nuevos recursos
@@ -207,3 +230,4 @@ cloud, autonomía indefinida de credenciales, calidad diagnóstica del modelo vi
 - [x] T10: autorización de la programación — acceptance: la identidad programada es un empleado activo con roles mínimos, autorizado por cada propietario, sin cuenta técnica privilegiada (covers: S2.10).
 - [x] T11: `docs/context/PLAN.md` desde la evidencia — acceptance: cada CU queda separado en implementación, aceptación funcional, calidad visual y despliegue, y ningún CU parcial se cuenta como completo (covers: S2.8).
 - [x] T12: cerrar F1–F3 de revisión — acceptance: revocación sólo de ejecución impide leer/repetir reporte guardado; entrega semanal fallida + reinicio + semana siguiente recupera IDs/documento originales; cita concurrente serializada con envío (covers: S2.12).
+- [x] T13: aceptar destinatario local inexistente — acceptance: dos 404 reales, auditoría durable sin delivered/efecto ni reversión; matriz ocho pasos/siete excepciones y revisión independiente conforme. Evidencia: `docs/evidence/cu28-recipient-local-20261107.md` (covers: S2.13).
