@@ -1,5 +1,26 @@
 # Estado comprobado
 
+## CU25/CU26 — asistente como servicio del Compose y smoke desde el Shell (2026-11-07)
+
+El asistente dejó de ser un proceso manual en el host: `infra/local/docker/agent.Dockerfile` y el
+servicio `agent` de `compose.yaml` lo ejecutan sin puerto publicado, como usuario `node`, y el BFF lo
+alcanza por la red del proyecto en `http://agent:3099`, esperándolo con `depends_on`. Los documentos y
+metadatos de los trabajos viven en el volumen `agent-jobs`; ningún token se escribe. Verificado: el
+mismo `jobId` se lee `SUCCEEDED` después de `--force-recreate` del contenedor (`totalWorks: 2`, 8
+afirmaciones) y un trabajo detenido mientras estaba `RUNNING` se lee `INTERRUPTED` con
+`INTERRUPTED_BY_RESTART`. Ollama sigue siendo un proveedor externo configurable (`OLLAMA_URL` →
+`host.docker.internal:11434`), respondió desde el contenedor con los modelos ya presentes y no se
+descargó ninguno.
+
+Smoke desde el Shell contra el servicio en contenedor: pregunta con herramientas (404 caracteres,
+`autonexus_list_team_agenda`, procedencia `operations`), reporte escrito por el modelo (`Modelo
+qwen3.5:4b`, 8 afirmaciones), recarga que retoma el mismo `jobId`, exportación CSV/JSON y denegación de
+permisos intacta con `mechanicA`. La reserva determinista se comprobó apuntando `OLLAMA_URL` a un
+destino inalcanzable —sólo configuración—: etiqueta «Plantilla determinista» y
+`narrative_model_unavailable:LLM_UNAVAILABLE` visibles. Agente **79/79**; cadena BFF→agente con 0
+violaciones del contrato. Evidencia: `docs/evidence/cu25-cu26-shell-20261106.md` (§9 y §10).
+
+
 ## CU25/CU26 — reporte asíncrono con identificador estable y contrato reconciliado (2026-11-06)
 
 El reporte se genera como **trabajo**: `startOperationsReport(from,to,operationId)` responde en
