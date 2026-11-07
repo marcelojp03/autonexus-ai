@@ -1,6 +1,6 @@
 ---
 feature: assistant-reports-events
-status: partial
+status: in-progress
 updated: 2026-11-06
 source: work/marcelo
 ---
@@ -79,6 +79,57 @@ interrumpido por un reinicio se cierra como `INTERRUPTED` y no se reanuda. Una a
 durante la generación termina en `AUTHORIZATION_EXPIRED` sin reiniciar la generación, y cada lectura
 verifica token y pertenencia.
 
+### [S2.7] Ejecución reproducible del asistente y sus trabajos
+
+`integration/agent` deja de correr en el host: imagen propia en `infra/local/docker/agent.Dockerfile`
+(Node 22.22.3 y pnpm 12.6.0 del repositorio, build TypeScript, runtime sin privilegios) y servicio
+`agent` en `compose.yaml`, **sin puerto publicado**: el BFF lo alcanza por la red interna en
+`http://agent:3099` y el proceso escucha en `0.0.0.0` dentro del contenedor (`AGENT_HOST`).
+
+- Documentos y metadatos de trabajos en el volumen nombrado `agent-jobs` (`REPORT_JOBS_DIR`), con la
+  retención ya definida. **Ningún token se escribe**, así que recrear el contenedor conserva los
+  documentos terminados y convierte en `INTERRUPTED` los trabajos que estaban en curso.
+- Ollama sigue siendo un proveedor **externo configurable**: `OLLAMA_URL` apunta al servicio del host
+  (`http://host.docker.internal:11434` por omisión en Compose), se documenta esa conexión y no se
+  descargan modelos nuevos. Un modelo ausente no rompe el servicio: el documento publica la plantilla
+  rotulada `deterministic`.
+- Aceptación: un reporte terminado se lee después de `--force-recreate` del contenedor, y un trabajo
+  cortado por detener el contenedor se lee como `INTERRUPTED`.
+
+### [S2.8] Catálogo de automatizaciones frente a lo implementado
+
+La especificación enumera cinco flujos —recordatorio de cita o mantenimiento, aviso de orden finalizada,
+notificación de asignación al mecánico, seguimiento de cotización pendiente y resumen semanal—. Lo
+implementado y verificado es **otro** evento: `operations.execution.review.requested.v1`, la solicitud de
+revisión de CU17. La diferencia se registra en la evidencia y en el catálogo: no se renombra la solicitud
+de revisión como ninguno de los cinco, no se da por cumplido ninguno de ellos y no se reduce el alcance.
+
+### [S2.9] Flujos pendientes por incrementos
+
+Cada flujo reutiliza la cadena ya verificada (Outbox del propietario, publicador con lease/backoff,
+webhook autenticado por secreto, deduplicación por `eventId` en n8n y canal local) y se entrega como
+incremento propio con su evento, su migración y su verificación:
+
+| Flujo | Disparador | Propietario del evento |
+| --- | --- | --- |
+| Orden finalizada | aprobación/finalización de CU17 | Operaciones |
+| Asignación de mecánico | asignación confirmada de CU15 | Operaciones |
+| Cotización pendiente | plazo sin respuesta | Finanzas |
+| Recordatorio de cita | programación periódica | Operaciones (lectura) |
+| Resumen semanal | programación periódica | agente de reportes (CU26) |
+
+El resumen semanal **integra CU26**: pide el reporte del período al agente por su API autorizada y
+publica el documento ya verificado, no una plantilla de n8n.
+
+### [S2.10] Autorización de la programación
+
+Los flujos programados necesitan una identidad que los propietarios acepten. Los contratos exigen
+empleado activo vinculado, permiso vigente y registro autorizado, así que no se usa una cuenta técnica
+privilegiada ni se salta la vinculación: se aprovisiona una **identidad de empleado sintética** con los
+roles mínimos de lectura que cada flujo necesita, igual que las cuentas de verificación, y cada llamada
+vuelve a autorizarse en el propietario. Si un flujo necesitara un alcance que un empleado no puede tener,
+no se programa y se registra el motivo.
+
 ## [S3] Out of Scope
 
 CU30 (escrituras), CU31 (administración web de clientes), los cuatro flujos restantes de CU28
@@ -91,3 +142,9 @@ CU30 (escrituras), CU31 (administración web de clientes), los cuatro flujos res
 - [x] T3: reporte narrativo con cálculos deterministas — acceptance: cifras iguales al cálculo, con referencias y procedencia (covers: S2.4).
 - [x] T4: BFF GraphQL y UI del Shell — acceptance: asistente y reporte usados desde la interfaz con sesión real (covers: S2.5). Verificado en navegador con siete escenarios.
 - [x] T5: trabajo asíncrono con identificador estable — acceptance: creación breve, estado por GraphQL, recarga sin duplicar, documento persistido y token no persistido (covers: S2.6).
+- [ ] T6: agente en Compose con volumen de trabajos y BFF por red interna — acceptance: reporte terminado legible tras `--force-recreate`, trabajo cortado leído como `INTERRUPTED`, sin puerto del agente publicado y sin modelos nuevos (covers: S2.7).
+- [ ] T7: smoke desde el Shell contra el agente en contenedor — acceptance: pregunta con herramientas, reporte del modelo, recarga y exportación funcionan sin procesos del host (covers: S2.7).
+- [ ] T8: catálogo de automatizaciones conciliado — acceptance: la diferencia entre la solicitud de revisión implementada y los cinco flujos enumerados queda registrada sin renombrar ni dar por cumplido ninguno (covers: S2.8).
+- [ ] T9: flujos de CU28 por incrementos — acceptance: cada flujo entregado dispara su evento real, se deduplica por `eventId` y llega al canal local; el resumen semanal publica el documento de CU26 (covers: S2.9, depends: T8).
+- [ ] T10: autorización de la programación — acceptance: la identidad programada es un empleado activo con roles mínimos, autorizado por cada propietario, sin cuenta técnica privilegiada (covers: S2.10).
+- [ ] T11: `docs/context/PLAN.md` desde la evidencia — acceptance: cada CU queda separado en implementación, aceptación funcional, calidad visual y despliegue, y ningún CU parcial se cuenta como completo (covers: S2.8).

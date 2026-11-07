@@ -329,6 +329,36 @@ services:
       retries: 30
       start_period: "10s"
     restart: "unless-stopped"
+  agent:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-agent:local"
+    build:
+      context: "."
+      dockerfile: "infra/local/docker/agent.Dockerfile"
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    # No published port: the BFF is the only client and reaches it by service name on the project
+    # network. The assistant forwards the caller token to Operations and mints no identity.
+    environment:
+      AGENT_PORT: "3099"
+      AGENT_HOST: "0.0.0.0"
+      OPERATIONS_URL: "http://operations:8081"
+      # The model stays an external, configurable provider on the host: no model is bundled or downloaded.
+      OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
+      REPORT_JOBS_DIR: "/var/lib/autonexus-agent/jobs"
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    # Finished report documents and job metadata. No token is ever written here.
+    volumes: ["agent-jobs:/var/lib/autonexus-agent/jobs"]
+    depends_on:
+      operations:
+        condition: "service_healthy"
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:3099/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: "5s"
+      timeout: "4s"
+      retries: 30
+      start_period: "5s"
+    restart: "unless-stopped"
   bff:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-bff:local"
     build:
@@ -340,11 +370,12 @@ services:
     volumes: ["config-bff:/run/config:ro"]
     environment:
       SYNC_API_URL: "http://sync:3005"
-      # CU25/CU26: the assistant runs on the host loopback during local proof, so the gateway reaches
-      # it through the host gateway instead of its own container. The service still authenticates every
-      # call with the user's token and closes its tool catalogue with it.
-      ASSISTANT_API_URL: "${ASSISTANT_API_URL:-http://host.docker.internal:3099}"
+      # CU25/CU26: the assistant runs as its own service on the project network and mints no identity:
+      # every call still carries the user's token, which the service uses against Operations.
+      ASSISTANT_API_URL: "${ASSISTANT_API_URL:-http://agent:3099}"
     depends_on:
+      agent:
+        condition: "service_healthy"
       employees:
         condition: "service_healthy"
       operations:
@@ -419,6 +450,7 @@ services:
       web: { condition: "service_healthy" }
 volumes:
   demo-state: {}
+  agent-jobs: {}
   acceptance-evidence: {}
   bootstrap-state: {}
   config-postgres: {}

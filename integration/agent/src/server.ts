@@ -298,16 +298,23 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
 
 export interface StartOptions extends ServerDeps {
   readonly port?: number;
+  /**
+   * Address to listen on. Loopback by default; inside a container it is `0.0.0.0` so the BFF reaches it
+   * over the project network, and no port is published to the host.
+   */
+  readonly host?: string;
 }
 
 export function startServer(options: StartOptions = {}): Server {
   const port = options.port ?? Number(process.env["AGENT_PORT"] ?? DEFAULT_PORT);
+  const host = options.host ?? process.env["AGENT_HOST"] ?? LOOPBACK;
   const handler = createHandler(options);
   const server = createServer(handler);
-  server.listen(port, LOOPBACK, () => {
+  server.listen(port, host, () => {
     const llm = options.llm === undefined ? "env" : options.llm === null ? "disabled" : options.llm.model;
-    process.stdout.write(JSON.stringify({service: "autonexus-agent", url: "http://" + LOOPBACK + ":" + String(port),
-      llm, endpoints: ["POST /assistant", "POST /report", "GET /health"]}) + String.fromCharCode(10));
+    process.stdout.write(JSON.stringify({service: "autonexus-agent", url: "http://" + host + ":" + String(port),
+      llm, endpoints: ["POST /assistant", "POST /report", "POST /report/jobs", "GET /report/jobs/{jobId}", "GET /health"],
+      jobs: process.env["REPORT_JOBS_DIR"] ?? "(default)"}) + String.fromCharCode(10));
   });
   return server;
 }
