@@ -46,13 +46,13 @@ pero sin recorrido real se cuenta como parcial y **no** entra en el total.
 | CU19 Cobro de servicio | 3 | Ninguna | **Pendiente** | — | — | — | Cobro local, sin pasarela |
 | CU20 Gastos operativos | 2 | Ninguna | **Pendiente** | — | — | — | Registro de gastos |
 | CU21 Indicadores | 4 | Ninguna | **Pendiente** | — | — | — | Indicadores derivados de cobros/gastos/órdenes |
-| CU22 IA visual local (web/móvil) | 5 | Inferencia local en Flutter y PWA (CU27) | **Parcial**: inferencia local en dispositivo, no el recorrido completo del CU | No revisada | Compose local + Android físico | STATUS CU27, evidencia cu27 | Conversión web (TFJS) y comparación visual diferida |
+| CU22 IA visual local (web/móvil) | 5 | Inferencia local en Flutter y PWA (CU27), conversión TFJS ejecutada | **Parcial**: ejecución local acreditada; falta conciliación completa de pasos y excepciones del CU22 | No revisada | Compose local + Android físico | STATUS comparación TFJS; `docs/evidence/cu27-20261105.md` | Verificar cobertura de excepciones y alternativa manual del CU22; comparación visual diferida, no conversión pendiente |
 | CU23 IA de servidor | 5 | `services/intelligence` desplegado, MongoDB, BFF, MF | **Parcial**: infraestructura e inferencia integradas, capacidad diagnóstica experimental y no validada (no suma) | No revisada | Compose local | Decisión 021, evidencia cu23 | Validación de la capacidad visual y de la calidad del modelo |
 | CU24 ML de duración | 5 | Ninguna | **Pendiente** | — | — | — | Dataset, entrenamiento, evaluación y límites |
-| CU25 Asistente con agentes | 5 | `integration/agent` en Compose, LLM local, catálogo cerrado, BFF, MF | **Parcial verificada**: pregunta con herramientas, aclaración, denegación y reserva determinista en navegador real | No revisada | Compose local (servicio `agent` sin puerto) | Evidencia cu25-cu26-shell §8–§10, decisión 026 | Modelo no desplegado como componente del producto; calidad del modelo no evaluada |
-| CU26 Reportes generativos | 4 | Reporte con cifras deterministas, trabajo asíncrono, exportación JSON/CSV | **Parcial verificada**: reporte escrito por el modelo con 8 afirmaciones y contrato sin violaciones | No revisada | Compose local | Evidencia cu25-cu26-shell §4, §9–§10 | Resumen semanal vía n8n (parte de CU28); calidad del modelo no evaluada |
+| CU25 Asistente con agentes | 5 | `integration/agent` en Compose, Ollama externo configurable, catálogo cerrado, BFF, MF | **Parcial verificada**: pregunta con herramientas, aclaración, denegación y reserva determinista en navegador real | No revisada | Compose local (servicio `agent` sin puerto) | Evidencia cu25-cu26-shell §8–§10, decisión 026 | Evaluación funcional acotada contra APIs propietarias y cobertura operativa/financiera/administrativa del CU25; ver matriz técnica |
+| CU26 Reportes generativos | 4 | Reporte operativo con cifras deterministas, trabajo asíncrono, exportación JSON/CSV | **Parcial verificada**: reporte escrito por el modelo con 8 afirmaciones y contrato sin violaciones | No revisada | Compose local + proveedor Ollama externo | Evidencia cu25-cu26-shell §4, §9–§10 | Tipos financiero/productividad, filtros e indicadores seleccionables, gráficos y entrada texto/audio de referencia 07 sin aceptación acreditada; matriz técnica |
 | CU27 Sincronización offline | 5 | `services/sync` desplegado, PWA + Flutter, DynamoDB | **Verificada** (aceptación funcional PWA y Android físico) | No revisada | Compose local + dispositivo | Evidencia cu27-20261105 | Conflictos avanzados y multi-dispositivo no ejercidos |
-| CU28 Automatizaciones n8n | 3 | Outbox + publicador + webhook + n8n + canal | **Parcial verificada**: 2 de los 5 flujos del catálogo (solicitud de revisión y orden finalizada) | No revisada | Compose local (n8n en su propio compose) | Evidencia cu28-20261106, decisión 025 | Asignación, cotización pendiente, recordatorio y resumen semanal; programación con identidad de empleado |
+| CU28 Automatizaciones n8n | 3 | Cinco flujos originales: Outbox propietarios, temporizadores n8n y CU26; revisión adicional | **Parcial verificada**: 5/5 flujos locales, duplicados, obsolescencia, temporizador deshabilitado y vencimiento/restablecimiento de sesión; no cierre global de excepciones | No revisada | Compose local (n8n en su propio compose) | Evidencia cu28-20261106 y cu28-catalogue-20261107; decisiones 025/027 | Excepción de destinatario inexistente sin aceptación específica: el sumidero local no modela destinatarios; no se exige enviar mensajes externos para acreditar los cinco flujos locales |
 | CU29 MCP consulta | 4 | `integration/mcp-server` con PKCE y alcance cerrado | **Verificada** (10 etapas reales) | No revisada | Compose local (loopback) | Evidencia cu29-20261105 | — |
 | CU30 MCP acciones | 5 | Ninguna | **Pendiente** | — | — | — | Acciones autorizadas con permisos y auditoría |
 | CU31 Acceso MCP externo | 3 | Ninguna | **Pendiente** | — | — | — | Registro y alcance por cliente MCP |
@@ -74,6 +74,21 @@ bloques pendientes: CU24 (5), CU25 (5), CU26 (4), CU28 (3) completos y CU30 (5).
 
 CU23 no suma todavía: su infraestructura e inferencia están integradas y verificadas, pero la capacidad
 visual es **experimental y no validada**, así que no se cuenta como aceptación funcional del CU.
+Se conserva la clasificación previa, no se niega la ejecución funcional ya acreditada ni se afirma
+calidad diagnóstica por haber ejecutado inferencia; los umbrales de calidad están en
+`contracts/ai/cu23-acceptance-criteria.md`.
+
+Los totales **54/22/26** y las clasificaciones se conservan: esta conciliación no constituye una nueva
+aceptación por CU. CU22 ya tiene conversión y ejecución TFJS: `ml/Dockerfile.tfjs`,
+`ml/training/export_tfjs_reference.py`, `scripts/cu22/verify-tfjs.mjs` y
+`scripts/cu22/verify-tfjs-browser.mjs`; STATUS registra equivalencia Node (3e-06), Chromium WebGL
+(2e-06) y recorrido desde foto (0,0070). La evidencia CU27 registra inferencia PWA offline real.
+No confundir equivalencia de ejecución con calidad del modelo experimental ni con revisión visual de UI.
+
+Ollama externo mediante `OLLAMA_URL` es una dependencia válida del producto, ya ejercitada desde
+Compose; no exige empaquetar el modelo en el mismo contenedor para aceptar CU25. La generación de
+CU26 se acepta independientemente de la programación y entrega semanal de CU28. Los pendientes
+y la evaluación acotada están en `docs/evidence/cu25-cu26-acceptance-matrix.md`; no hay nuevos PASS.
 
 ## Ruta orientativa por entregas
 
@@ -82,8 +97,8 @@ Cada fila se suma **sólo** cuando su aceptación funcional está verificada.
 | Entrega | Acumulado |
 | --- | ---: |
 | Base verificada al 2026-11-07 | 54 |
-| CU28 con los cuatro flujos restantes y el resumen semanal | 57 |
-| CU25 y CU26 completos (incluye resumen semanal y calidad evaluada) | 66 |
+| CU28: cinco flujos locales y controles pendientes aceptados contra CU28 (incluye resumen semanal) | 57 |
+| CU25 y CU26 completos contra sus especificaciones y matriz funcional (sin exigir scheduler CU28) | 66 |
 | CU24 ML de duración | 71 |
 | CU22 IA visual local en web y móvil | 76 |
 | CU30 acciones por MCP | 81 |
@@ -95,7 +110,7 @@ Cada fila se suma **sólo** cuando su aceptación funcional está verificada.
 
 | Dimensión | Estado |
 | --- | --- |
-| Funcional web online | CU01–CU07, CU09–CU17, CU23, CU27 y CU29 verificados; CU25, CU26 y CU28 parciales |
+| Funcional web online | CU01–CU07, CU09–CU17, CU27 y CU29 verificados; CU22, CU23, CU25, CU26 y CU28 parciales; CU23 tiene ejecución integrada verificada, no calidad visual validada |
 | Validación visual | Sólo CU05 tiene una revisión declarada pendiente (G2); ninguna otra superficie tiene conformidad visual acreditada |
 | Móvil (Flutter) | La app existe y la aceptación de CU27 en un dispositivo físico está registrada; el resto de los recorridos móviles no se ejercitó |
 | Offline (PWA + almacenamiento local + sincronización) | Verificado para CU27 sobre cambios y fotos; conflictos avanzados y multi-dispositivo pendientes |
