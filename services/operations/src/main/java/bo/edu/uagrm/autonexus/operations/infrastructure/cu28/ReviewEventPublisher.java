@@ -15,7 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * CU28 Outbox publisher. A due row is claimed with a lease in its own transaction, delivered over
- * HTTP outside any business transaction and only then marked delivered; a failed delivery schedules
+ * HTTP after the producing business transaction and only then marked delivered; a failed delivery schedules
  * the same eventId again. Nothing here can roll back the CU17 repair that produced the row, and
  * neither can it confirm it: the review request is already committed before the first attempt.
  */
@@ -91,29 +91,69 @@ public final class ReviewEventPublisher {
         Instant now = Instant.now();
         Claim claim = claim(now);
         if (claim == null) return null;
-        Outcome outcome = send(claim.payload());
-        record(claim, outcome);
+        tx.executeWithoutResult(status -> {
+            // Appointment before Outbox matches reminder creation. UPDATE in CU10 takes this same row lock.
+            if (AutomationEvents.REMINDER.equals(claim.eventType())) {
+                db.sql("SELECT true FROM operations.appointments WHERE id=? FOR UPDATE")
+                        .param(claim.aggregateId()).query(Boolean.class).optional();
+            }
+            boolean owned = db.sql("""
+                    SELECT true FROM operations.cu28_outbox
+                    WHERE event_id=? AND lease_owner=? AND lease_until>?
+                      AND delivered_at IS NULL AND suppressed_at IS NULL AND abandoned_at IS NULL
+                    FOR UPDATE
+                    """).params(claim.eventId(), claim.owner(), java.sql.Timestamp.from(Instant.now()))
+                    .query(Boolean.class).optional().orElse(false);
+            if (!owned) return;
+            boolean current = !AutomationEvents.REMINDER.equals(claim.eventType()) || db.sql("""
+                    SELECT EXISTS (SELECT 1 FROM operations.appointments
+                    WHERE id=? AND version=? AND status='scheduled' AND starts_at>?
+                      AND starts_at=(?::jsonb->'data'->>'startsAt')::timestamptz)
+                    """).params(claim.aggregateId(), claim.aggregateVersion(),
+                            java.sql.Timestamp.from(Instant.now()), claim.payload()).query(Boolean.class).single();
+            if (!current) {
+                db.sql("""
+                        UPDATE operations.cu28_outbox
+                        SET suppressed_at=?,last_error_code='CU28_APPOINTMENT_REMINDER_STALE',lease_owner=NULL,lease_until=NULL
+                        WHERE event_id=? AND lease_owner=? AND lease_until>?
+                          AND delivered_at IS NULL AND suppressed_at IS NULL AND abandoned_at IS NULL
+                        """).params(java.sql.Timestamp.from(Instant.now()), claim.eventId(), claim.owner(),
+                                java.sql.Timestamp.from(Instant.now())).update();
+                return;
+            }
+            record(claim, send(claim.payload()));
+        });
         return claim.eventId();
     }
 
     private Claim claim(Instant now) {
         return tx.execute(status -> {
             List<Claim> due = db.sql("""
-                    SELECT event_id,payload,attempts FROM operations.cu28_outbox
-                    WHERE delivered_at IS NULL AND abandoned_at IS NULL AND next_attempt_at<=?
+                    SELECT event_id,payload,attempts,event_type,aggregate_id,aggregate_version FROM operations.cu28_outbox
+                    WHERE delivered_at IS NULL AND abandoned_at IS NULL AND suppressed_at IS NULL AND next_attempt_at<=?
                       AND (lease_until IS NULL OR lease_until<=?)
                     ORDER BY next_attempt_at FOR UPDATE SKIP LOCKED LIMIT 1
                     """).params(java.sql.Timestamp.from(now), java.sql.Timestamp.from(now))
                     .query((rs, index) -> new Claim(rs.getObject("event_id", UUID.class), rs.getString("payload"),
-                            rs.getInt("attempts"), UUID.randomUUID())).list();
+                            rs.getInt("attempts"), UUID.randomUUID(), rs.getString("event_type"),
+                            rs.getObject("aggregate_id", UUID.class), rs.getInt("aggregate_version"))).list();
             if (due.isEmpty()) return null;
             Claim found = due.getFirst();
+            if (found.attempts() >= MAX_ATTEMPTS) {
+                db.sql("""
+                        UPDATE operations.cu28_outbox
+                        SET abandoned_at=?,last_error_code='CU28_DELIVERY_ATTEMPTS_EXHAUSTED',lease_owner=NULL,lease_until=NULL
+                        WHERE event_id=?
+                        """).params(java.sql.Timestamp.from(now), found.eventId()).update();
+                return null;
+            }
             int attempts = db.sql("""
                     UPDATE operations.cu28_outbox SET lease_owner=?,lease_until=?,attempts=attempts+1
                     WHERE event_id=? RETURNING attempts
                     """).params(found.owner(), java.sql.Timestamp.from(now.plus(LEASE)), found.eventId())
                     .query(Integer.class).single();
-            return new Claim(found.eventId(), found.payload(), attempts, found.owner());
+            return new Claim(found.eventId(), found.payload(), attempts, found.owner(), found.eventType(),
+                    found.aggregateId(), found.aggregateVersion());
         });
     }
 
@@ -150,6 +190,7 @@ public final class ReviewEventPublisher {
                     UPDATE operations.cu28_outbox
                     SET delivered_at=?,next_attempt_at=?,lease_owner=NULL,lease_until=NULL,last_error_code=NULL
                     WHERE event_id=? AND lease_owner=? AND lease_until>?
+                      AND delivered_at IS NULL AND suppressed_at IS NULL AND abandoned_at IS NULL
                     """).params(java.sql.Timestamp.from(now), java.sql.Timestamp.from(now), claim.eventId(),
                     claim.owner(), java.sql.Timestamp.from(now)).update();
             return;
@@ -160,6 +201,7 @@ public final class ReviewEventPublisher {
                 UPDATE operations.cu28_outbox
                 SET next_attempt_at=?,abandoned_at=?,lease_owner=NULL,lease_until=NULL,last_error_code=?
                 WHERE event_id=? AND lease_owner=? AND lease_until>?
+                  AND delivered_at IS NULL AND suppressed_at IS NULL AND abandoned_at IS NULL
                 """).params(java.sql.Timestamp.from(next), exhausted ? java.sql.Timestamp.from(now) : null,
                 exhausted ? "CU28_DELIVERY_ATTEMPTS_EXHAUSTED" : outcome.errorCode(), claim.eventId(),
                 claim.owner(), java.sql.Timestamp.from(now)).update();
@@ -172,7 +214,8 @@ public final class ReviewEventPublisher {
         return Math.min(MAX_DELAY_MILLIS, BASE_DELAY_MILLIS * (1L << exponent));
     }
 
-    private record Claim(UUID eventId, String payload, int attempts, UUID owner) {}
+    private record Claim(UUID eventId, String payload, int attempts, UUID owner, String eventType,
+            UUID aggregateId, int aggregateVersion) {}
 
     record Outcome(boolean delivered, String errorCode) {}
 }

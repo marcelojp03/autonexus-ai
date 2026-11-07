@@ -223,6 +223,12 @@ export async function aggregate(options: AggregateOptions): Promise<AggregateRes
     const execution = await options.source.call("autonexus_get_team_execution",
       {assignmentId, advanceLimit: MAX_WORK_RANGE, responseFormat: "json"});
     if (!execution.ok) {
+      if (execution.error?.status === 401 || execution.error?.status === 403
+        || execution.error?.code === "OWNER_UNAUTHORIZED" || execution.error?.code === "OWNER_FORBIDDEN") {
+        throw new ReportError(execution.error?.code ?? "EXECUTION_ACCESS_DENIED",
+          "El propietario rechazó la autorización de ejecución.",
+          execution.error?.status === 401 || execution.error?.code === "OWNER_UNAUTHORIZED" ? 401 : 403);
+      }
       executionsFailed += 1;
       limitations.push("execution_unavailable:" + String(execution.error?.code ?? "TOOL_ERROR"));
       perWork.push({...base, advances: null, evidence: null});

@@ -49,6 +49,18 @@ const stubLlm = content => ({model: "qwen3.5:4b", totalTimeoutMs: 3000,
 
 const build = (llm, extra = {}) => buildNarrativeReport({period: PERIOD, source: stubSource(), llm, now: () => NOW, ...extra});
 
+for (const [status, code] of [[401, "OWNER_UNAUTHORIZED"], [403, "OWNER_FORBIDDEN"]]) {
+  test("execution authorization rejection is terminal, not a partial success: " + status, async () => {
+    const source = stubSource();
+    const original = source.call.bind(source);
+    source.call = async (name, args) => name === "autonexus_get_team_execution"
+      ? {ok: false, error: {status, code}} : original(name, args);
+    const llm = stubLlm("This must never be published");
+    await assert.rejects(build(llm, {source}), failure => failure instanceof ReportError && failure.status === status && failure.code === code);
+    assert.equal(llm.calls.length, 0, "a refused execution never reaches narrative generation");
+  });
+}
+
 test("figures are the deterministic computation over the agenda and the executions", async () => {
   const report = await build(stubLlm("Resumen."), {});
   assert.equal(report.figures.totalWorks, 3);

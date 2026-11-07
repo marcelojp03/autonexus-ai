@@ -22,6 +22,8 @@ public class EmployeePermissionsClient {
 
     private record PermissionsResponse(List<String> effective, List<String> roles, List<Object> catalog) {}
 
+    private record BoundPermissionsResponse(List<String> effective, String employeeId, String employeeStatus) {}
+
     private final RestClient client;
     private final long ttlMillis;
     private final Map<String, Entry> cache = new ConcurrentHashMap<>();
@@ -58,6 +60,30 @@ public class EmployeePermissionsClient {
             return Set.copyOf(response.effective());
         } catch (RuntimeException error) {
             return Set.of();
+        }
+    }
+
+    public java.util.UUID requireBoundEmployee(String token, String permission) {
+        BoundPermissionsResponse response;
+        try {
+            response = client.get().uri("/security/permissions")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .retrieve().body(BoundPermissionsResponse.class);
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized denied) {
+            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(401, "UNAUTHORIZED");
+        } catch (org.springframework.web.client.HttpClientErrorException.Forbidden denied) {
+            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(403, "AUTOMATION_ACCESS_DENIED");
+        } catch (RuntimeException failure) {
+            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(503, "EMPLOYEE_AUTHORIZATION_UNAVAILABLE");
+        }
+        if (response == null || response.effective() == null || !response.effective().contains(permission)
+                || !"active".equals(response.employeeStatus()) || response.employeeId() == null) {
+            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(403, "AUTOMATION_ACCESS_DENIED");
+        }
+        try {
+            return java.util.UUID.fromString(response.employeeId());
+        } catch (IllegalArgumentException invalid) {
+            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(503, "EMPLOYEE_AUTHORIZATION_UNAVAILABLE");
         }
     }
 }

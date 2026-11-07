@@ -63,6 +63,20 @@ describe('ManageSecurity', () => {
     expect(catalog.catalog.map(item => item.id)).toContain('security:write');
     expect(catalog.effective).toEqual(['security:read', 'schedules:read']);
     expect(catalog.roles).toEqual(['administrador']);
+    expect(catalog.employeeId).toBeNull();
+    expect(catalog.employeeStatus).toBeNull();
+  });
+
+  it.each(['active', 'inactive'] as const)('exposes the owner-resolved %s employee binding', async employeeStatus => {
+    const permissions = vi.fn(async () => ({
+      roles: [], recognized: [], permissions: [],
+      employeeId: '11111111-1111-4111-8111-111111111111', employeeStatus,
+    }));
+    const security = new ManageSecurity(repository({ permissions }), gateway());
+    expect(await security.catalog('identity-subject', [])).toMatchObject({
+      employeeId: '11111111-1111-4111-8111-111111111111', employeeStatus,
+    });
+    expect(permissions).toHaveBeenCalledWith('identity-subject', []);
   });
 
   it('creates a role, materializes it in the IdP and reports synced', async () => {

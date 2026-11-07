@@ -2,7 +2,103 @@
 
 Exportaciones de flujos sin secretos ni credenciales.
 
-## Estado (2026-11-05)
+## Programación CU28 — exportaciones nuevas (2026-11-07)
+
+Tres workflows para n8n **2.46.6**, exportados **inactivos**. La aceptación local usó copias
+`Proof` con temporizador real cada 30 s, empleado sintético y canal local, sin modificar el
+receptor existente. Evidencia: `docs/evidence/cu28-catalogue-20261107.md` desde la raíz.
+
+| Archivo en workflows/ | ID | Cron (segundo primero), America/La_Paz | Llamada |
+| --- | --- | --- | --- |
+| appointments-reminders-scheduled.json | cu28AppointmentReminders | 0 0 9 * * * | POST http://operations:8081/automations/appointments/reminders, cuerpo {} |
+| quotes-pending-scheduled.json | cu28PendingQuotes | 0 0 * * * * | POST http://finance:8000/automations/quotes/pending, cuerpo {} |
+| weekly-report-scheduled.json | cu28WeeklyReport | 0 0 9 * * 1 | POST http://agent:3099/report/jobs; GET /report/jobs/{jobId} |
+
+Operaciones selecciona la próxima jornada civil con **su reloj**, revalida las citas y publica
+su Outbox. Finanzas decide el umbral con **su reloj**, revalida estado/versión de las cotizaciones
+y publica su Outbox. n8n no envía fechas ni listados a esos dos selectores; owner_accepted en
+el audit significa solamente que el propietario aceptó la solicitud, no una entrega al canal.
+
+### Consentimiento y autorización
+
+Cada exportación referencia oAuth2Api con id **autonexusCu28Scheduler** y nombre
+**AutoNexus CU28 delegated employee**. Es una referencia sin material secreto: aprovisionar la
+credencial cifrada en n8n mediante **authorization_code + PKCE**, consentimiento interactivo de
+empleado sintético activo y refresh automático de la credencial. No usar client_credentials,
+tokens incrustados ni encabezados Authorization manuales. Si se usa otro ID, sustituirlo en
+las referencias locales al importar, no copiar tokens al JSON.
+
+Cliente previsto: autonexus-cu28-scheduler; roles mínimos mcp_read_team y cu28_read_due
+(orders:read, agenda:read:team, executions:read:team, appointments:read, quotes:read),
+audiencias de los propietarios correspondientes. Cada POST y cada GET se autoriza en servidor;
+recuperar una entrega pendiente vuelve a consultar el mismo trabajo con esa credencial antes
+de publicar. 401/403 y revocación fallan cerrados, sin resumen vacío ni evento de éxito.
+Un cron activo no garantiza que la sesión siga vigente en su próximo disparo diario/semanal:
+la duración/idle/max session del IdP se conserva, no se amplía para esta entrega. Si ha vencido,
+se registra error y se necesita restablecer la delegación explícitamente. La aceptación abreviada
+no acredita operación desatendida durante días ni renovación infinita de la sesión.
+
+### Reporte semanal, recuperación y auditoría
+
+La semana es la anterior **lunes–domingo civil**, no los últimos siete días. Los IDs son UUIDv8
+deterministas: prefijo a0280001-0000-8000-8000-, lunes YYYYMMDD y sufijo 0001 para operationId,
+0002 para eventId. El inicio civil determina unívocamente el período; no dependen de ejecución,
+reintento ni credencial. El agente persiste el trabajo y deduplica el POST por operationId.
+
+El agente conserva un ledger propio en agent-jobs/weekly-deliveries, sin tokens. Antes de
+seleccionar la semana candidata, n8n adquiere POST /report/weekly/deliveries: el agente devuelve
+primero una intención pendiente anterior del mismo empleado, con su período e IDs originales.
+Con jobId conocido no vuelve a crear el trabajo: consulta ese ID y espera **5 segundos** entre
+lecturas. Al terminar vuelve a adquirir para guardar una copia inmutable del documento en el
+ledger ANTES del envío. Esa copia no depende de la retención normal de trabajos ni del estado
+estático de un workflow fallido. Hay presupuesto de **10 minutos** por ejecución y timeout HTTP
+de 20 s. Estados failed/interrupted y un jobId fijado ausente requieren revisión, sin generación
+nueva ciega. No se generan automáticamente todas las semanas omitidas.
+
+Al terminar, data contiene el documento completo por campos cerrados: report, period,
+generatedAt, promptVersion, figures, claims, provenance, references, limitations, financialData,
+narrative (incluidos path, verified y generative), más jobId y operationId. La plantilla conserva
+path=deterministic/generative=false; n8n no escribe narración ni la convierte en evidencia LLM.
+El evento es automation.weekly.report.generated.v1 y se publica solamente en
+http://n8n:5678/webhook/cu28-execution-review con x-autonexus-secret leído de
+CU28_WEBHOOK_SECRET. Se requiere el acceso a esa variable ya usado por el receptor
+(N8N_BLOCK_ENV_ACCESS_IN_NODE=false). No se envían mensajes externos.
+
+El transporte reintenta hasta tres veces el **mismo sobre**. Sin recibo, la intención sigue pending
+en el agente incluso después de reiniciar n8n/agente y proponer otra semana. Sólo recorded/duplicate
+con el mismo eventId permite POST /report/weekly/deliveries/{operationId}/ack. El ACK reautorizado
+marca delivered durable e idempotente; si se pierde el ACK, se repite el mismo evento y el canal
+deduplica. La siguiente adquisición de una semana ya entregada no vuelve a enviarla. Restaurar
+el consentimiento no convierte un trabajo terminal en uno nuevo. Static data es sólo audit de
+observación, nunca autoridad de pending. Cada documento reautoriza agenda y ejecuciones por registro.
+
+Todos los flujos usan saveDataSuccessExecution=none, saveDataErrorExecution=none,
+saveManualExecutions=false y saveExecutionProgress=false. Los errores pasan a un código cerrado
+CU28_* y terminan la ejecución con error. El nodo prepara lastResult con status, failureCode,
+executionId y observedAt, sin cuerpos HTTP, cabeceras ni credenciales. No se promete que n8n
+persista esa mutación estática al fallar: en la aceptación los selectores no publicaron un
+lastResult durable. La evidencia de fallo usa metadatos nativos de ejecución (workflowId,
+mode=trigger, status=error, fechas), no un lastResult previo como si fuera actual. La entrega
+se coteja contra el Outbox propietario y el canal; el semanal sí conservó jobId/período y recibo
+duplicate en estado estático. No habilitar logs completos para diagnosticar autenticación.
+
+### Construcción y verificaciones locales
+
+Desde la raíz, sin dependencias adicionales:
+
+~~~sh
+node scripts/n8n/build-scheduled.mjs
+node scripts/n8n/build-scheduled.mjs --check
+node --test scripts/n8n/scheduled.test.mjs
+~~~
+
+El constructor solo escribe las tres exportaciones nuevas y embebe las funciones exportadas
+de scheduled-functions.mjs; las pruebas ejecutan esas mismas funciones y nodos Code compilados,
+verifican cron, credenciales, grafo, errores, límites y recuperación. No añaden APIs de prueba.
+Se consultaron en modo lectura las descripciones ScheduleTrigger, Wait y HttpRequest del
+contenedor 2.46.6. Esto no acredita consentimiento, disparo real de temporizador ni entrega real.
+
+## Antecedente: estado (2026-11-05)
 
 Instancia local propia `cu16-proof-n8n-1` con `docker.n8n.io/n8nio/n8n:2.46.6` fijada por digest
 (`sha256:8602f5dfacbe2c931eeafd010de0e68182310e9f309921e780ab69182e92b3ae`), publicada solo en
@@ -47,8 +143,8 @@ consentimiento interactivo en el navegador (PKCE, redirect
 ejecución real del flujo. Crear la credencial desde la UI con el id/secret del archivo privado,
 reemplazar el `id` de credencial en el JSON exportado y ejecutar el flujo manualmente.
 
-## Límites
+## Límites del antecedente manual
 
-Ningún flujo programado ni por evento: los contratos de agenda y ejecuciones exigen empleado activo
+En ese antecedente no había flujo programado ni por evento: los contratos de agenda y ejecuciones exigen empleado activo
 vinculado, así que una identidad técnica sin vínculo laboral no puede consultarlas y no se abre una
 excepción. Sin avisos, sin RabbitMQ nuevo, sin escrituras empresariales y sin declarar CU28 completo.

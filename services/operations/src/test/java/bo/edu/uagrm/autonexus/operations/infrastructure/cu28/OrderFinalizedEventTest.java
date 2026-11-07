@@ -76,4 +76,12 @@ class OrderFinalizedEventTest {
         assertThrows(IllegalStateException.class, () -> OrderFinalizedEvent.envelope(execution(), 6, 0, AT, OPERATION));
         assertTrue(OrderFinalizedEvent.TYPE.startsWith("operations."));
     }
+
+    @Test
+    void orderIdentityUsesOrderVersionWhileDataRetainsExecutionVersion() {
+        Map<String, Object> envelope = OrderFinalizedEvent.envelope(execution(), 3, 28, AT, OPERATION);
+        assertEquals(3, envelope.get("aggregateVersion"));
+        assertEquals(OrderFinalizedEvent.id(ORDER, 3).toString(), envelope.get("eventId"));
+        assertEquals(28, ((Map<?, ?>) envelope.get("data")).get("version"));
+    }
 }

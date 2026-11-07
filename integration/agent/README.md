@@ -3,7 +3,23 @@
 Proceso interno de consulta. No aloja ni depende exclusivamente del servidor MCP: la fuente de
 herramientas es intercambiable.
 
-## Estado (2026-11-06)
+## Reportes guardados y entrega semanal (2026-11-07)
+
+El servicio corre como agent del Compose, sin puerto publicado, con OPERATIONS_URL y
+EMPLOYEES_API_URL internos; Ollama externo sigue configurable mediante OLLAMA_URL. Cada lectura
+o replay de reporte comprueba empleado activo y permisos actuales de agenda y ejecución en
+Empleados, y reautoriza los assignmentId representados en Operaciones. El catálogo del JWT o
+una agenda permitida no sustituyen esas comprobaciones. Un fallo no publica el documento.
+
+CU28 usa POST /report/weekly/deliveries y POST /report/weekly/deliveries/{operationId}/ack,
+descritos en contracts/rest/automations.md desde la raíz. El ledger en el subdirectorio
+weekly-deliveries de REPORT_JOBS_DIR conserva primero la intención pendiente y luego copia el
+reporte validado antes de enviarlo. Esa copia no sigue el sweep de los trabajos normales: fallo
+de canal/reinicio/cambio de semana recupera el documento anterior, y sólo un ACK válido cierra
+la entrega. Sin tokens persistidos ni generación ciega de trabajos terminales. Una sesión
+delegada vencida exige restablecimiento; no se extiende por guardar un trabajo o una intención.
+
+## Antecedente (2026-11-06)
 
 Implementado en TypeScript con Node 22.22.3 y `@modelcontextprotocol/client` 2.4.0. Dos fuentes:
 

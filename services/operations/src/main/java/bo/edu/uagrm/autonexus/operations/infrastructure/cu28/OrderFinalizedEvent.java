@@ -26,7 +26,7 @@ public final class OrderFinalizedEvent {
 
     private OrderFinalizedEvent() {}
 
-    /** Same execution version, different type: the id cannot collide with the review request. */
+    /** The owning order version identifies this transition, independently of execution progress. */
     public static UUID id(UUID orderId, int version) {
         return UUID.nameUUIDFromBytes((TYPE + '|' + orderId + '|' + version).getBytes(StandardCharsets.UTF_8));
     }

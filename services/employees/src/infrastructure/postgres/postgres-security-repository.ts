@@ -175,7 +175,6 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
    * gets the seeded `system` roles, never a role created through CU02.
    */
   async permissions(subject: string, roles: readonly string[]): Promise<EffectivePermissions> {
-    if (roles.length === 0) return { roles, recognized: [], permissions: [] };
     return this.read(async runner => {
       const rows = await runner.query(
         `SELECT r.name, r.permissions
@@ -198,8 +197,16 @@ export class PostgresSecurityRepository implements SecurityRepository, OnApplica
       ) as Array<{ name: string; permissions: string[] }>;
       const granted = new Set<string>();
       for (const row of rows) for (const permission of permissionsOf(row.permissions)) granted.add(permission);
+      const employees = await runner.query(
+        `SELECT e.id, e.record->>'status' AS status
+         FROM employees.employee_records e
+         WHERE e.subject=$1 AND e.record->'access'->>'subject'=$1`,
+        [subject],
+      ) as Array<{ id: string; status: 'active' | 'inactive' }>;
       return {
         roles,
+        employeeId: employees[0]?.id ?? null,
+        employeeStatus: employees[0]?.status ?? null,
         recognized: rows.map(row => row.name),
         permissions: [...granted].sort() as Permission[],
       };

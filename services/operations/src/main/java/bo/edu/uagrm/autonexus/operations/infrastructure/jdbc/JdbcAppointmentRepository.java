@@ -6,6 +6,7 @@ import bo.edu.uagrm.autonexus.operations.application.Page;
 import bo.edu.uagrm.autonexus.operations.domain.Appointment;
 import bo.edu.uagrm.autonexus.operations.domain.OperationsError;
 import java.sql.ResultSet;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -13,8 +14,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -38,11 +43,42 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
             """;
 
     private final int capacity;
+    private final DataSource dataSource;
+    private final int mutationNetworkTimeoutMillis;
 
-    public JdbcAppointmentRepository(JdbcClient jdbc, ObjectMapper json,
-                                     @Value("${operations.appointments.capacity:2}") int capacity) {
+    public JdbcAppointmentRepository(JdbcClient jdbc, ObjectMapper json, DataSource dataSource,
+                                     @Value("${operations.appointments.capacity:2}") int capacity,
+                                     @Value("${CU28_WEBHOOK_TIMEOUT_SECONDS:15}") int webhookTimeoutSeconds) {
         super(jdbc, json);
+        if (webhookTimeoutSeconds < 2 || webhookTimeoutSeconds > 60) {
+            throw new IllegalStateException("CU28_WEBHOOK_TIMEOUT_SECONDS must be between 2 and 60");
+        }
         this.capacity = Math.max(1, capacity);
+        this.dataSource = dataSource;
+        this.mutationNetworkTimeoutMillis = (webhookTimeoutSeconds + 5) * 1000;
+    }
+
+    private Mutation<Appointment> withMutationNetworkBudget(Supplier<Mutation<Appointment>> mutation) {
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try {
+            int original = connection.getNetworkTimeout();
+            try {
+                connection.setNetworkTimeout(Runnable::run, mutationNetworkTimeoutMillis);
+                return mutation.get();
+            } finally {
+                connection.setNetworkTimeout(Runnable::run, original);
+            }
+        } catch (SQLException error) {
+            throw new DataAccessResourceFailureException("Cannot configure appointment mutation network budget", error);
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
+    }
+
+    private void lockAppointment(UUID id) {
+        jdbc.sql("SELECT true FROM operations.appointments WHERE id = ? FOR UPDATE")
+                .param(id).query(Boolean.class).optional()
+                .orElseThrow(() -> OperationsError.notFound("APPOINTMENT_NOT_FOUND"));
     }
 
     private static Appointment map(ResultSet rs, int row) throws SQLException {
@@ -206,9 +242,17 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
     @Transactional
     public Mutation<Appointment> reschedule(UUID id, Instant startsAt, String notes, int expectedVersion,
                                             String actor, UUID operationId) {
+        return withMutationNetworkBudget(() -> rescheduleLocked(id, startsAt, notes, expectedVersion, actor, operationId));
+    }
+
+    private Mutation<Appointment> rescheduleLocked(UUID id, Instant startsAt, String notes, int expectedVersion,
+                                                   String actor, UUID operationId) {
         String print = fingerprint(actor, "reschedule-appointment", id, startsAt, notes, expectedVersion);
         var replay = replayed(operationId, print);
         if (replay.isPresent()) return new Mutation<>(get(replay.get()), true);
+        lockAppointment(id);
+        var afterRowLock = replayed(operationId, print);
+        if (afterRowLock.isPresent()) return new Mutation<>(get(afterRowLock.get()), true);
         Appointment current = get(id);
         if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
         if (!"scheduled".equals(current.status())) throw OperationsError.conflict("APPOINTMENT_NOT_SCHEDULED");
@@ -237,9 +281,16 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
     @Override
     @Transactional
     public Mutation<Appointment> cancel(UUID id, String reason, int expectedVersion, String actor, UUID operationId) {
+        return withMutationNetworkBudget(() -> cancelLocked(id, reason, expectedVersion, actor, operationId));
+    }
+
+    private Mutation<Appointment> cancelLocked(UUID id, String reason, int expectedVersion, String actor, UUID operationId) {
         String print = fingerprint(actor, "cancel-appointment", id, reason, expectedVersion);
         var replay = replayed(operationId, print);
         if (replay.isPresent()) return new Mutation<>(get(replay.get()), true);
+        lockAppointment(id);
+        var afterRowLock = replayed(operationId, print);
+        if (afterRowLock.isPresent()) return new Mutation<>(get(afterRowLock.get()), true);
         Appointment current = get(id);
         if (current.version() != expectedVersion) throw OperationsError.conflict("VERSION_CONFLICT");
         if ("cancelled".equals(current.status())) {
@@ -248,6 +299,8 @@ public class JdbcAppointmentRepository extends OperationsStore implements Appoin
         }
         jdbc.sql(SLOT_LOCK).query((rs, index) -> null).list();
         int version = expectedVersion + 1;
+        var afterLock = replayed(operationId, print);
+        if (afterLock.isPresent()) return new Mutation<>(get(afterLock.get()), true);
         int rows = jdbc.sql("""
                         UPDATE operations.appointments
                            SET status = 'cancelled', cancel_reason = ?, version = ?, updated_at = ?, updated_by = ?

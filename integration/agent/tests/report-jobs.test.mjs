@@ -11,6 +11,9 @@ import {randomUUID} from "node:crypto";
 import {createHandler} from "../dist/server.js";
 import {ReportJobRunner} from "../dist/report/job-runner.js";
 import {ReportJobStore} from "../dist/report/jobs.js";
+import {createReportAuthorizer} from "../dist/report/authorization.js";
+import {buildNarrativeReport} from "../dist/report/narrative-report.js";
+import {checkReportContract} from "../dist/report/contract.js";
 
 const NOW = new Date("2026-11-11T18:30:00.000Z");
 const PERIOD = {from: "2026-11-05", to: "2026-11-11"};
@@ -29,14 +32,16 @@ const AGENDA = [{assignmentId: "11111111-1111-4111-8111-111111111111",
 function sourceFactory(counter = {calls: 0}) {
   return () => ({
     async listTools() { return []; },
-    async call(name) {
+    async call(name, args) {
       counter.calls += 1;
       if (scope.deny === "unauthorized") return {ok: false, error: {code: "OWNER_UNAUTHORIZED", status: 401}};
       if (name === "autonexus_list_team_agenda") {
         return {ok: true, data: {data: AGENDA, period: {...PERIOD, timeZone: "America/La_Paz"},
           observedAt: NOW.toISOString(), page: {total: AGENDA.length}}};
       }
-      return {ok: true, data: {data: {evidenceSummary: {pending: 1, available: 2, failed: 0}}, page: {total: 3}}};
+      return {ok: true, data: {data: {assignmentId: args.assignmentId,
+        id: "33333333-3333-4333-8333-333333333333",
+        evidenceSummary: {pending: 1, available: 2, failed: 0}}, page: {total: 3}}};
     },
     async close() { },
   });
@@ -44,10 +49,188 @@ function sourceFactory(counter = {calls: 0}) {
 
 const scope = {deny: null};
 
+for (const [ownerStatus, ownerCode] of [[401, "OWNER_UNAUTHORIZED"], [403, "OWNER_FORBIDDEN"], [503, "OWNER_UNAVAILABLE"]]) {
+  test("job create/read/replay fail closed on current owner rejection " + ownerStatus, async () => {
+    const directory = newDirectory();
+    const jobId = randomUUID(), operationId = randomUUID();
+    const store = new ReportJobStore({directory});
+    const document = await buildNarrativeReport({source: sourceFactory()(), period: PERIOD, llm: null, now: () => NOW});
+    assert.deepEqual(checkReportContract(document), []);
+    store.save({jobId, operationId, subject: "chief", ...PERIOD, tokenExpiresAt: null,
+      requestedAt: NOW.toISOString(), startedAt: NOW.toISOString(), finishedAt: NOW.toISOString(),
+      status: "succeeded", document, failure: null});
+    const calls = [];
+    let closed = 0;
+    const started = await start({jobDirectory: directory, sourceFactory: token => ({
+      async listTools() { throw new Error("catalogue is not authorization"); },
+      async call(name, args) { calls.push({token, name, args}); return {ok: false, error: {code: ownerCode, status: ownerStatus}}; },
+      async close() { closed += 1; },
+    })});
+    try {
+      for (const request of [
+        ["/report/jobs/" + jobId, {method: "GET"}],
+        ["/report/jobs", {body: {from: "2026-01-01", to: "2026-01-02", operationId}}],
+        ["/report/jobs", {body: {...PERIOD, operationId: randomUUID()}}],
+      ]) {
+        const result = await call(started.url, ...request);
+        assert.equal(result.status, ownerStatus);
+        assert.equal(result.body.error.code, ownerStatus === 403 ? "REPORT_ACCESS_DENIED"
+          : ownerStatus === 503 ? "REPORT_AUTHORIZATION_UNAVAILABLE" : ownerCode);
+        assert.equal(result.body.report, undefined);
+        assert.ok(!JSON.stringify(result.body).includes(document.narrative.text));
+      }
+      assert.equal(calls.length, 3, "every access rechecks the owner");
+      assert.equal(closed, 3);
+      for (const invocation of calls) {
+        assert.equal(invocation.token, CHIEF, "the caller bearer is forwarded, not replaced");
+        assert.equal(invocation.name, "autonexus_list_team_agenda");
+        assert.deepEqual(invocation.args, {...PERIOD, limit: 1, responseFormat: "json"});
+      }
+      assert.equal(store.all().length, 1, "rejected creation writes no job");
+      assert.ok(!readFileSync(join(directory, jobId + ".json"), "utf8").includes(CHIEF));
+    } finally { await new Promise(ready => started.created.close(ready)); }
+  });
+}
+
+test("concurrent creation rechecks idempotency after owner authorization yields", async () => {
+  const directory = newDirectory();
+  const started = await start({jobDirectory: directory});
+  try {
+    const operationId = randomUUID();
+    const results = await Promise.all(Array.from({length: 3}, () => call(started.url, "/report/jobs", {body: {...PERIOD, operationId}})));
+    assert.equal(new Set(results.map(result => result.body.jobId)).size, 1);
+    assert.equal(results.filter(result => result.status === 202).length, 1);
+    await settle(started.url, results[0].body.jobId);
+    assert.equal(new ReportJobStore({directory}).all().length, 1);
+  } finally { await new Promise(ready => started.created.close(ready)); }
+});
+
+test("revoking current employee permission prevents completed report reads and replay", async () => {
+  const directory = newDirectory();
+  let denied = false;
+  const factory = sourceFactory();
+  const started = await start({jobDirectory: directory, sourceFactory: token => {
+    const source = factory(token);
+    return {...source, async call(name, args) {
+      return denied ? {ok: false, error: {code: "OWNER_FORBIDDEN", status: 403}} : source.call(name, args);
+    }};
+  }});
+  try {
+    const operationId = randomUUID();
+    const created = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId}});
+    assert.equal((await settle(started.url, created.body.jobId)).body.status, "succeeded");
+    denied = true;
+    const read = await call(started.url, "/report/jobs/" + created.body.jobId, {method: "GET"});
+    const replay = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId}});
+    for (const rejected of [read, replay]) {
+      assert.equal(rejected.status, 403);
+      assert.equal(rejected.body.report, undefined);
+    }
+    denied = false;
+    assert.equal((await call(started.url, "/report/jobs/" + created.body.jobId, {method: "GET"})).body.status, "succeeded");
+  } finally { await new Promise(ready => started.created.close(ready)); }
+});
+
+for (const revoked of ["execution-record", "employee-execution-grant"]) {
+  test("completed report GET and replay reject split-scope revocation: " + revoked, async () => {
+    const directory = newDirectory();
+    let denied = false;
+    let deniedExecutions = 0;
+    const baseFactory = sourceFactory();
+    const factory = token => {
+      const source = baseFactory(token);
+      return {...source, async call(name, args) {
+        if (denied && revoked === "execution-record" && name === "autonexus_get_team_execution") {
+          deniedExecutions += 1;
+          assert.equal(args.assignmentId, AGENDA[0].assignmentId);
+          return {ok: false, error: {code: "OWNER_FORBIDDEN", status: 403}};
+        }
+        return source.call(name, args);
+      }};
+    };
+    const authorizeReport = createReportAuthorizer({sourceFactory: factory, fetch: async (_url, options) => {
+      assert.equal(options.headers.authorization, "Bearer " + CHIEF);
+      return Response.json({employeeId: "22222222-2222-4222-8222-222222222222", employeeStatus: "active",
+        effective: denied && revoked === "employee-execution-grant"
+          ? ["agenda:read:team"] : ["agenda:read:team", "executions:read:team"]});
+    }});
+    const started = await start({jobDirectory: directory, sourceFactory: factory, authorizeReport});
+    try {
+      const operationId = randomUUID();
+      const created = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId}});
+      assert.equal(created.status, 202);
+      const completed = await settle(started.url, created.body.jobId);
+      assert.equal(completed.body.status, "succeeded");
+      const document = completed.body.report;
+      assert.deepEqual(checkReportContract(document), []);
+      assert.equal(document.figures.totalWorks, 1);
+      assert.equal(document.figures.executionsConsulted, 1);
+      assert.ok(document.references.some(ref => ref.kind === "assignment" && ref.id === AGENDA[0].assignmentId));
+      const saved = readFileSync(join(directory, created.body.jobId + ".json"), "utf8");
+      denied = true;
+      const agendaSource = factory(CHIEF);
+      try {
+        assert.equal((await agendaSource.call("autonexus_list_team_agenda", PERIOD)).ok, true,
+          "agenda remains authorized while execution access is revoked");
+      } finally { await agendaSource.close(); }
+      for (const rejected of [
+        await call(started.url, "/report/jobs/" + created.body.jobId, {method: "GET"}),
+        await call(started.url, "/report/jobs", {body: {...PERIOD, operationId}}),
+      ]) {
+        assert.equal(rejected.status, 403);
+        assert.equal(rejected.body.error.code, "REPORT_ACCESS_DENIED");
+        assert.equal(rejected.body.report, undefined);
+        assert.ok(!JSON.stringify(rejected.body).includes(document.narrative.text));
+        assert.ok(!JSON.stringify(rejected.body).includes(AGENDA[0].assignmentId));
+      }
+      if (revoked === "execution-record") assert.equal(deniedExecutions, 2);
+      assert.equal(readFileSync(join(directory, created.body.jobId + ".json"), "utf8"), saved);
+      denied = false;
+      const restoredRead = await call(started.url, "/report/jobs/" + created.body.jobId, {method: "GET"});
+      const restoredReplay = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId}});
+      for (const restored of [restoredRead, restoredReplay]) {
+        assert.equal(restored.status, 200);
+        assert.equal(restored.body.jobId, created.body.jobId);
+        assert.deepEqual(restored.body.report, document);
+      }
+      assert.equal(restoredReplay.body.reused, true);
+      assert.equal(new ReportJobStore({directory}).all().length, 1, "no new generation job after restore");
+    } finally { await new Promise(ready => started.created.close(ready)); }
+  });
+}
+
+for (const [status, code, terminalCode] of [[401, "OWNER_UNAUTHORIZED", "AUTHORIZATION_EXPIRED"], [403, "OWNER_FORBIDDEN", "FORBIDDEN"]]) {
+  test("execution rejection closes the async job without a document: " + status, async () => {
+    const directory = newDirectory();
+    const factory = sourceFactory();
+    const started = await start({jobDirectory: directory, sourceFactory: token => {
+      const source = factory(token);
+      return {...source, async call(name, args) {
+        return name === "autonexus_get_team_execution" ? {ok: false, error: {code, status}} : source.call(name, args);
+      }};
+    }});
+    try {
+      const created = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId: randomUUID()}});
+      const finished = await settle(started.url, created.body.jobId);
+      assert.equal(finished.body.status, "failed");
+      assert.equal(finished.body.failure.code, terminalCode);
+      assert.equal(finished.body.report, undefined);
+      assert.equal(finished.body.startedAt, NOW.toISOString());
+      assert.equal(new ReportJobStore({directory}).load(created.body.jobId).document, null);
+    } finally { await new Promise(ready => started.created.close(ready)); }
+  });
+}
+
 const start = async (deps = {}) => {
+  const factory = deps.sourceFactory ?? sourceFactory();
   const handler = createHandler({
     llm: null,
-    sourceFactory: sourceFactory(),
+    sourceFactory: factory,
+    authorizeReport: createReportAuthorizer({sourceFactory: factory, fetch: async (_url, options) => {
+      assert.equal(options.headers.authorization, "Bearer " + CHIEF);
+      return Response.json({employeeId: "22222222-2222-4222-8222-222222222222", employeeStatus: "active",
+        effective: ["agenda:read:team", "executions:read:team"]});
+    }}),
     now: () => NOW,
     logger: () => { },
     ...deps,
@@ -89,8 +272,10 @@ test("creation is short and the identifier is stable across the whole run", asyn
     const settled = await settle(started.url, created.body.jobId);
     assert.equal(settled.status, 200);
     assert.equal(settled.body.status, "succeeded");
+    assert.equal(settled.body.startedAt, NOW.toISOString());
     assert.equal(settled.body.jobId, created.body.jobId, "el identificador no cambia entre consultas");
     assert.equal(settled.body.report.figures.totalWorks, 1);
+    assert.deepEqual(checkReportContract(settled.body.report), []);
     assert.equal(settled.body.report.narrative.path, "deterministic");
     assert.equal(settled.body.report.narrative.generative, false);
     // The finished document lives on disk: a reload (a new handler over the same directory) reads it.
@@ -100,6 +285,7 @@ test("creation is short and the identifier is stable across the whole run", asyn
       assert.equal(again.status, 200);
       assert.equal(again.body.status, "succeeded");
       assert.equal(again.body.report.figures.totalWorks, 1);
+      assert.deepEqual(checkReportContract(again.body.report), []);
     } finally { await new Promise(ready => reopened.created.close(ready)); }
   } finally { await new Promise(ready => started.created.close(ready)); }
 });
@@ -107,17 +293,24 @@ test("creation is short and the identifier is stable across the whole run", asyn
 test("a retry with the same operationId returns the same job instead of generating again", async () => {
   const directory = newDirectory();
   const counter = {calls: 0};
-  const started = await start({jobDirectory: directory, sourceFactory: sourceFactory(counter)});
+  let generations = 0;
+  const started = await start({jobDirectory: directory, sourceFactory: sourceFactory(counter), llm: {
+    model: "controlled-report-model", totalTimeoutMs: 3000,
+    async chat() { generations += 1; throw new Error("controlled model unavailable"); },
+  }});
   try {
     const operationId = randomUUID();
     const first = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId}});
     await settle(started.url, first.body.jobId);
     const callsAfterFirst = counter.calls;
+    const generationsAfterFirst = generations;
+    assert.ok(generationsAfterFirst > 0);
     const second = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId}});
     assert.equal(second.status, 200);
     assert.equal(second.body.reused, true);
     assert.equal(second.body.jobId, first.body.jobId, "el reintento reutiliza el mismo trabajo");
-    assert.equal(counter.calls, callsAfterFirst, "no se consultó otra vez a los propietarios");
+    assert.ok(counter.calls > callsAfterFirst, "se revalida autorización de los registros guardados");
+    assert.equal(generations, generationsAfterFirst, "el reintento no vuelve a generar la narrativa");
     assert.equal(readdirSync(directory).filter(name => name.endsWith(".json")).length, 1, "un solo trabajo en disco");
   } finally { await new Promise(ready => started.created.close(ready)); }
 });
@@ -165,7 +358,7 @@ test("an authorization refused during the generation ends the job without restar
   const directory = newDirectory();
   const counter = {calls: 0};
   scope.deny = "unauthorized";
-  const started = await start({jobDirectory: directory, sourceFactory: sourceFactory(counter)});
+  const started = await start({jobDirectory: directory, sourceFactory: sourceFactory(counter), authorizeReport: async () => { }});
   try {
     const created = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId: randomUUID()}});
     const settled = await settle(started.url, created.body.jobId);
@@ -231,7 +424,7 @@ test("a full queue answers 503 instead of accepting work it cannot run", async (
     },
     async close() { },
   });
-  const started = await start({jobDirectory: directory, sourceFactory: blocked, jobCapacity: 1});
+  const started = await start({jobDirectory: directory, sourceFactory: blocked, jobCapacity: 1, authorizeReport: async () => { }});
   try {
     const first = await call(started.url, "/report/jobs", {body: {...PERIOD, operationId: randomUUID()}});
     assert.equal(first.status, 202);
@@ -271,6 +464,8 @@ test("a job that fails inside the runner closes as failed and does not stop the 
   const second = store.load(healthy.jobId);
   assert.equal(first.status, "failed", "el trabajo con el fallo termina");
   assert.equal(second.status, "succeeded", "el siguiente trabajo de la cola corre igual");
+  assert.equal(first.startedAt, NOW.toISOString());
+  assert.equal(second.startedAt, NOW.toISOString());
 });
 
 test("a store that cannot write fails loudly instead of losing the job", async () => {

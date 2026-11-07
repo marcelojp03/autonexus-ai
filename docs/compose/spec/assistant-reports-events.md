@@ -1,7 +1,7 @@
 ---
 feature: assistant-reports-events
-status: in-progress
-updated: 2026-11-06
+status: delivered
+updated: 2026-11-07
 source: work/marcelo
 ---
 
@@ -9,21 +9,30 @@ source: work/marcelo
 
 ## Report
 
-Estado al `73faf56`, verificado en navegador real. Detalle y límites en
-`docs/evidence/cu25-cu26-shell-20261106.md` (asistente y reporte) y `docs/evidence/cu28-20261106.md`
-(evento por evento).
+Entrega local verificada sobre base 7baf72b, work/marcelo, 2026-11-07. Este recorte no declara
+completos todos los requisitos de CU25/CU26/CU28 ni modifica la cobertura 54/22/26 del PLAN.
 
-| Diseño | Estado |
-| --- | --- |
-| S2.1 evento desde Outbox | **entregado** para un flujo (solicitud de revisión de CU17), tras corregir dos defectos de transporte: el cliente JDK se colgaba en el `upgrade` a HTTP/2 y el presupuesto de 5 s era menor que el receptor en frío |
-| S2.2 deduplicación y canal local | **entregado**: mismo `eventId` entregado una vez, más reentrega, fallo, recuperación, respuesta perdida y agotamiento observados |
-| S2.3 asistente con LLM real | **entregado**: Ollama `qwen3.5:4b`, catálogo cerrado por token, pasada de seguridad previa y respuesta con fuentes, procedencia y límites. La traza de razonamiento está desactivada por medición: con ella el modelo devolvía texto vacío en 99 s; sin ella responde en 20 s |
-| S2.4 reporte con cálculo separado | **entregado**: cifras deterministas coherentes (`totalWorks` = suma de `byStatus` = `perWork`), afirmaciones ligadas a su indicador, período y fuente; la narración del modelo se acepta solo si cada cifra queda vinculada y, si no, se publica la plantilla rotulada `deterministic` |
-| S2.5 integración web | **entregado**: `assistantAnswer`, `operationsReport`, `startOperationsReport` y `operationsReportJob` en GraphQL, con la página del microfrontend de Empleados sobre la sesión del Shell |
-| S2.6 generación asíncrona (añadido al diseñar S2.5) | **entregado**: la creación responde en milisegundos con el `operationId` del cliente, el estado se consulta por GraphQL, recargar retoma el mismo trabajo y el documento terminado se persiste; el token nunca se escribe |
+**What was built** — asistente y reporte operativo en Compose, Ollama externo configurable,
+trabajos persistentes sin tokens y Shell GraphQL; los cinco flujos originales de CU28 con
+solicitud de revisión adicional. Asignación sólo al cierre global de Saga, selección/revalidación
+propietaria de citas y cotizaciones, reporte semanal CU26 con ledger durable y ACK, permisos
+actuales y registros reautorizados. La entrega se serializa con cambios de cita mediante bloqueo
+y presupuesto de conexión temporal; salud/lecturas conservan sus límites globales.
 
-Pendiente de este recorte: los otros cuatro flujos de CU28, la programación con identidad técnica, los
-avisos externos y el asistente como componente desplegado (hoy es un proceso local en el *loopback*).
+**Verification** — agente 121/121 y TypeScript; Operaciones 87/87; Empleados 18/18 y tipos;
+Finanzas 16/16; programación 10/10 y exportaciones iguales al constructor. Se observaron
+los desencadenadores reales, repetición sin nuevo efecto, obsolescencia, autorización vencida,
+revocación parcial y restauración. La prueba intersemanal avanzó el candidato en un fixture,
+no el calendario: agente recreado, n8n reiniciado, mismos IDs/documento y un registro. La prueba
+concurrente real observó espera PostgreSQL, entrega 202 y cancelación 200 posterior, con
+configuración original restaurada. Evidencia y comandos en docs/evidence/cu28-catalogue-20261107.md;
+los recorridos de Shell previos permanecen en cu25-cu26-shell-20261106.md.
+
+Revisión independiente inicial exigió F1–F3; re-revisión del delta completo y de las pruebas reales
+cerró los tres sin bloqueantes. La observación menor de entradas extra se resolvió aclarando
+el comportamiento existente en el contrato: Finanzas rechaza, Operaciones ignora sin utilizarlas.
+La matriz cu25-cu26-acceptance-matrix.md conserva pendientes concretos y no acredita calidad
+general del modelo. Notificaciones externas, destinatarios y autonomía indefinida no se prometen.
 
 ## [S1] Problem
 
@@ -100,9 +109,10 @@ verifica token y pertenencia.
 
 La especificación enumera cinco flujos —recordatorio de cita o mantenimiento, aviso de orden finalizada,
 notificación de asignación al mecánico, seguimiento de cotización pendiente y resumen semanal—. Lo
-implementado y verificado es **otro** evento: `operations.execution.review.requested.v1`, la solicitud de
-revisión de CU17. La diferencia se registra en la evidencia y en el catálogo: no se renombra la solicitud
-de revisión como ninguno de los cinco, no se da por cumplido ninguno de ellos y no se reduce el alcance.
+implementado originalmente era **otro** evento: `operations.execution.review.requested.v1`, la solicitud de
+revisión de CU17. Se conserva como adicional, no como uno de los cinco. Base `7baf72b`: orden finalizada
+era 1/5. La continuación S2.11 añade los otros cuatro y acredita sólo sus resultados observados en
+`docs/evidence/cu28-catalogue-20261107.md`, sin reducir el alcance ni cerrar excepciones no ejercidas.
 
 ### [S2.9] Flujos pendientes por incrementos
 
@@ -130,10 +140,58 @@ roles mínimos de lectura que cada flujo necesita, igual que las cuentas de veri
 vuelve a autorizarse en el propietario. Si un flujo necesitara un alcance que un empleado no puede tener,
 no se programa y se registra el motivo.
 
+### [S2.11] Aceptación acotada de la continuación
+
+Base publicada: `7baf72b`, worktree personal `work/marcelo` conservado. La continuación autorizada
+por el usuario cubre los cuatro flujos originales pendientes, no nuevos CU. Orden finalizada cuenta
+como 1/5 y solicitud de revisión como adicional. No cambian puntos por ejecutar un proveedor externo:
+Ollama configurable forma parte del producto; programación semanal pertenece a CU28, no a CU26.
+
+- Asignación: evento sólo con Saga CU15 globalmente concluida; reserva o confirmación local no bastan.
+- Cotización: Finanzas selecciona pendientes vencidas y revalida estado/versión antes de publicar;
+  una decisión o revisión invalida el aviso anterior de forma observable.
+- Cita: programación en `America/La_Paz`, próxima jornada civil por defecto; el propietario decide
+  estado vigente y suprime avisos obsoletos por cancelación o reprogramación.
+- Semana: lunes 09:00 del taller, semana civil anterior lunes–domingo. CU26 genera mediante
+  `operationId` estable por período; n8n consulta el mismo trabajo hasta terminar y envía período,
+  procedencia, claims y `narrative.path` sin transformar plantilla en generación.
+- Credenciales: sesión OAuth2 delegada de empleado sintético activo con permisos mínimos;
+  refresh cifrado en credencial n8n, nunca en eventos/trabajos/logs. Vencimiento o revocación
+  registra fallo y detiene publicación. Restablecer sesión reintenta las mismas claves, sin
+  prometer autonomía más allá de la sesión delegada. No se usa client_credentials privilegiado.
+- Prueba por flujo: desencadenador empresarial real, una entrega correlacionada por ID,
+  repetición sin efecto nuevo y recuperación relevante. Programados: disparo real de temporizador
+  (cadencia breve sólo en fixture), fallo de autorización y recuperación. Sin borrar registros.
+- Evaluación CU25/CU26: selección de herramientas y exactitud frente a snapshots de APIs
+  autorizadas, aclaración, permiso y fallo honesto con expectativas explícitas; el conjunto
+  acotado no acredita calidad general ni funcionalidades financieras que no existen.
+
+### [S2.12] Correcciones de revisión: autorización completa y entrega semanal durable
+
+- Un documento guardado se reautoriza por todos sus datos representados, incluidas las
+  ejecuciones por assignmentId. Agenda permitida no basta si se revocó ejecución. GET y replay
+  de creación fallan cerrados sin publicar el documento al perder acceso a un registro/permiso.
+- El agente conserva intención semanal y copia del documento terminado en su volumen propio,
+  sin tokens, independiente del static data de n8n y de la retención normal de trabajos.
+  `POST /report/weekly/deliveries` recibe from/to de la semana candidata, pero recupera primero
+  una entrega pendiente anterior del mismo empleado. Devuelve período, IDs, jobId y documento
+  durable cuando existe. Cada acceso se reautoriza. Documento/IDs quedan inmutables hasta ACK.
+  `POST /report/weekly/deliveries/{operationId}/ack` exige eventId coincidente y recibo
+  recorded|duplicate; sólo entonces marca entregado. n8n confirma ese recibo tras el webhook.
+  Sin ACK, reiniciar y pasar a otra semana recupera el período/documento original antes de
+  elegir uno nuevo. Un trabajo failed/interrupted no se reinicia automáticamente.
+- La última decisión de vigencia de cita se serializa con cancelación/reprogramación mediante
+  bloqueo del propietario hasta terminar el POST acotado; el resultado no puede ser simultáneamente
+  suppressed y delivered. Se verifica el intercalado concurrente, no sólo cancelar antes del envío.
+  Cancelación/reprogramación toman primero la fila de cita y después el bloqueo global de slots,
+  para no retener el bloqueo global mientras esperan al publicador. Su conexión transaccional
+  usa temporalmente timeout de lectura = presupuesto HTTP CU28 + 5 s (20 s por defecto), y lo
+  restaura al salir. Salud, lecturas generales y configuración global conservan socketTimeout=2 s.
+
 ## [S3] Out of Scope
 
-CU30 (escrituras), CU31 (administración web de clientes), los cuatro flujos restantes de CU28
-(ampliaciones), notificaciones externas, programación autónoma y calidad del modelo visual.
+CU30 (escrituras), CU31 (administración web de clientes), notificaciones externas, nuevos recursos
+cloud, autonomía indefinida de credenciales, calidad diagnóstica del modelo visual e ICONIX.
 
 ## Tasks
 
@@ -142,9 +200,10 @@ CU30 (escrituras), CU31 (administración web de clientes), los cuatro flujos res
 - [x] T3: reporte narrativo con cálculos deterministas — acceptance: cifras iguales al cálculo, con referencias y procedencia (covers: S2.4).
 - [x] T4: BFF GraphQL y UI del Shell — acceptance: asistente y reporte usados desde la interfaz con sesión real (covers: S2.5). Verificado en navegador con siete escenarios.
 - [x] T5: trabajo asíncrono con identificador estable — acceptance: creación breve, estado por GraphQL, recarga sin duplicar, documento persistido y token no persistido (covers: S2.6).
-- [ ] T6: agente en Compose con volumen de trabajos y BFF por red interna — acceptance: reporte terminado legible tras `--force-recreate`, trabajo cortado leído como `INTERRUPTED`, sin puerto del agente publicado y sin modelos nuevos (covers: S2.7).
-- [ ] T7: smoke desde el Shell contra el agente en contenedor — acceptance: pregunta con herramientas, reporte del modelo, recarga y exportación funcionan sin procesos del host (covers: S2.7).
-- [ ] T8: catálogo de automatizaciones conciliado — acceptance: la diferencia entre la solicitud de revisión implementada y los cinco flujos enumerados queda registrada sin renombrar ni dar por cumplido ninguno (covers: S2.8).
-- [ ] T9: flujos de CU28 por incrementos — acceptance: cada flujo entregado dispara su evento real, se deduplica por `eventId` y llega al canal local; el resumen semanal publica el documento de CU26 (covers: S2.9, depends: T8).
-- [ ] T10: autorización de la programación — acceptance: la identidad programada es un empleado activo con roles mínimos, autorizado por cada propietario, sin cuenta técnica privilegiada (covers: S2.10).
-- [ ] T11: `docs/context/PLAN.md` desde la evidencia — acceptance: cada CU queda separado en implementación, aceptación funcional, calidad visual y despliegue, y ningún CU parcial se cuenta como completo (covers: S2.8).
+- [x] T6: agente en Compose con volumen de trabajos y BFF por red interna — acceptance: reporte terminado legible tras `--force-recreate`, trabajo cortado leído como `INTERRUPTED`, sin puerto del agente publicado y sin modelos nuevos (covers: S2.7).
+- [x] T7: smoke desde el Shell contra el agente en contenedor — acceptance: pregunta con herramientas, reporte del modelo, recarga y exportación funcionan sin procesos del host (covers: S2.7).
+- [x] T8: catálogo de automatizaciones conciliado — acceptance: solicitud de revisión registrada como adicional, orden finalizada 1/5 en la base y estado posterior de cada flujo respaldado por su propia evidencia (covers: S2.8).
+- [x] T9: flujos de CU28 por incrementos — acceptance: cada flujo entregado dispara su evento real, se deduplica por `eventId` y llega al canal local; el resumen semanal publica el documento de CU26 (covers: S2.9, depends: T8).
+- [x] T10: autorización de la programación — acceptance: la identidad programada es un empleado activo con roles mínimos, autorizado por cada propietario, sin cuenta técnica privilegiada (covers: S2.10).
+- [x] T11: `docs/context/PLAN.md` desde la evidencia — acceptance: cada CU queda separado en implementación, aceptación funcional, calidad visual y despliegue, y ningún CU parcial se cuenta como completo (covers: S2.8).
+- [x] T12: cerrar F1–F3 de revisión — acceptance: revocación sólo de ejecución impide leer/repetir reporte guardado; entrega semanal fallida + reinicio + semana siguiente recupera IDs/documento originales; cita concurrente serializada con envío (covers: S2.12).

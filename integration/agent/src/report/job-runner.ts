@@ -115,7 +115,7 @@ export class ReportJobRunner {
   }
 
   private async run(pending: Pending): Promise<void> {
-    const job = this.store.load(pending.jobId);
+    let job = this.store.load(pending.jobId);
     if (job === null) return;
     if (job.tokenExpiresAt !== null && job.tokenExpiresAt <= this.now().getTime()) {
       // The token that created the job already expired: the owners would answer 401 for every read.
@@ -124,7 +124,8 @@ export class ReportJobRunner {
       return;
     }
     const startedAt = this.now().toISOString();
-    this.store.save({...job, status: "running", startedAt});
+    job = {...job, status: "running", startedAt};
+    this.store.save(job);
     this.logger({at: startedAt, outcome: "job-started", jobId: job.jobId, from: job.from, to: job.to});
     let source: ToolSource | null = null;
     try {

@@ -171,6 +171,10 @@ services:
         condition: "service_completed_successfully"
   finance:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-finance:local"
+    environment:
+      CU28_PENDING_QUOTE_HOURS: "${CU28_PENDING_QUOTE_HOURS:-24}"
+      CU28_WEBHOOK_URL: "${CU28_WEBHOOK_URL:-}"
+      CU28_WEBHOOK_SECRET: "${CU28_WEBHOOK_SECRET:-}"
     build:
       context: "."
       dockerfile: "infra/local/docker/finance.Dockerfile"
@@ -207,6 +211,21 @@ services:
         condition: "service_healthy"
       provision:
         condition: "service_completed_successfully"
+    restart: "unless-stopped"
+  finance-automation-publisher:
+    image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-finance:local"
+    profiles: ["automations"]
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    volumes: ["config-finance:/run/config:ro"]
+    environment:
+      CU28_WEBHOOK_URL: "${CU28_WEBHOOK_URL:-}"
+      CU28_WEBHOOK_SECRET: "${CU28_WEBHOOK_SECRET:-}"
+    command: ["php","artisan","cu28:publish-outbox","--loop"]
+    depends_on:
+      finance:
+        condition: "service_healthy"
     restart: "unless-stopped"
   operations:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-operations:local"
@@ -343,6 +362,7 @@ services:
       AGENT_PORT: "3099"
       AGENT_HOST: "0.0.0.0"
       OPERATIONS_URL: "http://operations:8081"
+      EMPLOYEES_API_URL: "http://employees:3002"
       # The model stays an external, configurable provider on the host: no model is bundled or downloaded.
       OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
       REPORT_JOBS_DIR: "/var/lib/autonexus-agent/jobs"

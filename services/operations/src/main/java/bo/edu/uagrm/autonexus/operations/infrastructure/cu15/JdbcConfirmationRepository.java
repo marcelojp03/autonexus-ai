@@ -167,6 +167,18 @@ public class JdbcConfirmationRepository implements Repository {
             s.orderVersion++; s.status=confirm?"confirmed":"rejected"; s.phase=s.status; s.nextAttemptAt=now.toString();
             if(!saveInside(c,s,now)) throw new IllegalStateException("LEASE_LOST");
             event(s,confirm?"operations.order.confirmed.v1":"operations.cu15.confirmation.rejected.v1",UUID.fromString(s.input.get("operationId").toString()),now);
+            if (confirm) {
+                var notification = bo.edu.uagrm.autonexus.operations.infrastructure.cu28.AutomationEvents.envelope(
+                    bo.edu.uagrm.autonexus.operations.infrastructure.cu28.AutomationEvents.ASSIGNMENT,
+                    "order", UUID.fromString(s.orderId), s.orderVersion, UUID.fromString(s.id),
+                    UUID.fromString(s.input.get("operationId").toString()), now, s.initiatedBy,
+                    Map.of("orderId", s.orderId, "sagaId", s.id, "status", "confirmed",
+                        "assignmentId", s.step("confirm_assignment").resource().get("id"),
+                        "assignmentVersion", s.step("confirm_assignment").resource().get("version"),
+                        "employeeId", s.input.get("employeeId"), "startsAt", s.input.get("startsAt"),
+                        "endsAt", s.input.get("endsAt"), "version", s.orderVersion));
+                bo.edu.uagrm.autonexus.operations.infrastructure.cu28.AutomationEvents.insert(db, notification, json.write(notification), now);
+            }
             db.sql("INSERT INTO operations.operations_history(id,entity,entity_id,action,actor_subject,occurred_at,version,snapshot) VALUES(?,'work-order',?,?,?,?,?,?::jsonb)")
               .params(UUID.randomUUID(),UUID.fromString(s.orderId),s.status,s.initiatedBy,at(now),s.orderVersion,json.write(s)).update();
         });

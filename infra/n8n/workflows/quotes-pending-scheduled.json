@@ -1,0 +1,172 @@
+{
+  "id": "cu28PendingQuotes",
+  "name": "AutoNexus — CU28 overdue pending quotes",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "owner-selection",
+      "name": "Owner selection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "url": "http://finance:8000/automations/quotes/pending",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 20000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "autonexusCu28Scheduler",
+          "name": "AutoNexus CU28 delegated employee"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "sanitized-result-audit",
+      "name": "Sanitized result audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function httpBody(response) {\n  const status = response.statusCode;\n  if (status === 401 || status === 403) throw new Error('CU28_AUTHORIZATION_REQUIRED');\n  if (!Number.isInteger(status) || status < 200 || status >= 300) throw new Error('CU28_HTTP_UNAVAILABLE');\n  if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) {\n    throw new Error('CU28_INVALID_RESPONSE');\n  }\n  return response.body;\n}\ntry {httpBody($json);\nconst result = {status: 'owner_accepted', observedAt: new Date().toISOString()};\nconst state = $getWorkflowStaticData('global');\nstate.lastResult = result;\nreturn [{json: result}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "safe-transport-failure",
+      "name": "Safe transport failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\ntry {const allowed = ['CU28_INVALID_PERIOD', 'CU28_AUTHORIZATION_REQUIRED', 'CU28_HTTP_UNAVAILABLE',\n  'CU28_INVALID_RESPONSE', 'CU28_INVALID_JOB', 'CU28_JOB_MISMATCH', 'CU28_REPORT_TERMINAL_FAILURE',\n  'CU28_REPORT_POLL_TIMEOUT', 'CU28_INVALID_JOB_STATE', 'CU28_INVALID_VERIFIED_REPORT',\n  'CU28_DELIVERY_UNCONFIRMED', 'CU28_INVALID_DELIVERY', 'CU28_DELIVERY_NOT_READY', 'CU28_INTERNAL_FAILURE'];\nconst candidate = String($json.error?.message || $json.error || '').split(' ')[0];\nconst failureCode = allowed.includes(candidate) ? candidate : 'CU28_TRANSPORT_OR_CREDENTIAL_FAILURE';\nconst result = {status: 'error', failureCode, executionId: $execution.id, observedAt: new Date().toISOString()};\n$getWorkflowStaticData('global').lastResult = result;\nreturn [{json: result}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      }
+    },
+    {
+      "id": "fail-with-safe-code",
+      "name": "Fail with safe code",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {
+        "errorMessage": "={{ $json.failureCode }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Owner selection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner selection": {
+      "main": [
+        [
+          {
+            "node": "Sanitized result audit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safe transport failure": {
+      "main": [
+        [
+          {
+            "node": "Fail with safe code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitized result audit": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/La_Paz",
+    "saveManualExecutions": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveExecutionProgress": false,
+    "executionTimeout": 600
+  },
+  "active": false,
+  "pinData": {}
+}

@@ -2,6 +2,8 @@ import type { Permission } from '../domain/permissions.js';
 import type { AssignmentView, RoleDraft, RoleView, SecurityHistoryView, SyncErrorCode, SyncStatus } from '../domain/security.js';
 
 export interface EffectivePermissions {
+  readonly employeeId?: string | null;
+  readonly employeeStatus?: 'active' | 'inactive' | null;
   readonly roles: readonly string[];
   readonly recognized: readonly string[];
   readonly permissions: readonly Permission[];

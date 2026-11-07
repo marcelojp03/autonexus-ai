@@ -4,6 +4,8 @@ import {test, before, after} from "node:test";
 import assert from "node:assert/strict";
 import {createServer} from "node:http";
 import {createHandler} from "../dist/server.js";
+import {createReportAuthorizer} from "../dist/report/authorization.js";
+import {checkReportContract} from "../dist/report/contract.js";
 
 const NOW = new Date("2026-11-11T18:30:00.000Z");
 const FORWARDED = "Bearer " + "A".repeat(40);
@@ -50,9 +52,15 @@ let baseUrl;
 let server;
 
 const start = async (deps = {}) => {
+  const sourceFactory = deps.sourceFactory ?? (token => { seen.push({factoryToken: token}); return source(); });
   const handler = createHandler({
     llm: llm(),
-    sourceFactory: token => { seen.push({factoryToken: token}); return source(); },
+    sourceFactory,
+    authorizeReport: createReportAuthorizer({sourceFactory, fetch: async (_url, options) => {
+      assert.equal(options.headers.authorization, "Bearer " + CHIEF);
+      return Response.json({employeeId: "22222222-2222-4222-8222-222222222222", employeeStatus: "active",
+        effective: ["agenda:read:team", "executions:read:team"]});
+    }}),
     now: () => NOW,
     logger: entry => { log.push(entry); },
     ...deps,
@@ -192,13 +200,16 @@ test("the report is served over the caller's token with deterministic figures", 
         assignmentId: "11111111-1111-4111-8111-111111111111", orderId: "aaaaaaaa-1111-4111-8111-111111111111",
         orderNumber: "OS-1", executionStatus: "confirmed", startsAt: "2026-11-05T13:00:00Z"}],
         period: {from: args.from, to: args.to, timeZone: "America/La_Paz"}, page: {total: 1, limit: 50, offset: 0}}};
-      return {ok: true, data: {data: {evidenceSummary: {pending: 0, available: 2, failed: 0}}, page: {total: 3}}};
+      return {ok: true, data: {data: {assignmentId: args.assignmentId,
+        id: "33333333-3333-4333-8333-333333333333",
+        evidenceSummary: {pending: 0, available: 2, failed: 0}}, page: {total: 3}}};
     }};
   }});
   try {
     const response = await post("/report", {from: "2026-11-05", to: "2026-11-11"}, CHIEF, started.url);
     assert.equal(response.status, 200);
     assert.equal(response.body.report, "operations-narrative");
+    assert.deepEqual(checkReportContract(response.body), []);
     assert.equal(response.body.figures.totalWorks, 1);
     assert.equal(response.body.figures.advances, 3);
     assert.deepEqual(response.body.period, {from: "2026-11-05", to: "2026-11-11", timeZone: "America/La_Paz"});

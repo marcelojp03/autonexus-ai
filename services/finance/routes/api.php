@@ -31,3 +31,5 @@ Route::middleware('finance-auth:quotes.write')->group(function () {
 });
 
 Route::middleware('finance-auth:quotes.decide')->post('/quotes/{id}/decision', [QuoteController::class, 'decide']);
+
+Route::middleware('finance-auth:quotes.read')->post('/automations/quotes/pending', \App\Http\Controllers\PendingQuoteAutomationController::class);

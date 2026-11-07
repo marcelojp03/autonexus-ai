@@ -37,6 +37,8 @@ const REVOKE_KEYS = ['operationId', 'expectedVersion'] as const;
 const ASSIGN_KEYS = ['operationId', 'roleName'] as const;
 
 export interface SecurityCatalog {
+  readonly employeeId?: string | null;
+  readonly employeeStatus?: 'active' | 'inactive' | null;
   readonly catalog: typeof PERMISSION_CATALOG;
   readonly effective: readonly Permission[];
   readonly roles: readonly string[];
@@ -51,7 +53,10 @@ export class ManageSecurity {
 
   async catalog(subject: string, roles: readonly string[]): Promise<SecurityCatalog> {
     const effective = await this.repository.permissions(subject, roles);
-    return { catalog: PERMISSION_CATALOG, effective: effective.permissions, roles: effective.recognized };
+    return {
+      catalog: PERMISSION_CATALOG, effective: effective.permissions, roles: effective.recognized,
+      employeeId: effective.employeeId ?? null, employeeStatus: effective.employeeStatus ?? null,
+    };
   }
 
   roles(): Promise<readonly RoleView[]> {

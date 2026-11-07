@@ -1,5 +1,38 @@
 # Estado comprobado
 
+## CU28 — catálogo local, sesión programada limitada y conciliación del PLAN (2026-11-07)
+
+Base `7baf72b`, continuación en `work/marcelo`. Orden finalizada era **1/5** del catálogo; solicitud
+de revisión permanece adicional. Implementados y ejercitados los otros cuatro: asignación sólo al
+cierre global de CU15, recordatorio de cita por reloj de Operaciones, cotización pendiente y Outbox
+propios de Finanzas, resumen semanal que entrega el documento de CU26 sin cambiar su procedencia
+ni rotulado. Temporizadores reales en America/La_Paz con cadencia breve sólo en copias Proof.
+
+Repetición conserva IDs y un efecto local por evento. Cita cancelada y cotización rechazada después
+de persistir intención quedaron suppressed, no delivered. Recuperación de cita agotada por operador
+y de resumen con canal caído conserva ID/documento. Empleado sintético con cinco permisos de lectura
+sin administrador/jefe: logout de sus sesiones más expiración produce error en los tres temporizadores;
+restablecer Code+PKCE/credencial devuelve success sin duplicar el reporte. No autonomía indefinida.
+
+Agente comprueba vínculo y ambos permisos actuales en Empleados, y reautoriza en Operaciones
+los datos de ejecución representados en cada lectura/replay. Ledger semanal propio sin tokens:
+snapshot anterior a envío y ACK durable; no depende del static data fallido de n8n ni del TTL de jobs.
+Corrección de versión de agregado order en futuros eventos finalizados.
+Verificación final: agente **121/121** + build; Empleados **18/18** + tipos; Operaciones **87/87**;
+Finanzas **16/16**; programación **10/10**, exportaciones iguales al constructor. Documento semanal
+idéntico a CU26, 3 claims, ruta llm, 0 violaciones. Fallos iniciales y límites registrados en
+`docs/evidence/cu28-catalogue-20261107.md`; decisión 027.
+
+PLAN corrige CU22 (TFJS ya convertido/ejecutado), CU23 (inferencia integrada pero capacidad
+experimental), CU25 (Ollama externo configurable válido) y CU26 (generación separada de CU28).
+Puntos **54/22/26 sin cambio**: no se cierra todo CU28 por completar sólo catálogo local; queda
+la excepción de destinatario inexistente sin aceptación específica (el sumidero no modela destinatarios).
+Temporizadores Proof deshabilitados sin nuevas ejecuciones; horarios normales activos y política
+financiera restaurada a 24 horas. La matriz
+`docs/evidence/cu25-cu26-acceptance-matrix.md` fija preguntas, períodos, herramientas y oráculos
+contra propietarios; CU25/CU26 siguen parciales por capacidades/escenarios concretos, no por una
+condición indefinida de calidad general del modelo. No cambios académicos ICONIX.
+
 ## CU25/CU26 — asistente como servicio del Compose y smoke desde el Shell (2026-11-07)
 
 El asistente dejó de ser un proceso manual en el host: `infra/local/docker/agent.Dockerfile` y el

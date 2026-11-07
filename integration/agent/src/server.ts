@@ -12,9 +12,12 @@ import {createOllamaClient, type LlmClient} from "./llm/ollama.js";
 import {ASSISTANT_PROMPT_VERSION, askWithLlm, type AssistantAnswer} from "./assistant/llm-assistant.js";
 import {answerDeterministically} from "./assistant/deterministic.js";
 import {createTokenSource} from "./assistant/token-source.js";
-import {buildNarrativeReport, ReportError} from "./report/narrative-report.js";
+import {buildNarrativeReport, ReportError, validatePeriod} from "./report/narrative-report.js";
 import {ReportJobStore, type ReportJob} from "./report/jobs.js";
 import {publicJob, QUEUE_FULL, ReportJobRunner} from "./report/job-runner.js";
+import {WeeklyDeliveryStore, WeeklyDeliveryStoreError} from "./report/weekly-deliveries.js";
+import {createReportAuthorizer, type AuthorizeReport} from "./report/authorization.js";
+import {checkReportContract} from "./report/contract.js";
 import type {ToolSource} from "./sources/mcp.js";
 
 export const DEFAULT_PORT = 3099;
@@ -23,6 +26,8 @@ const LOOPBACK = "127.0.0.1";
 const BEARER = /^Bearer ([A-Za-z0-9._~+/=-]{20,})$/;
 const MIN_QUERY = 3;
 const MAX_QUERY = 1_000;
+const WEEKLY_PATH = "/report/weekly/deliveries";
+const WEEKLY_ACK = new RegExp("^/report/weekly/deliveries/([0-9a-f-]{36})/ack$", "i");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const JOB_PATH = /^\/report\/jobs\/([0-9a-f-]{36})$/i;
 
@@ -30,6 +35,7 @@ export interface ServerDeps {
   /** null disables the model: every request then answers through the deterministic planner. */
   readonly llm?: LlmClient | null;
   readonly sourceFactory?: (token: string) => ToolSource;
+  readonly authorizeReport?: AuthorizeReport;
   readonly now?: () => Date;
   readonly logger?: (entry: Readonly<Record<string, unknown>>) => void;
   readonly maxBodyBytes?: number;
@@ -138,10 +144,12 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
   const maxBodyBytes = deps.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const now = deps.now ?? ((): Date => new Date());
   const llm = deps.llm === undefined ? createOllamaClient() : deps.llm;
+  const authorizeReport = deps.authorizeReport ?? createReportAuthorizer({sourceFactory});
 
   const jobDirectory = deps.jobDirectory ?? process.env["REPORT_JOBS_DIR"] ?? resolve(process.cwd(), "output/agent/jobs");
   const jobStore = new ReportJobStore({directory: jobDirectory,
     ...(deps.jobRetention === undefined ? {} : {keep: deps.jobRetention})});
+  const weeklyStore = new WeeklyDeliveryStore({directory: resolve(jobDirectory, "weekly-deliveries")});
   const jobs = new ReportJobRunner({store: jobStore, sourceFactory, build: buildNarrativeReport, llm, now,
     logger: entry => logger(entry), ...(deps.jobCapacity === undefined ? {} : {capacity: deps.jobCapacity})});
   // A job left open by a previous process cannot resume: its token was never written down.
@@ -173,7 +181,9 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
     };
     const challenge = {"www-authenticate": "Bearer realm=\"autonexus-agent\", error=\"invalid_token\""};
     const jobPath = JOB_PATH.exec(path);
-    const known = path === "/assistant" || path === "/report" || path === "/report/jobs" || jobPath !== null;
+    const weeklyAck = WEEKLY_ACK.exec(path);
+    const known = path === "/assistant" || path === "/report" || path === "/report/jobs" || jobPath !== null
+      || path === WEEKLY_PATH || weeklyAck !== null;
 
     void (async () => {
       try {
@@ -210,6 +220,7 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
             fail(404, "JOB_NOT_FOUND", "No hay un trabajo con ese identificador para esta cuenta.");
             return;
           }
+          await authorizeReport(token, {from: job.from, to: job.to}, job.document);
           complete(200, {outcome: "job-status", jobId: job.jobId, jobStatus: job.status});
           sendJson(response, 200, publicJob(job));
           return;
@@ -224,6 +235,45 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           input = parsed as Json;
         } catch { fail(400, "INVALID_BODY", "Se espera un objeto JSON."); return; }
 
+        if (path === WEEKLY_PATH || weeklyAck !== null) {
+          if (claims.sub === null) { fail(401, "INVALID_TOKEN", "El token no identifica una cuenta.", challenge); return; }
+          if (weeklyAck !== null) {
+            if (Object.keys(input).some(key => !["eventId", "status"].includes(key))
+                || typeof input["eventId"] !== "string" || !UUID.test(input["eventId"])
+                || !["recorded", "duplicate"].includes(String(input["status"]))) {
+              fail(400, "INVALID_RECEIPT", "Se requiere un recibo de entrega válido."); return;
+            }
+            const entry = weeklyStore.find(claims.sub, weeklyAck[1] ?? "");
+            if (entry === null) { fail(404, "DELIVERY_NOT_FOUND", "Entrega no disponible."); return; }
+            await authorizeReport(token, entry.period, entry.report);
+            const saved = weeklyStore.acknowledge(claims.sub, entry.operationId, input["eventId"],
+              input["status"] as "recorded" | "duplicate", now().toISOString());
+            const {subject: ignored, ...view} = saved;
+            sendJson(response, 200, view); complete(200, {outcome: "weekly-delivered", eventId: saved.eventId}); return;
+          }
+          if (Object.keys(input).some(key => !["from", "to"].includes(key))) {
+            fail(400, "INVALID_PERIOD", "Sólo se acepta el período candidato."); return;
+          }
+          const candidate = validatePeriod(String(input["from"] ?? ""), String(input["to"] ?? ""));
+          const pending = weeklyStore.pending(claims.sub);
+          await authorizeReport(token, pending?.period ?? candidate, pending?.report);
+          let entry = weeklyStore.select(claims.sub, candidate, now().toISOString());
+          if (entry.report === null) {
+            const existingJob = jobStore.findByOperation(claims.sub, entry.operationId);
+            if (existingJob !== null) {
+              entry = weeklyStore.bindJob(claims.sub, entry.operationId, existingJob.jobId);
+              if (existingJob.status === "succeeded") {
+                await authorizeReport(token, entry.period, existingJob.document);
+                if (checkReportContract(existingJob.document).length !== 0) throw new ReportError("INVALID_REPORT", "El documento no cumple el contrato.", 502);
+                entry = weeklyStore.saveReady(claims.sub, entry.operationId, existingJob.jobId, existingJob.document);
+              }
+            }
+          }
+          await authorizeReport(token, entry.period, entry.report);
+          const {subject: ignored, ...view} = entry;
+          sendJson(response, 200, view); complete(200, {outcome: "weekly-delivery", eventId: entry.eventId}); return;
+        }
+
         if (path === "/report/jobs") {
           const operationId = typeof input["operationId"] === "string" ? input["operationId"].trim() : "";
           if (!UUID.test(operationId)) {
@@ -231,18 +281,26 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
             return;
           }
           if (claims.sub === null) { fail(401, "INVALID_TOKEN", "El token no identifica a una cuenta.", challenge); return; }
+          const prior = jobStore.findByOperation(claims.sub, operationId);
+          const period = validatePeriod(prior?.from ?? String(input["from"] ?? ""), prior?.to ?? String(input["to"] ?? ""));
+          await authorizeReport(token, period, prior?.document);
+          // Authorization yields: another request may have created the same operation meanwhile.
           const existing = jobStore.findByOperation(claims.sub, operationId);
           if (existing !== null) {
+            await authorizeReport(token, {from: existing.from, to: existing.to}, existing.document);
             complete(200, {outcome: "job-reused", jobId: existing.jobId, jobStatus: existing.status});
             sendJson(response, 200, {...publicJob(existing), reused: true});
             return;
           }
           const requestedAt = now().toISOString();
           const job: ReportJob = {jobId: randomUUID(), operationId, subject: claims.sub,
-            from: String(input["from"] ?? ""), to: String(input["to"] ?? ""),
+            from: period.from, to: period.to,
             tokenExpiresAt: claims.exp === undefined ? null : claims.exp * 1_000,
             requestedAt, startedAt: null, finishedAt: null, status: "queued",
             document: null, failure: null};
+          const weeklyIntent = weeklyStore.find(claims.sub, operationId);
+          if (weeklyIntent?.jobId) { fail(409, "WEEKLY_JOB_MISSING", "El trabajo vinculado no está disponible; requiere revisión operativa."); return; }
+          if (weeklyIntent !== null) weeklyStore.bindJob(claims.sub, operationId, job.jobId);
           // Written before it is queued: a reload must find the same identifier, not a new generation.
           jobStore.save(job);
           if (!jobs.submit(job, token)) {
@@ -275,6 +333,7 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           }
 
           const from = input["from"], to = input["to"];
+          await authorizeReport(token, {from: String(from ?? ""), to: String(to ?? "")});
           const report = await buildNarrativeReport({period: {from: String(from ?? ""), to: String(to ?? "")},
             source, llm, now, ...(typeof input["maxWorks"] === "number" ? {maxWorks: input["maxWorks"] as number} : {})});
           complete(200, {outcome: "report", narrativePath: report.narrative.path, generative: report.narrative.generative,
@@ -284,8 +343,13 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           await source.close();
         }
       } catch (caught) {
+        const weeklyFailure = caught as {code?: string; status?: number};
+        if (caught instanceof WeeklyDeliveryStoreError) {
+          const status = [400, 404, 409, 503].includes(weeklyFailure.status ?? 0) ? weeklyFailure.status as number : 503;
+          fail(status, caught.code, "No se pudo confirmar el estado durable de la entrega semanal."); return;
+        }
         if (caught instanceof ReportError) {
-          const status = caught.status === 401 ? 401 : caught.status === 403 ? 403 : caught.status === 400 ? 400 : 502;
+          const status = caught.status === 401 ? 401 : caught.status === 403 ? 403 : caught.status === 400 ? 400 : caught.status === 503 ? 503 : 502;
           fail(status, caught.code, caught.message, status === 401 ? challenge : {});
           return;
         }

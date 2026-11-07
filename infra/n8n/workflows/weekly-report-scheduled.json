@@ -1,0 +1,984 @@
+{
+  "id": "cu28WeeklyReport",
+  "name": "AutoNexus — CU28 weekly verified CU26 report",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 9 * * 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prepare-period",
+      "name": "Prepare period",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function previousWeek(instant) {\n  const parts = new Intl.DateTimeFormat('en-CA', {\n    timeZone: 'America/La_Paz', year: 'numeric', month: '2-digit', day: '2-digit',\n  }).formatToParts(new Date(instant));\n  const part = type => parts.find(p => p.type === type).value;\n  const day = new Date(part('year') + '-' + part('month') + '-' + part('day') + 'T00:00:00Z');\n  day.setUTCDate(day.getUTCDate() - (day.getUTCDay() + 6) % 7 - 7);\n  const from = day.toISOString().slice(0, 10);\n  day.setUTCDate(day.getUTCDate() + 6);\n  return {from, to: day.toISOString().slice(0, 10), timeZone: 'America/La_Paz'};\n}\ntry {return [{json: {period: previousWeek($json.timestamp || new Date().toISOString())}}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "acquire-durable-delivery",
+      "name": "Acquire durable delivery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "url": "http://agent:3099/report/weekly/deliveries",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({from: $json.period.from, to: $json.period.to}) }}",
+        "options": {
+          "timeout": 20000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "autonexusCu28Scheduler",
+          "name": "AutoNexus CU28 delegated employee"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "delivery-acquired",
+      "name": "Delivery acquired",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function httpBody(response) {\n  const status = response.statusCode;\n  if (status === 401 || status === 403) throw new Error('CU28_AUTHORIZATION_REQUIRED');\n  if (!Number.isInteger(status) || status < 200 || status >= 300) throw new Error('CU28_HTTP_UNAVAILABLE');\n  if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) {\n    throw new Error('CU28_INVALID_RESPONSE');\n  }\n  return response.body;\n}\nfunction periodIds(period) {\n  const start = new Date(period.from + 'T00:00:00Z');\n  const end = new Date(start);\n  end.setUTCDate(end.getUTCDate() + 6);\n  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(period.from) || !Number.isFinite(start.getTime())\n      || start.toISOString().slice(0, 10) !== period.from || start.getUTCDay() !== 1\n      || end.toISOString().slice(0, 10) !== period.to || period.timeZone !== 'America/La_Paz') {\n    throw new Error('CU28_INVALID_PERIOD');\n  }\n  // UUIDv8 encodes the civil Monday injectively; purpose suffixes separate operation and event IDs.\n  const prefix = 'a0280001-0000-8000-8000-' + period.from.replaceAll('-', '');\n  return {operationId: prefix + '0001', eventId: prefix + '0002'};\n}\nfunction acquiredDelivery(response) {\n  const delivery = httpBody(response);\n  const ids = periodIds(delivery.period ?? {});\n  if (delivery.operationId !== ids.operationId || delivery.eventId !== ids.eventId\n      || !['pending', 'delivered'].includes(delivery.status)\n      || !(delivery.jobId === null || typeof delivery.jobId === 'string' && /^[0-9a-f-]{36}$/i.test(delivery.jobId))\n      || !(delivery.report === null || delivery.report && typeof delivery.report === 'object' && !Array.isArray(delivery.report))\n      || (delivery.report !== null && delivery.jobId === null) || (delivery.status === 'delivered' && delivery.report === null)) {\n    throw new Error('CU28_INVALID_DELIVERY');\n  }\n  return {period: delivery.period, ...ids, jobId: delivery.jobId, resumeJobId: delivery.jobId,\n    hasJob: Boolean(delivery.jobId), ready: delivery.report !== null,\n    delivered: delivery.status === 'delivered', report: delivery.report, deadline: Date.now() + 600000};\n}\ntry {return [{json: acquiredDelivery($json)}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "delivery-already-acknowledged",
+      "name": "Delivery already acknowledged",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Delivery already acknowledged",
+              "leftValue": "={{ $json.delivered }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "already-acknowledged-audit",
+      "name": "Already acknowledged audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        260
+      ],
+      "parameters": {
+        "jsCode": "\ntry {const result = {status: 'delivered', eventId: $json.eventId, operationId: $json.operationId,\njobId: $json.jobId, period: $json.period, observedAt: new Date().toISOString()};\n$getWorkflowStaticData('global').lastResult = result;\nreturn [{json: result}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "durable-report-ready",
+      "name": "Durable report ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Durable report ready",
+              "leftValue": "={{ $json.ready }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "have-existing-job",
+      "name": "Have existing job",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Have existing job",
+              "leftValue": "={{ $json.hasJob }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "start-or-recover-same-job",
+      "name": "Start or recover same job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        780,
+        260
+      ],
+      "parameters": {
+        "url": "http://agent:3099/report/jobs",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({from: $json.period.from, to: $json.period.to, operationId: $json.operationId}) }}",
+        "options": {
+          "timeout": 20000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "autonexusCu28Scheduler",
+          "name": "AutoNexus CU28 delegated employee"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "job-accepted",
+      "name": "Job accepted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        260
+      ],
+      "parameters": {
+        "jsCode": "function httpBody(response) {\n  const status = response.statusCode;\n  if (status === 401 || status === 403) throw new Error('CU28_AUTHORIZATION_REQUIRED');\n  if (!Number.isInteger(status) || status < 200 || status >= 300) throw new Error('CU28_HTTP_UNAVAILABLE');\n  if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) {\n    throw new Error('CU28_INVALID_RESPONSE');\n  }\n  return response.body;\n}\nfunction acceptedJob(response) {\n  const job = httpBody(response);\n  if (typeof job.jobId !== 'string' || !/^[0-9a-f-]{36}$/i.test(job.jobId)) throw new Error('CU28_INVALID_JOB');\n  return {jobId: job.jobId};\n}\ntry {const result = $json.resumeJobId ? {jobId: $json.resumeJobId} : acceptedJob($json);\nreturn [{json: result}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "check-poll-budget",
+      "name": "Check poll budget",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        520
+      ],
+      "parameters": {
+        "jsCode": "\ntry {if (Date.now() + 20000 >= $('Delivery acquired').first().json.deadline) throw new Error('CU28_REPORT_POLL_TIMEOUT');\nreturn [{json: {jobId: $('Job accepted').first().json.jobId}}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "read-same-job",
+      "name": "Read same job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        260,
+        520
+      ],
+      "parameters": {
+        "url": "={{ 'http://agent:3099/report/jobs/' + $('Job accepted').first().json.jobId }}",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {
+          "timeout": 20000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "autonexusCu28Scheduler",
+          "name": "AutoNexus CU28 delegated employee"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "evaluate-job",
+      "name": "Evaluate job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        520
+      ],
+      "parameters": {
+        "jsCode": "function httpBody(response) {\n  const status = response.statusCode;\n  if (status === 401 || status === 403) throw new Error('CU28_AUTHORIZATION_REQUIRED');\n  if (!Number.isInteger(status) || status < 200 || status >= 300) throw new Error('CU28_HTTP_UNAVAILABLE');\n  if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) {\n    throw new Error('CU28_INVALID_RESPONSE');\n  }\n  return response.body;\n}\nfunction evaluateJob(response, context, now) {\n  const job = httpBody(response);\n  if (now >= context.deadline) throw new Error('CU28_REPORT_POLL_TIMEOUT');\n  if (job.jobId !== context.jobId || job.period?.from !== context.period.from\n      || job.period?.to !== context.period.to || job.period?.timeZone !== context.period.timeZone) {\n    throw new Error('CU28_JOB_MISMATCH');\n  }\n  if (job.status === 'failed' || job.status === 'interrupted') {\n    throw new Error(job.failure?.code === 'AUTHORIZATION_EXPIRED'\n      ? 'CU28_AUTHORIZATION_REQUIRED' : 'CU28_REPORT_TERMINAL_FAILURE');\n  }\n  if (job.status === 'succeeded') return {ready: true, report: job.report};\n  if (!['queued', 'running'].includes(job.status)) throw new Error('CU28_INVALID_JOB_STATE');\n  // Reserve the next wait and HTTP timeout inside the ten-minute budget.\n  if (now + 25000 >= context.deadline) throw new Error('CU28_REPORT_POLL_TIMEOUT');\n  return {ready: false, jobId: context.jobId};\n}\ntry {const context = {...$('Delivery acquired').first().json, ...$('Job accepted').first().json};\nreturn [{json: evaluateJob($json, context, Date.now())}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "report-ready",
+      "name": "Report ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Report ready",
+              "leftValue": "={{ $json.ready }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-5-seconds",
+      "name": "Wait 5 seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        520
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 5,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "persist-completed-delivery",
+      "name": "Persist completed delivery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        0,
+        780
+      ],
+      "parameters": {
+        "url": "http://agent:3099/report/weekly/deliveries",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({from: $(\"Delivery acquired\").first().json.period.from, to: $(\"Delivery acquired\").first().json.period.to}) }}",
+        "options": {
+          "timeout": 20000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "autonexusCu28Scheduler",
+          "name": "AutoNexus CU28 delegated employee"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ready-persisted",
+      "name": "Ready persisted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        780
+      ],
+      "parameters": {
+        "jsCode": "function httpBody(response) {\n  const status = response.statusCode;\n  if (status === 401 || status === 403) throw new Error('CU28_AUTHORIZATION_REQUIRED');\n  if (!Number.isInteger(status) || status < 200 || status >= 300) throw new Error('CU28_HTTP_UNAVAILABLE');\n  if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) {\n    throw new Error('CU28_INVALID_RESPONSE');\n  }\n  return response.body;\n}\nfunction periodIds(period) {\n  const start = new Date(period.from + 'T00:00:00Z');\n  const end = new Date(start);\n  end.setUTCDate(end.getUTCDate() + 6);\n  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(period.from) || !Number.isFinite(start.getTime())\n      || start.toISOString().slice(0, 10) !== period.from || start.getUTCDay() !== 1\n      || end.toISOString().slice(0, 10) !== period.to || period.timeZone !== 'America/La_Paz') {\n    throw new Error('CU28_INVALID_PERIOD');\n  }\n  // UUIDv8 encodes the civil Monday injectively; purpose suffixes separate operation and event IDs.\n  const prefix = 'a0280001-0000-8000-8000-' + period.from.replaceAll('-', '');\n  return {operationId: prefix + '0001', eventId: prefix + '0002'};\n}\nfunction acquiredDelivery(response) {\n  const delivery = httpBody(response);\n  const ids = periodIds(delivery.period ?? {});\n  if (delivery.operationId !== ids.operationId || delivery.eventId !== ids.eventId\n      || !['pending', 'delivered'].includes(delivery.status)\n      || !(delivery.jobId === null || typeof delivery.jobId === 'string' && /^[0-9a-f-]{36}$/i.test(delivery.jobId))\n      || !(delivery.report === null || delivery.report && typeof delivery.report === 'object' && !Array.isArray(delivery.report))\n      || (delivery.report !== null && delivery.jobId === null) || (delivery.status === 'delivered' && delivery.report === null)) {\n    throw new Error('CU28_INVALID_DELIVERY');\n  }\n  return {period: delivery.period, ...ids, jobId: delivery.jobId, resumeJobId: delivery.jobId,\n    hasJob: Boolean(delivery.jobId), ready: delivery.report !== null,\n    delivered: delivery.status === 'delivered', report: delivery.report, deadline: Date.now() + 600000};\n}\ntry {const result = acquiredDelivery($json);\nif (!result.ready || !result.jobId) throw new Error('CU28_DELIVERY_NOT_READY');\nreturn [{json: result}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "verified-event",
+      "name": "Verified event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        780
+      ],
+      "parameters": {
+        "jsCode": "function periodIds(period) {\n  const start = new Date(period.from + 'T00:00:00Z');\n  const end = new Date(start);\n  end.setUTCDate(end.getUTCDate() + 6);\n  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(period.from) || !Number.isFinite(start.getTime())\n      || start.toISOString().slice(0, 10) !== period.from || start.getUTCDay() !== 1\n      || end.toISOString().slice(0, 10) !== period.to || period.timeZone !== 'America/La_Paz') {\n    throw new Error('CU28_INVALID_PERIOD');\n  }\n  // UUIDv8 encodes the civil Monday injectively; purpose suffixes separate operation and event IDs.\n  const prefix = 'a0280001-0000-8000-8000-' + period.from.replaceAll('-', '');\n  return {operationId: prefix + '0001', eventId: prefix + '0002'};\n}\nfunction weeklyEvent(report, period, jobId) {\n  const ids = periodIds(period);\n  if (!report || report.report !== 'operations-narrative' || report.period?.from !== period.from\n      || report.period?.to !== period.to || report.period?.timeZone !== period.timeZone\n      || !Number.isFinite(Date.parse(report.generatedAt)) || typeof report.promptVersion !== 'string'\n      || !report.figures || !Array.isArray(report.claims) || !Array.isArray(report.provenance)\n      || !Array.isArray(report.references) || !Array.isArray(report.limitations)\n      || report.financialData?.included !== false || typeof report.financialData.note !== 'string'\n      || report.narrative?.verified !== true || typeof report.narrative.text !== 'string'\n      || !['llm', 'deterministic'].includes(report.narrative.path)\n      || report.narrative.generative !== (report.narrative.path === 'llm')) {\n    throw new Error('CU28_INVALID_VERIFIED_REPORT');\n  }\n  const data = {\n    jobId, operationId: ids.operationId, report: report.report,\n    period: {from: period.from, to: period.to, timeZone: period.timeZone},\n    generatedAt: report.generatedAt, promptVersion: report.promptVersion,\n    figures: report.figures, claims: report.claims, provenance: report.provenance,\n    references: report.references, limitations: report.limitations,\n    financialData: {included: false, note: report.financialData.note},\n    narrative: {text: report.narrative.text, path: report.narrative.path,\n      model: report.narrative.model, verified: true, generative: report.narrative.generative},\n  };\n  return {\n    eventId: ids.eventId, eventType: 'automation.weekly.report.generated.v1', schemaVersion: 1,\n    aggregateType: 'weekly_report', aggregateId: ids.operationId, aggregateVersion: 1,\n    occurredAt: report.generatedAt, producer: 'agent', correlationId: ids.operationId,\n    causationId: ids.operationId, initiatedBy: 'n8n-schedule', executedBy: 'delegated-employee', data,\n  };\n}\ntry {return [{json: weeklyEvent($json.report, $json.period, $json.jobId)}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "deliver-same-event",
+      "name": "Deliver same event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        780,
+        780
+      ],
+      "parameters": {
+        "url": "http://n8n:5678/webhook/cu28-execution-review",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 20000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": false
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-autonexus-secret",
+              "value": "={{ $env.CU28_WEBHOOK_SECRET }}"
+            }
+          ]
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "confirm-channel-receipt",
+      "name": "Confirm channel receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        780
+      ],
+      "parameters": {
+        "jsCode": "function httpBody(response) {\n  const status = response.statusCode;\n  if (status === 401 || status === 403) throw new Error('CU28_AUTHORIZATION_REQUIRED');\n  if (!Number.isInteger(status) || status < 200 || status >= 300) throw new Error('CU28_HTTP_UNAVAILABLE');\n  if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) {\n    throw new Error('CU28_INVALID_RESPONSE');\n  }\n  return response.body;\n}\nfunction deliveryReceipt(response, eventId) {\n  const body = httpBody(response);\n  if (body.eventId !== eventId || !['recorded', 'duplicate'].includes(body.status)) {\n    throw new Error('CU28_DELIVERY_UNCONFIRMED');\n  }\n  return {eventId, status: body.status};\n}\ntry {const event = $('Verified event').first().json;\nconst receipt = deliveryReceipt($json, event.eventId);\nreturn [{json: {...receipt, operationId: event.data.operationId}}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "acknowledge-durable-delivery",
+      "name": "Acknowledge durable delivery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        0,
+        1040
+      ],
+      "parameters": {
+        "url": "={{ 'http://agent:3099/report/weekly/deliveries/' + $json.operationId + '/ack' }}",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({eventId: $json.eventId, status: $json.status}) }}",
+        "options": {
+          "timeout": 20000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "autonexusCu28Scheduler",
+          "name": "AutoNexus CU28 delegated employee"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "sanitized-result-audit",
+      "name": "Sanitized result audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        1040
+      ],
+      "parameters": {
+        "jsCode": "function httpBody(response) {\n  const status = response.statusCode;\n  if (status === 401 || status === 403) throw new Error('CU28_AUTHORIZATION_REQUIRED');\n  if (!Number.isInteger(status) || status < 200 || status >= 300) throw new Error('CU28_HTTP_UNAVAILABLE');\n  if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) {\n    throw new Error('CU28_INVALID_RESPONSE');\n  }\n  return response.body;\n}\ntry {const acknowledged = httpBody($json);\nconst event = $('Verified event').first().json;\nif (acknowledged.status !== 'delivered' || acknowledged.eventId !== event.eventId) throw new Error('CU28_DELIVERY_UNCONFIRMED');\nconst result = {eventId: event.eventId, status: 'delivered', operationId: event.data.operationId, jobId: event.data.jobId,\nperiod: event.data.period, narrativePath: event.data.narrative.path, claims: event.data.claims.length, observedAt: new Date().toISOString()};\n$getWorkflowStaticData('global').lastResult = result;\nreturn [{json: result}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "safe-transport-failure",
+      "name": "Safe transport failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        1040
+      ],
+      "parameters": {
+        "jsCode": "\ntry {const allowed = ['CU28_INVALID_PERIOD', 'CU28_AUTHORIZATION_REQUIRED', 'CU28_HTTP_UNAVAILABLE',\n  'CU28_INVALID_RESPONSE', 'CU28_INVALID_JOB', 'CU28_JOB_MISMATCH', 'CU28_REPORT_TERMINAL_FAILURE',\n  'CU28_REPORT_POLL_TIMEOUT', 'CU28_INVALID_JOB_STATE', 'CU28_INVALID_VERIFIED_REPORT',\n  'CU28_DELIVERY_UNCONFIRMED', 'CU28_INVALID_DELIVERY', 'CU28_DELIVERY_NOT_READY', 'CU28_INTERNAL_FAILURE'];\nconst candidate = String($json.error?.message || $json.error || '').split(' ')[0];\nconst failureCode = allowed.includes(candidate) ? candidate : 'CU28_TRANSPORT_OR_CREDENTIAL_FAILURE';\nconst result = {status: 'error', failureCode, executionId: $execution.id, observedAt: new Date().toISOString()};\n$getWorkflowStaticData('global').lastResult = result;\nreturn [{json: result}];} catch (failure) {\nconst failureCode = /^CU28_[A-Z_]+$/.test(failure.message) ? failure.message : 'CU28_INTERNAL_FAILURE';\nthrow new Error(failureCode);\n}"
+      }
+    },
+    {
+      "id": "fail-with-safe-code",
+      "name": "Fail with safe code",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        780,
+        1040
+      ],
+      "parameters": {
+        "errorMessage": "={{ $json.failureCode }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Prepare period",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare period": {
+      "main": [
+        [
+          {
+            "node": "Acquire durable delivery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire durable delivery": {
+      "main": [
+        [
+          {
+            "node": "Delivery acquired",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery acquired": {
+      "main": [
+        [
+          {
+            "node": "Delivery already acknowledged",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery already acknowledged": {
+      "main": [
+        [
+          {
+            "node": "Already acknowledged audit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Durable report ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Durable report ready": {
+      "main": [
+        [
+          {
+            "node": "Verified event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Have existing job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Have existing job": {
+      "main": [
+        [
+          {
+            "node": "Job accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Start or recover same job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start or recover same job": {
+      "main": [
+        [
+          {
+            "node": "Job accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job accepted": {
+      "main": [
+        [
+          {
+            "node": "Check poll budget",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check poll budget": {
+      "main": [
+        [
+          {
+            "node": "Read same job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read same job": {
+      "main": [
+        [
+          {
+            "node": "Evaluate job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate job": {
+      "main": [
+        [
+          {
+            "node": "Report ready",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report ready": {
+      "main": [
+        [
+          {
+            "node": "Persist completed delivery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 5 seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 seconds": {
+      "main": [
+        [
+          {
+            "node": "Check poll budget",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist completed delivery": {
+      "main": [
+        [
+          {
+            "node": "Ready persisted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready persisted": {
+      "main": [
+        [
+          {
+            "node": "Verified event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verified event": {
+      "main": [
+        [
+          {
+            "node": "Deliver same event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver same event": {
+      "main": [
+        [
+          {
+            "node": "Confirm channel receipt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm channel receipt": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge durable delivery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge durable delivery": {
+      "main": [
+        [
+          {
+            "node": "Sanitized result audit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safe transport failure": {
+      "main": [
+        [
+          {
+            "node": "Fail with safe code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already acknowledged audit": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitized result audit": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Safe transport failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/La_Paz",
+    "saveManualExecutions": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveExecutionProgress": false,
+    "executionTimeout": 600
+  },
+  "active": false,
+  "pinData": {}
+}
