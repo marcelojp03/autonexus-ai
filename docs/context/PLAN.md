@@ -43,10 +43,10 @@ pero sin recorrido real se cuenta como parcial y **no** entra en el total.
 | CU16 Ejecución y evidencias | 4 | Operaciones + BFF + MF + S3 | **Verificada** | No revisada | Compose local + S3 real | 15+12+7 etapas, decisión 019 | Deuda: identidad IAM mínima |
 | CU17 Verificar y finalizar | 2 | Operaciones + BFF + MF | **Verificada** | No revisada | Compose local | Suites 44 + BFF 144, auditoría 8/8, `6f954a7` | — |
 | CU18 Entrega de vehículo | 2 | Ninguna | **Pendiente** | — | — | — | Registro de entrega separado de la finalización |
-| CU19 Cobro de servicio | 3 | Ninguna | **Pendiente** | — | — | — | Cobro local, sin pasarela |
-| CU20 Gastos operativos | 2 | Ninguna | **Pendiente** | — | — | — | Registro de gastos |
+| CU19 Cobro de servicio | 3 | Ledger propietario + contexto Operaciones + BFF + React, publicado fb27230 | **Parcial**: saldo íntegro, replay/recibo y recuperación de referencia real verificados; revisiones147/149conformes para publicación parcial | Antes/después1440/390 y foco medidos, sin inspección de píxeles | Compose local, imagen3c6abd4a26b6 servida | cu19-cu20-20261108, decisión030; React42/PHP3+evidencia previa | UX visual pendiente; política conservadora no acredita abonos ni pasarela/factura fiscal. No suma3puntos |
+| CU20 Gastos operativos | 2 | Ledger/categorías/documentos privados + BFF + React, publicado fb27230 | **Parcial**: gasto/documento/hash, duplicado explícito y recuperación reales; consulta read-only UI corregida | Antes/después1440/390 medidos, sin inspección visual acreditada | Compose local + MinIO persistente propio | cu19-cu20-20261108, traslado3/3 y conservación posterior4/4; React42 | UX visual pendiente. Worker Windows falló, suite Linux42/42 sí ejecutada. No suma2puntos |
 | CU21 Indicadores | 4 | Ninguna | **Pendiente** | — | — | — | Indicadores derivados de cobros/gastos/órdenes |
-| CU22 IA visual local (web/móvil) | 5 | Inferencia local Flutter/PWA; revisión manual independiente y conservación de predicción/revisión; recuperación de caché | **Parcial global**: recorrido y excepciones core verificados, revisión directa declarada; capacidad del modelo no validada | UX nueva pendiente; captura sin inspección visual no acredita conformidad | Compose local + Android físico previo; teléfono autorizado ausente en nueva revisión | `docs/evidence/cu22-local-inspection-20261107.md`, decisión029; Shell42+12, Flutter57, Chromium recuperación | Calidad del modelo y autorización de distribución de pesos siguen pendientes; UX antes/después y teléfono sin aceptar. No suma5puntos |
+| CU22 IA visual local (web/móvil) | 5 | Inferencia local Flutter/PWA; revisión manual independiente y conservación de predicción/revisión; recuperación de caché | **Parcial global**: recorrido y excepciones core verificados, revisión directa declarada; capacidad del modelo no validada | UX nueva pendiente; captura sin inspección visual no acredita conformidad | Compose local + Android físico previo; teléfono disponible pero acceso de nueva revisión sin completar | `docs/evidence/cu22-local-inspection-20261107.md`, decisión029; nueva UX separada en offline-workspace-ux-20261108 | Calidad del modelo/licencia sin cambios. Borrador PWA aislado y preparación/formulario Flutter en verificación separada, sin volver a aceptar CU22. No suma5puntos |
 | CU23 IA de servidor | 5 | `services/intelligence` desplegado, MongoDB, BFF, MF | **Parcial**: infraestructura e inferencia integradas, capacidad diagnóstica experimental y no validada (no suma) | No revisada | Compose local | Decisión 021, evidencia cu23 | Validación de la capacidad visual y de la calidad del modelo |
 | CU24 ML de duración | 5 | Ninguna | **Pendiente** | — | — | — | Dataset, entrenamiento, evaluación y límites |
 | CU25 Asistente con agentes | 5 | `integration/agent` en Compose, Ollama externo configurable, catálogo cerrado, BFF, MF | **Parcial verificada**: pregunta con herramientas, aclaración, denegación y reserva determinista en navegador real | No revisada | Compose local (servicio `agent` sin puerto) | Evidencia cu25-cu26-shell §8–§10, decisión 026 | Evaluación funcional acotada contra APIs propietarias y cobertura operativa/financiera/administrativa del CU25; ver matriz técnica |
@@ -64,13 +64,19 @@ Sólo suma la aceptación funcional **verificada**; un CU parcial no aporta punt
 | Dimensión | Puntos | Detalle |
 | --- | ---: | --- |
 | Aceptación funcional verificada | **57** | CU01–CU07, CU09–CU17, CU27, CU28 local configurado y CU29 |
-| Parcial, no suma | 19 | CU22 (5), CU23 (5), CU25 (5), CU26 (4) |
-| Sin implementación | 26 | CU08 (2), CU18–CU21 (11), CU24 (5), CU30 (5), CU31 (3) |
+| Parcial, no suma | 24 | CU19 (3), CU20 (2), CU22 (5), CU23 (5), CU25 (5), CU26 (4) |
+| Sin implementación | 21 | CU08 (2), CU18 (2), CU21 (4), CU24 (5), CU30 (5), CU31 (3) |
 | Calidad visual | 0 acreditados | Sólo CU05 tiene una revisión declarada pendiente; el resto no se revisó |
 | Despliegue | Compose local | Todos los servicios, incluido el asistente, corren en Compose reproducible; el despliegue cloud es una propuesta sin ejecutar |
 
 Referencia del 70 % sobre 102: **72 puntos**. Faltan **15** puntos verificados; CU24 (5),
 CU25 (5), CU26 (4), CU22 (5) y CU30 (5) conservan sus requisitos y aceptación pendientes.
+
+La continuación financiera **no añade puntos verificados: siguen57**. Sólo mueve
+5puntos de planificación de «sin implementación» a «parcial», porque ahora existen
+ledger/APIs/BFF/React y recorridos reales acotados de CU19/CU20 documentados en
+`docs/evidence/cu19-cu20-20261108.md`. No se confunde esa reclasificación con cierre
+funcional global, revisión visual, suite React aprobada ni publicación.
 
 CU23 no suma todavía: su infraestructura e inferencia están integradas y verificadas, pero la capacidad
 visual es **experimental y no validada**, así que no se cuenta como aceptación funcional del CU.
@@ -93,6 +99,11 @@ Compose; no exige empaquetar el modelo en el mismo contenedor para aceptar CU25.
 CU26 se acepta independientemente de la programación y entrega semanal de CU28. Los pendientes
 y la evaluación acotada están en `docs/evidence/cu25-cu26-acceptance-matrix.md`; no hay nuevos PASS.
 
+Publicación técnica posterior: Finanzas `fb27230` y UX operativa `aed5dd9`,
+ambas revisadas, integradas y confirmadas en remoto. React42/42 Linux y
+Flutter31/análisis/APK, Shell10/tipos y conservación4/4 registrados; no nuevos
+puntos ni cierre visual/físico por esas verificaciones.
+
 ## Ruta orientativa por entregas
 
 Cada fila se suma **sólo** cuando su aceptación funcional está verificada.
@@ -113,7 +124,7 @@ Cada fila se suma **sólo** cuando su aceptación funcional está verificada.
 
 | Dimensión | Estado |
 | --- | --- |
-| Funcional web online | CU01–CU07, CU09–CU17, CU27, CU28 local y CU29 verificados; CU22, CU23, CU25 y CU26 parciales; CU23 tiene ejecución integrada verificada, no calidad visual validada |
+| Funcional web online | CU01–CU07, CU09–CU17, CU27, CU28 local y CU29 verificados; CU19/CU20 en delta funcional acotado sin revisar/publicar; CU22, CU23, CU25 y CU26 parciales; CU23 tiene ejecución integrada verificada, no calidad visual validada |
 | Validación visual | Sólo CU05 tiene una revisión declarada pendiente (G2); ninguna otra superficie tiene conformidad visual acreditada |
 | Móvil (Flutter) | La app existe y la aceptación de CU27 en un dispositivo físico está registrada; el resto de los recorridos móviles no se ejercitó |
 | Offline (PWA + almacenamiento local + sincronización) | Verificado para CU27 sobre cambios y fotos; conflictos avanzados y multi-dispositivo pendientes |

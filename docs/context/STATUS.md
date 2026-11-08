@@ -1,5 +1,102 @@
 # Estado comprobado
 
+## Publicación incremental — Finanzas y UX operativa parcial (2026-11-08)
+
+Integrados por FF y publicados por push normal, con ls-remote de ambas ramas:
+`fb2723021fd01955054657b30fbd601baabf486b` Finanzas/BFF/React/documentos/entrada
+local (97rutas, auditoría sin hallazgos) y
+`aed5dd97a679ab18779ae9f226be6454f5bf9624` borrador PWA/preparación/formulario
+Flutter (13rutas, auditoría sin hallazgos). main/work/marcelo/remotos coinciden
+en aed5dd9 al publicar el código. Cuatro archivos ajenos sin trackear conservados.
+
+Revisión147 completa del incremento financiero,2hallazgos corregidos; revisión149
+focalizada cerró ambos y no encontró defectos concretos nuevos. Verificación y
+revisión fueron secuenciales. Sólo aceptación parcial: T8financiero y T13UX
+offline siguen abiertos por inspección visual/física no completada. Appnueva
+compilada, no instalada en el teléfono. Sin nuevos puntos:57verificados.
+
+Docker recuperado sin reinicio, documentos/configuración/dinero preservados;
+entrada oficial node infra/local/run.mjs. React42, Flutter31/análisis/APK,
+Shell10/tipos y coordinador31 aprobados con los límites registrados debajo.
+No nuevas pruebas CU28 ni aceptación/modelo/licencia CU22. CU25/CU26 financiero
+todavía pendiente; su siguiente fuente es el ledger real, no cotizaciones.
+
+## Continuación — correcciones financieras y borrador por trabajo (2026-11-08)
+
+Revisión independiente general-147 encontró dos fallos concretos: consulta de
+intención bloqueada al perder sólo write y referencia humana no consumida
+inutilizable tras volver a seleccionar orden. Corregidos: lookup read O write
+propio separado del retry write; Finance recupera el mismo registro no consumido
+sólo con actor/vínculo/orden/método/importe/referencia coincidentes, preservando
+nota/fecha/ID. Consumida o datos distintos se rechazan. Nueva regresión PHP
+primero409 y luego **3/3,72aserciones**; API real posterior confirmó recuperación,
+replay y rechazo de otro importe, sin crear dinero ni alegar transferencia real.
+
+Suite ledger React actual **42/42** en Linux/Node22.22.3, dependencias fijadas,
+contenedor sin red y fuentes readonly. El startup de worker Windows no fue PASS;
+el problema del ejecutor no se confundió con un error del producto. Sobre el
+web realmente servido, gasto aplicado/respuesta perdida y permiso UI de lectura
+controlado permiten Consultar resultado pero no retry, con una sola mutación y
+el mismo resultado propietario. **No** equivale a revocación real en Empleados.
+
+Web `3c6abd4a26b6` construido/servido con bytes y manifiesto offline de esa imagen
+comprobados; preparación sin descargas nuevas de modelos. Finance y proveedor
+recreados coordinadamente: mismos env/montajes/volumen; hashes de12tablas iguales
+(dinero, documentos, versiones e historia) y **4/4** archivos available releídos
+con hash correcto. n8n/publicador detenidos/restaurados, sin reinicio global ni
+migración de datos adicional. Entrada oficial check actual exit0, servicios
+con healthcheck healthy; no acredita instalación limpia ni arranque frío.
+
+PWA: el build anterior reprodujo a1440/390 el borrador de A bajo selección B;
+nuevo build exige descarte explícito, cancelar conserva selección/texto/foto/
+revisión y confirmar cambia a B limpio. Copias locales sintéticas aisladas,
+0mutaciones/0avances encolados: regresión UI, no integración propietaria nueva.
+Diez regresiones afectadas y tipos0. Flutter impide preparar no-in-progress,
+revalida estado/asignación/cuenta y conserva datos anteriores; formulario vacío
+sin datos plausibles inventados, errores inline/foco/teclado/SafeArea. **31/31**
+pruebas focalizadas, análisis0 y APKdebug0; no se repitió matriz CU22/CU28.
+
+Revisión focalizada149terminada: ambos hallazgos cerrados, sin defectos concretos
+nuevos en el alcance inspeccionado; conformidad de especificación/corrección/
+consistencia para publicación parcial. Delta todavía sin publicar. Capturas antes/
+después disponibles pero canal sólo entrega metadatos, **no conformidad visual**.
+Teléfono autorizado conectado, app previa abierta sin limpiar datos. Acceso
+nativo no completado: cuatro pestañas nativas previas y timeout de CDP al
+identificar la visible; no se cerraron pestañas ni usó otro teléfono. APKnuevo
+compilado, aún no instalado/aceptado físicamente. CU19/CU20 globales y nueva UX
+siguen parciales; puntos funcionales57sin cambio. CU25/CU26 financiero pendiente.
+
+## CU19/CU20 — build servido y recorridos financieros; revisión en curso (2026-11-08)
+
+Base publicada `cc32551`; delta financiero todavía sin publicar. La imagen web
+`sha256:783c28903e245e2a0cee1d0de8f0f0a0d337ed7275ec30eb5dd6d7bd2e5c5ba0`
+terminó build0 y se sirve realmente con manifiesto offline preparado desde esa
+misma imagen; no se recompiló por los timeouts del ejecutor. El fixture incierto
+se concilió conservando intención: WO-2026-000008 completed v4/Saga confirmed.
+
+Sobre ese build: cobro real de16950centavos, validación de parcial junto al campo
+y foco sin mutación; respuesta aplicada perdida y reintento idéntico con un pago,
+mismo comprobante releído y orden sin cambios. Gasto con PNG privado confirmado,
+descarga de hash idéntico, duplicado con nueva intención explícita y conciliación
+del gasto aplicado tras perder respuesta/navegar entre pestañas. Denegación al
+mecánico. Logs `ledger-ux-{payment,expense,denial}-real`: 5/5/1 etapas, exit0.
+Ocho estados desktop1440/móvil390 sin errores de página ni overflow general.
+Esto acredita recorridos funcionales y medidas DOM, **no revisión visual**.
+
+Docker responde: ningún contenedor en removing, únicamente cu16-proof activo;
+no se reinició el motor ni se interrumpieron otros proyectos. Finance/MinIO y
+servicios con healthcheck están healthy en la observación actual; config-init
+histórico permanece Exited1, no se presenta como arranque limpio aceptado.
+Se conserva traslado3/3 antes/después de recreación, sin repetir firma ni CU28.
+Coordinador/almacenamiento: comprobación fresca Node **31/31**, exit0.
+Vitest React sigue sin pruebas ejecutadas por timeout al iniciar worker: no PASS.
+
+Revisión independiente del delta en curso; aceptación global CU19/CU20, UX y
+publicación pendientes. Canal de imagen volvió a dar sólo metadatos, no píxeles
+interpretables. El teléfono autorizado ff77c09b1c12 volvió a estar conectado
+(adb devices de sólo lectura); no se usó el otro teléfono. No nueva aceptación
+móvil ni cambio de puntos verificados. CU25/CU26 financiero aún no implementado.
+
 ## CU22 — core funcional revisado; nueva UX sigue abierta (2026-11-08)
 
 Incremento desde3f1e61d: alternativa manual sin IA, predicción/revisión separadas,

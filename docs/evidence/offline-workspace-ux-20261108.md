@@ -1,5 +1,10 @@
 # UX operativa — borrador PWA y preparación/formulario Flutter
 
+Publicación parcial: `aed5dd97a679ab18779ae9f226be6454f5bf9624`, FF main y
+push normal ambas ramas, ls-remote confirmado;13rutas/13blobs sin hallazgos.
+Revisión149conforme para ese alcance, no conformidad visual/física ni puntos.
+Esta constancia supera el pendiente de Git de las notas de verificación.
+
 Base `cc32551`, work/marcelo; ampliación de `offline-sync` S2.10–S2.12.
 No vuelve a aceptar CU22/CU27 ni modifica modelo, licencia o métricas.
 

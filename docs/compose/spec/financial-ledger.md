@@ -132,7 +132,7 @@ completos, eliminación/corrección destructiva, credenciales AWS ajenas e ICONI
 - [x] T2: cobros/saldos/recibos y audit — acceptance: dinero sólo tras confirmación, cálculo exacto/replay/carrera/rechazos comprobados (covers: S2.2).
 - [x] T3: gastos/categorías/duplicidad/documento — acceptance: persistencia propia, prevención de doble registro y respaldo privado real o indisponibilidad explícita (covers: S2.3).
 - [x] T4: BFF y React — acceptance: permisos/estados, confirmación humana, incertidumbre y recibos sin JWT ni saldo cliente (covers: S2.4).
-- [ ] T5: aceptación real/revisión/publicación — acceptance: fuentes y límites documentados; cobertura sólo por requisitos demostrados (covers: S2.5).
+- [x] T5: aceptación real/revisión/publicación — acceptance: fuentes y límites documentados; cobertura sólo por requisitos demostrados (covers: S2.5).
 - [x] T6: persistencia documental local y traslado auditado — acceptance: copias de hash idéntico, referencias migradas sin tocar dinero, versiones recuperadas tras recreación; resultado incierto conciliado por journal (covers: S2.6, depends: T3).
 - [x] T7: recuperación acotada y entrada oficial — acceptance: instalación/configuración conservadas y arranque coordinado documentado, sin otra plataforma (covers: S2.7, depends: T6).
 - [ ] T8: UX financiera revisada — acceptance: evidencia real antes/después y recorrido afectado en build servido, hallazgos prioritarios corregidos con límites declarados (covers: S2.8, depends: T4).

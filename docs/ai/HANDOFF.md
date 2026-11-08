@@ -1,5 +1,19 @@
 # Cierre y continuidad de sesión
 
+Código publicado confirmado: `fb27230` Finanzas/arranque/documentos y `aed5dd9`
+UX operativa parcial PWA/Flutter, ambas ramas main/work/marcelo y remotas.
+Verificación/revisión147/149 y auditorías97/13rutas registradas. Visual y
+recorrido del APK nuevo en teléfono siguen abiertos; puntos57sin cambios.
+Continuidad CU25/CU26: fuentes reales payments/expenses/financial-summary,
+sin atribuir cierre de UX ni ingresos a cotizaciones.
+
+Traspaso vigente2026-11-08: [CU22 funcional, Finanzas y ejecución local](../handoffs/2026-11-08-cu22-finance-local.md).
+CoreCU22 publicado `cc32551`; traslado3documentos conservado y proveedor definitivo
+activo sin reinicio global. Web3c6abd4a26b6/Financece731be00838 ya servidos, cuatro
+documentos conservados; React42 y Flutter31/análisis/APK aprobados. Revisión
+focalizada149conforme para publicación parcial, aún pendiente Git. UX visual y recorrido físico sin cerrar.
+CU28 cerrado: no repetir su matriz. Los siguientes traspasos son históricos.
+
 Traspaso vigente: [CU25/CU26 como reporte asíncrono, contrato conciliado y verificación en el Shell](../handoffs/2026-11-06-cu25-cu26-async-report.md). HEAD `73faf56` publicado en `main` y `work/marcelo`; CU25/CU26 siguen parciales y CU30/CU31 quedan después.
 
 Traspaso CU28 evento: [CU28 evento + asistente/reportes asíncronos](../handoffs/2026-11-06-cu28-event-and-async-jobs.md). Orden de trabajo fijado por el usuario; CU25/CU26/CU28 siguen parciales.
