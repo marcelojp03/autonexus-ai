@@ -34,8 +34,13 @@ Contrato aprobado en `docs/compose/spec/cu02-security.md` y ampliado en `docs/co
 | `executions:read:self` | Ejecuciones | read:self | Avances y evidencias del trabajo asignado al empleado vigente (CU16) |
 | `executions:read:team` | Ejecuciones | read:team | Avances y evidencias de los trabajos del taller y su descarga temporal (CU16) |
 | `executions:write` | Ejecuciones | write | Iniciar ejecución, registrar avances y solicitar/confirmar evidencias del trabajo propio (CU16) |
+| `executions:verify` | Verificación | verify | Verificar y finalizar ejecución/orden (CU17; ya existente en catálogo ejecutable) |
 | `intelligence:analyze` | Inteligencia | analyze | Analizar una evidencia de un trabajo propio o del equipo (CU23) |
 | `intelligence:read` | Inteligencia | read | Consultar los análisis visuales guardados de un trabajo (CU23) |
+| `payments:read` | Cobros | read | Obligaciones, pagos y comprobantes internos (CU19) |
+| `payments:write` | Cobros | write | Verificación humana de referencia y registro online de cobro (CU19) |
+| `expenses:read` | Gastos | read | Categorías, gastos y respaldos autorizados (CU20) |
+| `expenses:write` | Gastos | write | Registrar gasto, resolver posible duplicidad y adjuntar respaldo (CU20) |
 
 Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, en minúsculas ASCII; conjunto cerrado, sin herencia por prefijo. Un permiso desconocido produce VALIDATION_ERROR. El catálogo se publica por GET /security/permissions y securityCatalog. CU05 añade solo dos permisos de lectura acotada, no acceso general a órdenes, clientes, documentos o cotizaciones.
 
@@ -43,11 +48,11 @@ Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, e
 
 | Rol | Permisos | Motivo |
 | --- | --- | --- |
-| `administrador` | los treinta y uno del catálogo CU23 | Autoridad completa; CU05/CU16/CU23 requieren vínculo laboral activo por registro |
+| `administrador` | los treinta y cinco del catálogo CU19/CU20 | Autoridad completa; CU05/CU16/CU23 requieren vínculo laboral activo por registro |
 | `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team, executions:read:self/team, executions:verify, intelligence:read | Planificación, catálogo, órdenes, decisión financiera, confirmación CU15, verificación CU17 y consulta de análisis CU23 |
 | `recepcionista` | customers:read/write, vehicles:read/write, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes y decisión del cliente; no elabora cotizaciones |
 | `mecanico` | receptions:read/write, agenda:read:self, executions:read:self/write, intelligence:analyze/read | Recepción CU11, agenda propia CU05, ejecución de sus trabajos CU16 y análisis visual de sus evidencias CU23; sin CRUD general ni agenda del equipo |
-| `responsable_financiero` | orders:read, quotes:read/write/decide | Cotizaciones y decisiones CU13/CU14; aprobar no confirma el servicio |
+| `responsable_financiero` | orders:read, quotes:read/write/decide, payments:read/write, expenses:read/write | Cotizaciones y decisiones CU13/CU14; aprobar no confirma el servicio |
 
 Los roles iniciales son `system=true`: no se renombran y no se borran. Sus permisos sí pueden editarse, con las restricciones de último administrador. Un rol nuevo requiere nombre `^[a-z][a-z0-9_]{2,63}$`, distinto de cualquier otro, y al menos un permiso del catálogo.
 

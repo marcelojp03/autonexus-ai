@@ -31,6 +31,10 @@ export const PERMISSIONS = [
   'executions:verify',
   'intelligence:analyze',
   'intelligence:read',
+  'payments:read',
+  'payments:write',
+  'expenses:read',
+  'expenses:write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -74,6 +78,10 @@ export const PERMISSION_CATALOG: readonly PermissionDescriptor[] = Object.freeze
   { id: 'executions:verify', module: 'Ejecuciones', operation: 'verify', description: 'Solicitar y resolver la verificación técnica de un trabajo (CU17)' },
   { id: 'intelligence:analyze', module: 'Inteligencia', operation: 'analyze', description: 'Solicitar el análisis visual de una evidencia propia (CU23)' },
   { id: 'intelligence:read', module: 'Inteligencia', operation: 'read', description: 'Consultar análisis visuales de un trabajo (CU23)' },
+  { id: 'payments:read', module: 'Cobros', operation: 'read', description: 'Consultar obligaciones, pagos y comprobantes (CU19)' },
+  { id: 'payments:write', module: 'Cobros', operation: 'write', description: 'Verificar referencias y registrar cobros (CU19)' },
+  { id: 'expenses:read', module: 'Gastos', operation: 'read', description: 'Consultar categorías, gastos y respaldos (CU20)' },
+  { id: 'expenses:write', module: 'Gastos', operation: 'write', description: 'Registrar gastos y resolver duplicidad (CU20)' },
 ]);
 
 const KNOWN = new Set<string>(PERMISSIONS);
@@ -96,5 +104,5 @@ export const INITIAL_ROLES: readonly { name: string; description: string; permis
     'orders:read', 'orders:write', 'quotes:read', 'quotes:decide',
   ] },
   { name: 'mecanico', description: 'Trabajo técnico en el taller', permissions: ['receptions:read', 'receptions:write', 'agenda:read:self', 'executions:read:self', 'executions:write', 'intelligence:analyze', 'intelligence:read'] },
-  { name: 'responsable_financiero', description: 'Responsabilidad financiera', permissions: ['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide'] },
+  { name: 'responsable_financiero', description: 'Responsabilidad financiera', permissions: ['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide', 'payments:read', 'payments:write', 'expenses:read', 'expenses:write'] },
 ]);

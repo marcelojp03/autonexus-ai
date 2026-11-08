@@ -1,3 +1,4 @@
+import { HttpLedgerGateway, LEDGER_PERMISSIONS, type LedgerArgs } from './ledger-gateway.js';
 import { readFileSync } from 'node:fs';
 import {
   buildSchema,
@@ -22,6 +23,7 @@ import type { RegisterSyncInput, SyncGateway } from './sync-gateway.js';
 
 /** Closed permission catalog published by the Employees owner. */
 type Permission =
+  | 'payments:read' | 'payments:write' | 'expenses:read' | 'expenses:write'
   | 'employees:read' | 'employees:write'
   | 'schedules:read' | 'schedules:write'
   | 'security:read' | 'security:write'
@@ -40,7 +42,8 @@ type Permission =
 export interface CallerIdentity { readonly subject: string; readonly roles: readonly string[]; }
 
 /** Root-field permission policy: CU03 stays employees:write (administrator only). */
-const FIELD_PERMISSION: Readonly<Record<string, Permission | null>> = Object.freeze({
+const FIELD_PERMISSION: Readonly<Record<string, Permission | readonly Permission[] | null>> = Object.freeze({
+  ...LEDGER_PERMISSIONS,
   registerOfflineSync: null,
   pushOfflineSync: null,
   offlineSyncOverlay: null,
@@ -181,6 +184,7 @@ export class BusinessGraphql {
     private readonly intelligence?: IntelligenceGateway,
     private readonly sync?: SyncGateway,
     private readonly assistant?: AssistantGateway,
+    private readonly ledger?: HttpLedgerGateway,
   ) {
     this.schema = buildSchema(schemaPaths.map(path => readFileSync(path, 'utf8')).join('\n\n'));
   }
@@ -193,7 +197,7 @@ export class BusinessGraphql {
     if (required.some(permission => permission === undefined)) {
       return { errors: [{ message: publicMessage('FORBIDDEN'), extensions: { code: 'FORBIDDEN', statusCode: 403 } }] };
     }
-    const needed = required.filter((permission): permission is Permission => typeof permission === 'string');
+    const needed = required.flatMap(permission => typeof permission === 'string' ? [permission] : Array.isArray(permission) ? permission : []);
     if (needed.length) {
       const granted = await this.effectivePermissions(identity, token);
       if (!needed.every(permission => granted.has(permission))) {
@@ -287,6 +291,10 @@ export class BusinessGraphql {
 
   private rootValue(token: string) {
     return {
+      ...Object.fromEntries(Object.keys(LEDGER_PERMISSIONS).map(name => [name, (args: LedgerArgs) => {
+        if (!this.ledger) throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+        return this.ledger.call(name, args, token);
+      }])),
       registerOfflineSync: (args: { input: RegisterSyncInput }) => this.syncGateway().register(args.input, token),
       pushOfflineSync: (args: { overlayId: string }) => this.syncGateway().push(args.overlayId, token),
       offlineSyncOverlay: (args: { overlayId: string }) => this.syncGateway().overlay(args.overlayId, token),

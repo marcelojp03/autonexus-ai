@@ -1,5 +1,42 @@
 # BFF
 
+## CU19/CU20 — ledger propietario
+
+El duodécimo SDL es `contracts/graphql/financial-ledger.graphql`. Override
+`BFF_LEDGER_SCHEMA_PATH`: archivo absoluto existente; una ruta ausente, relativa o un directorio
+impide arrancar. `HttpLedgerGateway` reutiliza `FINANCE_API_URL` y reenvía únicamente el bearer
+humano recibido a las APIs públicas de Finanzas. Sin credenciales técnicas, logs de tokens,
+persistencia de negocio, consultas SQL ni coordinación de cobros en el BFF.
+
+Superficie: obligaciones/saldos e historial, pagos, comprobante interno no fiscal, comprobación
+humana de referencia, gastos/categorías, resumen y conciliación de operaciones. Lecturas y
+escrituras requieren el permiso exacto `payments:read/write` o `expenses:read/write`; el resumen
+requiere ambos permisos de lectura. La conciliación no presupone el módulo desde el UUID: el
+propietario exige lectura del módulo o escritura del actor original. Cada llamada propietaria
+reautoriza vínculo laboral activo y permisos vigentes; la caché general del BFF no los sustituye.
+
+La proyección es cerrada, también dentro de `financialOperation.resultJson`: no expone fingerprints,
+claves de duplicidad, cuerpos de error, credenciales ni campos adicionales del propietario.
+Un rechazo conciliado conserva código y candidato de duplicidad autorizado, sin mensaje arbitrario.
+Los importes son strings de centavos enteros, incluso por encima de Int32; movimiento neto puede
+ser negativo. No hay conversión Float, defaults numéricos ni total cero por indisponibilidad.
+Sólo el ledger de pagos representa dinero recibido; cotizaciones aprobadas no son ingresos.
+Se conserva `operationId`/cuerpo/versión: timeout significa resultado incierto, no rechazo confirmado.
+Finanzas aplica `FULL_AFTER_COMPLETION_V1`; no se habilitan abonos ni entrega automática.
+
+Documentos: las tres operaciones GraphQL adaptan los metadatos a `/expense-documents`
+del propietario. Los targets se restringen a `/finance-files/documents/{UUID}/content`,
+método y cabeceras del grant, sin URL arbitraria. El proxy binario permite sólo GET/PUT
+JPEG/PNG hasta5MiB y rechaza cookies/JWT/querystrings. Preserva bytes/Content-Length y
+limita a15s la lectura entrante y la respuesta propietaria. El borde desactiva buffering
+para respetar el deadline. Ausencia de almacenamiento sigue siendo503 del propietario,
+nunca un adjunto exitoso. No se reutiliza el S3 de Operaciones.
+
+Verificación final con Node22.22.3: **280 unitarias/contrato**, **45 HTTP**, tipos y build
+conformes (`output/cu27/ledger-bff-final.{log,exit}`). Incluye12 pruebas de metadata/grants
+y30 focalizadas de proxy/CORS. Sus propietarios/controladores HTTP son sintéticos; la
+aceptación real propietaria y de navegador se registra por separado en la evidencia CU19/CU20.
+
 ## CU25/CU26 — asistente y reporte narrativo
 
 `contracts/graphql/assistant.graphql` publica cuatro campos raíz. `assistantAnswer(query)` no declara

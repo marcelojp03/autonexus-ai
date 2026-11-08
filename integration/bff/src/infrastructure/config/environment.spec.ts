@@ -50,9 +50,9 @@ describe('CU05 seventh, CU23 ninth and CU27 tenth schemas without transport-poli
       expect(() => bffEnvironment({ BFF_SYNC_SCHEMA_PATH: path })).toThrow('BFF_SYNC_SCHEMA_PATH');
     }
   });
-  it('loads eleven schemas, keeping agenda seventh, executions eighth, intelligence ninth, sync tenth and the assistant last', () => {
+  it('loads twelve schemas, keeping agenda seventh, executions eighth, intelligence ninth, sync tenth and the assistant last', () => {
     const paths = bffEnvironment({}).schemaPaths;
-    expect(paths).toHaveLength(11);
+    expect(paths).toHaveLength(12);
     expect(paths[6]).toBe(resolve('../../contracts/graphql/agenda.graphql'));
     expect(paths[7]).toBe(resolve('../../contracts/graphql/executions.graphql'));
     expect(paths[8]).toBe(resolve('../../contracts/graphql/intelligence.graphql'));
@@ -77,5 +77,14 @@ describe('CU05 seventh, CU23 ninth and CU27 tenth schemas without transport-poli
     expect(() => bffEnvironment({ OIDC_ISSUER_URI: 'invalid' })).toThrow('OIDC_ISSUER_URI');
     expect(() => bffEnvironment({ OIDC_AUDIENCE: 'invalid' })).toThrow('OIDC_AUDIENCE');
     expect(() => bffEnvironment({ PORT: '0' })).toThrow('PORT');
+  });
+});
+
+describe('CU19/CU20 ledger SDL', () => {
+  it('loads the ledger and rejects invalid overrides', () => {
+    expect(bffEnvironment({}).schemaPaths[11]).toBe(resolve('../../contracts/graphql/financial-ledger.graphql'));
+    for (const path of ['ledger.graphql', resolve('missing-ledger.graphql'), resolve('../../contracts/graphql'), '']) {
+      expect(() => bffEnvironment({ BFF_LEDGER_SCHEMA_PATH: path })).toThrow('BFF_LEDGER_SCHEMA_PATH');
+    }
   });
 });

@@ -1,4 +1,5 @@
 import type { DataSourceOptions } from 'typeorm';
+import { AddFinancialLedgerPermissions1794056400000 } from './migrations/1794056400000-add-financial-ledger-permissions.js';
 import { AddAgendaPermissions1793541600000 } from './migrations/1793541600000-add-agenda-permissions.js';
 import { AddExecutionPermissions1793628000000 } from './migrations/1793628000000-add-execution-permissions.js';
 import { AddIntelligencePermissions1793800800000 } from './migrations/1793800800000-add-intelligence-permissions.js';
@@ -31,6 +32,7 @@ export function dataSourceOptions(): DataSourceOptions {
     AddExecutionPermissions1793628000000,
       AddVerificationPermission1793714400000,
       AddIntelligencePermissions1793800800000,
+      AddFinancialLedgerPermissions1794056400000,
     ],
     migrationsTableName: 'employees_migrations',
     logging: false,

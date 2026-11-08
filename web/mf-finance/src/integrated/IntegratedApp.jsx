@@ -1,13 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Descriptions, Empty, Input, Space, Table, Tag, Typography } from 'antd';
 import QuoteEditor from './QuoteEditor';
+import LedgerWorkspace from './LedgerWorkspace';
 import { PERMISSIONS, ORDERS, QUOTES, CREATE, REVISE, DECIDE, explain, money, workshopDate } from './quote-api';
 
 const PAGE_SIZE = 20;
 export default function IntegratedApp({ session, basePath }) {
   const [identity, setIdentity] = useState({ session, key: 0 });
   if (identity.session !== session) setIdentity({ session, key: identity.key + 1 });
-  return <FinanceWorkspace key={identity.key} session={session} basePath={basePath} />;
+  return <FinanceNavigation key={identity.key} session={session} basePath={basePath} />;
+}
+
+function FinanceNavigation({ session, basePath }) {
+  const [view, setView] = useState('quotes');
+  const [ledgerOpened, setLedgerOpened] = useState(false);
+  return <>
+    <nav aria-label="Finanzas" style={{ padding: '16px 16px 0' }}>
+      <Space wrap>{[['quotes', 'Cotizaciones'], ['payments', 'Cobros'], ['expenses', 'Gastos']].map(([key, label]) =>
+        <Button key={key} type={view === key ? 'primary' : 'default'} aria-pressed={view === key} onClick={() => { setView(key); if (key !== 'quotes') setLedgerOpened(true); }}>{label}</Button>)}
+      </Space>
+    </nav>
+    <div hidden={view !== 'quotes'}><FinanceWorkspace session={session} basePath={basePath} /></div>
+    {ledgerOpened && <div hidden={view === 'quotes'}><LedgerWorkspace session={session} view={view === 'expenses' ? 'expenses' : 'payments'} /></div>}
+  </>;
 }
 
 function FinanceWorkspace({ session, basePath }) {

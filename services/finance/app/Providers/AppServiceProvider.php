@@ -10,6 +10,10 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(\App\Application\Ledger\DocumentStorage::class, \App\Infrastructure\Ledger\S3DocumentStorage::class);
+        $this->app->bind(\App\Application\Ledger\DocumentRepository::class, \App\Infrastructure\Ledger\SqlDocumentRepository::class);
+        $this->app->bind(\App\Application\Ledger\LedgerStore::class, \App\Infrastructure\Ledger\SqlLedgerStore::class);
+        $this->app->bind(\App\Application\Ledger\CollectionContext::class, \App\Infrastructure\Ledger\HttpCollectionContext::class);
         $this->app->bind(\App\Application\Cu15\EventPublisher::class, \App\Infrastructure\Cu15\AmqpEventPublisher::class);
         $this->app->bind(\App\Application\Cu15\QuoteLinkStore::class, \App\Infrastructure\Cu15\SqlQuoteLinkStore::class);
         $this->app->singleton(JwtVerifier::class, fn () => new JwtVerifier(

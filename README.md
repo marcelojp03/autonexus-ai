@@ -33,6 +33,8 @@ Cliente y vehículo → Recepción → Orden → Cotización y aprobación
 - Iniciar y documentar la ejecución de un trabajo asignado, registrar avances y solicitar evidencias. La carga y descarga de archivos requiere configurar AWS S3 privado; sin esa configuración no se presentan como disponibles.
 - Preguntar al asistente interno con el propio acceso: responde combinando consultas autorizadas y devuelve fuentes, procedencia y límites declarados. Un modelo local (Ollama) redacta; si no responde o no cita las cifras calculadas, la respuesta lo declara en lugar de inventar datos.
 - Generar el reporte narrativo de un período: las cifras las calcula el servidor de forma determinista y la narración sólo las redacta, con afirmaciones ligadas a su indicador, período y fuente, sin datos financieros. El reporte se produce como trabajo con identificador estable —recargar la página no inicia otra generación— y se puede exportar en JSON y CSV.
+- Registrar el cobro íntegro del saldo de un servicio finalizado y globalmente confirmado, con comprobación humana de referencias no efectivas, conciliación de resultados inciertos y comprobante interno no fiscal. Sin pasarela, abonos ni cobros offline.
+- Registrar gastos por categoría, fecha y responsable, con prevención de duplicados y respaldo privado opcional de Finanzas. El incremento tiene recorridos funcionales verificados; su conformidad visual y el cierre global CU19/CU20 siguen pendientes.
 
 Una cotización aprobada no es todavía un servicio confirmado. La coordinación conserva sus pasos y se recupera ante interrupciones; las asignaciones provisionales no se muestran como trabajos confirmados.
 
@@ -49,6 +51,19 @@ Una cotización aprobada no es todavía un servicio confirmado. La coordinación
 | Entorno reproducible | Docker Compose y builds multietapa desde fuentes |
 
 ## Uso local
+
+### Entrada operativa de la instalación existente
+
+Con Node.js 22 y Docker Compose, usar los archivos privados ya preparados y autorizados de esta instalación (nunca versionarlos):
+
+~~~sh
+node infra/local/run.mjs check --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+node infra/local/run.mjs status --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+~~~
+
+La misma entrada acepta up y stop en lugar de check, sólo con autorización para arrancar/parar. Default temporal: cu16-proof; --project selecciona otra instalación existente, no crea otra plataforma. Conserva overrides, volúmenes y credenciales. No prepara perfiles, importa flujos, renueva consentimiento, ejecuta semillas ni migra documentos. Ver guardas y límites en la [guía local](docs/deployment/local-compose.md).
+
+### Demo histórica para una copia nueva, no recuperación con datos
 
 Necesitás Docker con Compose y acceso a internet para descargar imágenes y paquetes. Desde la raíz de una copia del repositorio, ejecutá:
 

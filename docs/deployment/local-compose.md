@@ -1,10 +1,31 @@
 # Entorno local integral con Docker Compose
 
-Guía del conjunto implementado. No necesita Java, Node, pnpm, PHP ni builds previos en el host: Docker compila los fuentes y prepara la infraestructura. Se puede obtener el repositorio mediante clone o ZIP; Git no es una dependencia de los contenedores.
+Guía del conjunto implementado. Docker compila los fuentes: los contenedores no necesitan Java, pnpm, PHP ni builds previos en el host. La entrada coordinadora de la instalación existente sí requiere Node.js22, como se indica abajo. Se puede obtener el repositorio mediante clone o ZIP; Git no es una dependencia de los contenedores.
 
 Comprobado con Docker29.9.2, Compose5.6.0 y contenedores Linux x86-64. No se estableció una versión mínima de Docker ni un mínimo de hardware. El primer build necesita red para imágenes y paquetes.
 
-## Inicio rápido
+## Entrada oficial de la instalación existente
+
+Requiere Node.js 22 y Docker Compose. Forma de uso desde la raíz:
+
+~~~sh
+node infra/local/run.mjs check --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+node infra/local/run.mjs status --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+~~~
+
+Usar los archivos privados autorizados de la instalación; el ejemplo actual conserva los valores existentes de n8n en output/stack/n8n.private.env, sin regenerarlos. No se crean ni imprimen secretos al arrancar. Ambas opciones de env son obligatorias y repetibles para conservar capas. Reemplazar check por up o stop sólo con autorización operativa.
+
+- Default temporal centralizado: cu16-proof. --project NOMBRE selecciona sólo una instalación existente. Se conserva la unión ordenada de archivos Compose registrada en las etiquetas de sus contenedores; --file RUTA añade overrides existentes. Se añade el overlay permanente infra/local/finance-documents.compose.yaml sin modificar archivos Compose.
+- check y status son read-only: presencia, ownership de contenedores/volúmenes/red, perfil activo MinIO y config --quiet. No imprimen configuración expandida, credenciales ni errores crudos de Docker. pass significa preflight válido, no salud global: leer state y health por servicio. Los montajes anónimos heredados sólo se admiten si Docker los identifica como anónimos y están declarados por el contenedor; se conservan sus IDs, no se sustituyen.
+- n8n se identifica de manera única por la red y el mismo proyecto seleccionado. Sus archivos Compose se validan por separado, sin fusionarlos con el modelo de plataforma. Un n8n de otro proyecto se rechaza aunque esté conectado a esa red: no queda autorizado implícitamente para stop.
+- up reanuda únicamente IDs de contenedores existentes ya validados mediante docker start, dependencias antes de aplicaciones, Finance antes de su almacenamiento, publicadores después y n8n al final. No crea contenedores, aplica cambios de configuración, actualiza imágenes ni garantiza readiness: consultar status después. No importa/activa workflows, renueva consentimientos ni prepara perfiles/semillas. Es una entrada operativa de instalación existente, no un instalador para una máquina vacía.
+- Finance y MinIO deben conservar el namespace y el volumen <project>_finance-documents-minio-data, con perfil activo loopback puerto4568. La recreación deliberada requiere procedimiento separado coordinado, nunca Finance aislada. No se migra documentación automáticamente ni se elimina el proveedor/volumen antiguo.
+- stop detiene secuencialmente n8n/publicadores, APIs/escritores, Finance, almacenamiento/emuladores y bases; Sync precede DynamoDB, Finance precede MinIO. Espera 60 s por contenedor y aborta al primer fallo. Sólo actúa sobre contenedores Compose del proyecto y n8n enlazado: preparadores/emuladores históricos externos al inventario se conservan para revisión separada. No usa down -v, prune ni volume rm.
+- El mínimo no agrega perfil offline: conserva cualquier override registrado. Antes de añadir uno, ejecutar explícitamente la guarda existente scripts/cu22/verify-offline-overlay.mjs con la imagen web local y recursos autorizados ya preparados. Nunca descarga pesos ni prepara modelos.
+
+Verificación del coordinador:15/15 pruebas unitarias con ejecutor falso, dentro de31/31 controles frescos de coordinador/preparación/traslado; check real exit0 tras el despliegue del arreglo financiero. Reanudación previa conservó17contenedores, imágenes, montajes y configuración. No acredita instalación limpia ni parada/arranque frío. Los primeros intentos con Compose up/start no cuentan como éxito. Mongo había estado unhealthy por el presupuesto de su probe; la observación actual muestra los servicios con healthcheck healthy, sin ocultar el histórico config-init Exited1. No se repite traslado, firma ni CU28 para validar esta entrada. Si falta archivo, ownership o perfil correcto, detenerse y revisar; no reparar automáticamente.
+
+## Inicio rápido histórico para una copia nueva
 
 Desde la raíz de una copia nueva:
 

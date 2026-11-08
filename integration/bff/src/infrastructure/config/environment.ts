@@ -57,6 +57,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   const intelligenceSchema = env.BFF_INTELLIGENCE_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/intelligence.graphql');
   const syncSchema = env.BFF_SYNC_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/sync.graphql');
   const assistantSchema = env.BFF_ASSISTANT_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/assistant.graphql');
+  const ledgerSchema = env.BFF_LEDGER_SCHEMA_PATH ?? resolve(cwd, '../../contracts/graphql/financial-ledger.graphql');
   trustedHttpUrl(issuer, 'OIDC_ISSUER_URI');
   const jwksUri = env.OIDC_JWKS_URI ?? LOCAL_ISSUER + '/protocol/openid-connect/certs';
   trustedHttpUrl(jwksUri, 'OIDC_JWKS_URI');
@@ -84,6 +85,7 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
   if (!isAbsolute(intelligenceSchema) || !existsSync(intelligenceSchema) || !statSync(intelligenceSchema).isFile()) throw new Error('Invalid configuration: BFF_INTELLIGENCE_SCHEMA_PATH');
   if (!isAbsolute(syncSchema) || !existsSync(syncSchema) || !statSync(syncSchema).isFile()) throw new Error('Invalid configuration: BFF_SYNC_SCHEMA_PATH');
   if (!isAbsolute(assistantSchema) || !existsSync(assistantSchema) || !statSync(assistantSchema).isFile()) throw new Error('Invalid configuration: BFF_ASSISTANT_SCHEMA_PATH');
+  if (!isAbsolute(ledgerSchema) || !existsSync(ledgerSchema) || !statSync(ledgerSchema).isFile()) throw new Error('Invalid configuration: BFF_LEDGER_SCHEMA_PATH');
   return Object.freeze({
     host: httpHost(env.HTTP_HOST),
     jwksUri,
@@ -97,6 +99,6 @@ export function bffEnvironment(env: NodeJS.ProcessEnv = process.env, cwd = proce
     intelligenceUrl: intelligenceTarget.origin,
     syncUrl: syncTarget.origin,
     assistantUrl: assistantTarget.origin,
-    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema, agendaSchema, executionsSchema, intelligenceSchema, syncSchema, assistantSchema]),
+    schemaPaths: Object.freeze([schemaPath, scheduleSchema, securitySchema, operationsSchema, financeSchema, confirmationSchema, agendaSchema, executionsSchema, intelligenceSchema, syncSchema, assistantSchema, ledgerSchema]),
   });
 }

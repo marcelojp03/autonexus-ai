@@ -12,6 +12,37 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class EmployeePermissionsClientTest {
+    @Test
+    void boundPaymentAuthorizationIsFreshAndAcceptsEitherPermission() throws IOException {
+        for (String permission : List.of("payments:read", "payments:write")) {
+            AtomicInteger calls = new AtomicInteger();
+            String employee = java.util.UUID.randomUUID().toString();
+            HttpServer server = server(200, "{\"effective\":[\""+permission+"\"],\"employeeId\":\""+employee+"\",\"employeeStatus\":\"active\"}", calls);
+            try {
+                var client = new EmployeePermissionsClient("http://127.0.0.1:"+server.getAddress().getPort(), 30);
+                var required = java.util.Set.of("payments:read","payments:write");
+                assertThat(client.requireBoundAnyPermission("token", required).toString()).isEqualTo(employee);
+                client.requireBoundAnyPermission("token", required);
+                assertThat(calls.get()).isEqualTo(2);
+            } finally { server.stop(0); }
+        }
+    }
+
+    @Test
+    void paymentAuthorizationRejectsUnboundInactiveAndMissingPermission() throws IOException {
+        for (String body : List.of(
+                "{\"effective\":[\"payments:read\"]}",
+                "{\"effective\":[\"payments:read\"],\"employeeId\":\""+java.util.UUID.randomUUID()+"\",\"employeeStatus\":\"inactive\"}",
+                "{\"effective\":[\"orders:read\"],\"employeeId\":\""+java.util.UUID.randomUUID()+"\",\"employeeStatus\":\"active\"}")) {
+            HttpServer server = server(200,body,new AtomicInteger());
+            try {
+                var client = new EmployeePermissionsClient("http://127.0.0.1:"+server.getAddress().getPort(),30);
+                var error = org.junit.jupiter.api.Assertions.assertThrows(bo.edu.uagrm.autonexus.operations.domain.OperationsError.class,
+                    () -> client.requireBoundAnyPermission("token",java.util.Set.of("payments:read","payments:write")));
+                assertThat(error.statusCode()).isEqualTo(403);
+            } finally { server.stop(0); }
+        }
+    }
     private HttpServer server(int status, String body, AtomicInteger counter) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/security/permissions", exchange -> {

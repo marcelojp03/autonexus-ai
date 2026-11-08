@@ -1,4 +1,4 @@
-# MF03 Finanzas — React, CU13 y CU14
+# MF03 Finanzas — React, CU13/CU14 y pantallas CU19/CU20
 
 Template ViteDash copiado directamente en esta carpeta, conservando su licencia, fuentes, AGENTS y contexto. Versiones instaladas verificadas: React 19.3.1, Ant Design 6.6.8, Vite 8.3.5; keycloak-js 26.2.4 y @ant-design/cssinjs 2.1.2 explícitos. Node 22.22.3 y pnpm 12.6.0 del repositorio, sin cambios globales. El lockfile fija las resoluciones.
 
@@ -8,7 +8,19 @@ Consulta de órdenes pendientes, búsqueda por número/placa/ID, creación y rev
 
 La decisión se registra exclusivamente sobre una cotización seleccionada identificada por ID, orden y versión. Exige evidencia real no vacía y admite motivo. Las referencias de cliente y vehículo son sus UUID de Operaciones; nombre y placa son solo presentación. Permisos quotes:read/write/decide y orders:read resueltos por securityCatalog; los servicios y BFF vuelven a autorizarlos.
 
-**Aprobar no confirma el servicio ni asigna mecánico.** La confirmación se realiza por CU15, con su estado y evidencia en STATUS. Cobros, gastos e indicadores siguen pendientes; IA, fotos/S3 y offline no se acreditan.
+**Aprobar no confirma el servicio ni asigna mecánico.** La confirmación se realiza por CU15, con su estado y evidencia en STATUS. Los indicadores completos siguen pendientes; IA y offline no se acreditan.
+
+### Cobros y gastos (CU19/CU20)
+
+La navegación local separa Cotizaciones, Cobros y Gastos sin desmontar las intenciones pendientes al cambiar de pantalla. Cobros consulta obligaciones, importe acordado, pagos previos y saldo/versiones del servidor; lista cobros registrados y relee sus comprobantes internos (no facturas fiscales). La política publicada es cobro íntegro tras finalización, sin abonos ni anticipos. Efectivo exige confirmación humana de recepción; transferencia/QR requieren primero registrar la comprobación humana de referencia e importe, sin afirmar una consulta bancaria automática.
+
+Gastos consulta categorías y listado paginado con filtros y total del período del servidor; el formulario requiere confirmación. Un posible duplicado se concilia como rechazo antes de presentar su candidato; registrar otro gasto legítimo requiere motivo y confirmación explícita de una intención nueva. Los importes se convierten de texto decimal a cadenas de centavos con BigInt, sin Float. Permisos payments:read/write y expenses:read/write desde securityCatalog, actualizables; el servidor mantiene toda autoridad.
+
+El respaldo JPEG/PNG opcional se autoriza/confirma por GraphQL. Solo los bytes usan el proxy BFF /finance-files, con X-Finance-Grant opaco, sin JWT ni cookies ni redirecciones. No se adjunta documentId hasta obtener estado available. La falta de almacenamiento es error, nunca un adjunto ficticio. La descarga solicita un grant nuevo y no persiste URLs. Esto describe implementación frontend, no evidencia de integración real con S3/BFF.
+
+Tras un resultado incierto se conservan operationId y cuerpo exactos en memoria y se bloquea una intención sustitutiva; Consultar resultado o Reintentar el mismo envío no generan otro ID. Un resultado no encontrado no se interpreta como rechazo. **La recuperación se conserva durante el montaje/sesión actual, no a través de recarga o cierre del navegador**; la pantalla advierte que no se cierre antes de conciliar. No se escribe información financiera en almacenamiento del navegador.
+
+Verificación local: src/integrated/ledger.test.jsx usa dobles explícitos de SessionPort/jsdom y transporte binario. Cubre dinero exacto, permisos, paginación, stale fetch, confirmaciones humanas, duplicidad, conciliación/reintento y adjunto confirmado. No demuestra la integración empresarial ni el recorrido visual en navegador. Compilaciones integrado y standalone ejecutadas, en ese orden, con Node 22.22.3; persiste el aviso de tamaño del bundle. No se reinició runtime ni se hizo staging del Shell como parte de este cambio.
 
 ## Integrado en el Shell
 

@@ -117,6 +117,7 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/receptions", "/receptions/*").hasAuthority("receptions:read")
                 .requestMatchers(HttpMethod.POST, "/receptions").hasAuthority("receptions:write")
                 // CU12 work orders
+                .requestMatchers(HttpMethod.GET, "/orders/*/collection-context").authenticated()
                 .requestMatchers(HttpMethod.GET, "/confirmations/**", "/orders/*/confirmations").hasAuthority("confirmations:read")
                 .requestMatchers(HttpMethod.POST, "/orders/*/confirmations", "/confirmations/*/retry").hasAuthority("confirmations:write")
                 .requestMatchers(HttpMethod.GET, "/orders", "/orders/*").hasAuthority("orders:read")

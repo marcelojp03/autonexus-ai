@@ -1,0 +1,38 @@
+# Optional local-only CU20 acceptance; no cloud or Operations storage profile.
+# Switch the active profile only through the relocation procedure.
+services:
+  finance:
+    environment:
+      FINANCE_DOCUMENT_STORAGE_FILE: /run/finance-documents/storage.json
+    volumes:
+      - ./output/stack/finance-documents.private.json:/run/finance-documents/storage.json:ro
+  finance-documents-storage:
+    image: ${COMPOSE_PROJECT_NAME:-autonexus-local}-finance-documents:local
+    build:
+      context: .
+      dockerfile: infra/local/docker/finance-documents.Dockerfile
+    profiles: [finance-documents]
+    # Network sharing keeps the Finance-owned profile on loopback HTTP.
+    # Separate process/volume; no host S3 port or Docker socket.
+    network_mode: service:finance
+    environment:
+      MINIO_ROOT_USER_FILE: /run/finance-minio/user
+      MINIO_ROOT_PASSWORD_FILE: /run/finance-minio/password
+      MINIO_BROWSER: "off"
+      MINIO_UPDATE: "off"
+    volumes:
+      - finance-documents-minio-data:/data
+      - ./output/stack/finance-minio-user.private.txt:/run/finance-minio/user:ro
+      - ./output/stack/finance-minio-password.private.txt:/run/finance-minio/password:ro
+    labels:
+      autonexus.owner: finance
+      autonexus.purpose: storage-relocation-target
+    depends_on:
+      finance:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  finance-documents-data: {}
+  finance-documents-minio-data:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-autonexus-local}_finance-documents-minio-data

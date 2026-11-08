@@ -1,0 +1,80 @@
+# CU19/CU20. Dinero en strings de centavos, nunca Float ni Int32 para importes.
+type FinancialPage { total: Int!, limit: Int!, offset: Int! }
+type ServicePayment {
+  id: UUID!, orderId: UUID!, orderNumber: String!, obligationId: UUID!, amountMinor: String!,
+  currency: String!, method: String!, referenceVerificationId: UUID, receiptId: UUID!,
+  receiptNumber: String!, recordedAt: DateTime!, actorSubject: String!, employeeId: UUID!
+}
+type Receivable {
+  orderId: UUID!, orderNumber: String!, orderStatus: String!, orderVersion: Int!,
+  sagaId: UUID!, quoteId: UUID!, quoteVersion: Int!, quoteLinkId: UUID!,
+  agreedAmountMinor: String!, paidAmountMinor: String!, balanceMinor: String!, currency: String!,
+  balanceVersion: Int!, policyCode: String!, payments: [ServicePayment!]!, observedAt: DateTime!
+}
+type ReceivablePage { items: [Receivable!]!, page: FinancialPage! }
+type ServicePaymentPage { items: [ServicePayment!]!, page: FinancialPage!, totalAmountMinor: String! }
+type InternalPaymentReceipt {
+  id: UUID!, number: String!, paymentId: UUID!, orderId: UUID!, orderNumber: String!,
+  amountMinor: String!, currency: String!, method: String!, recordedAt: DateTime!,
+  actorSubject: String!, employeeId: UUID!, fiscalStatus: String!, referenceVerificationId: UUID
+}
+type PaymentReferenceVerification {
+  id: UUID!, orderId: UUID!, method: String!, amountMinor: String!, reference: String!,
+  status: String!, verifiedAt: DateTime!, verifierSubject: String!, employeeId: UUID!, note: String!
+}
+type ExpenseCategory { id: UUID!, code: String!, name: String!, active: Boolean! }
+type ExpenseDocument {
+  id: UUID!, fileName: String!, contentType: String!, sizeBytes: Int!, sha256: String!,
+  state: String!, createdAt: DateTime!, expenseId: UUID
+}
+type FinancialFileTarget { url: String!, method: String!, expiresAt: DateTime!, headersJson: String! }
+type ExpenseDocumentUpload { document: ExpenseDocument!, upload: FinancialFileTarget, replayed: Boolean! }
+type OperatingExpense {
+  id: UUID!, description: String!, category: ExpenseCategory!, expenseDate: Date!, amountMinor: String!,
+  currency: String!, method: String!, document: ExpenseDocument, duplicateOf: UUID, duplicateReason: String,
+  recordedAt: DateTime!, actorSubject: String!, employeeId: UUID!
+}
+type OperatingExpensePage { items: [OperatingExpense!]!, page: FinancialPage!, totalAmountMinor: String! }
+type FinancialSummary {
+  from: Date!, to: Date!, timeZone: String!, currency: String!, paymentCount: Int!, expenseCount: Int!,
+  receivedAmountMinor: String!, expenseAmountMinor: String!, netMovementMinor: String!, generatedAt: DateTime!
+}
+type FinancialOperation {
+  operationId: UUID!, action: String!, outcome: String!, status: Int!, committedAt: DateTime!,
+  resultJson: String!, errorCode: String
+}
+type RecordServicePaymentResult { payment: ServicePayment!, receivable: Receivable!, receipt: InternalPaymentReceipt!, replayed: Boolean! }
+type RecordPaymentReferenceResult { verification: PaymentReferenceVerification!, replayed: Boolean! }
+type RecordOperatingExpenseResult { expense: OperatingExpense!, replayed: Boolean! }
+
+input RecordServicePaymentInput {
+  operationId: UUID!, expectedVersion: Int!, amountMinor: String!, method: String!,
+  confirmReceived: Boolean!, referenceVerificationId: UUID
+}
+input VerifyPaymentReferenceInput { operationId: UUID!, method: String!, amountMinor: String!, reference: String!, note: String! }
+input RecordOperatingExpenseInput {
+  operationId: UUID!, description: String!, categoryId: UUID!, expenseDate: Date!, amountMinor: String!,
+  method: String!, documentId: UUID, duplicateOf: UUID, duplicateReason: String
+}
+input RequestExpenseDocumentInput { operationId: UUID!, fileName: String!, contentType: String!, sizeBytes: Int!, sha256: String! }
+input ConfirmExpenseDocumentInput { operationId: UUID!, documentId: UUID! }
+
+extend type Query {
+  receivables(status: String, limit: Int, offset: Int): ReceivablePage!
+  receivable(orderId: UUID!): Receivable!
+  servicePayments(from: Date, to: Date, limit: Int, offset: Int): ServicePaymentPage!
+  paymentReceipt(paymentId: UUID!): InternalPaymentReceipt!
+  expenseCategories: [ExpenseCategory!]!
+  operatingExpenses(from: Date, to: Date, categoryId: UUID, limit: Int, offset: Int): OperatingExpensePage!
+  operatingExpense(id: UUID!): OperatingExpense!
+  financialOperation(operationId: UUID!): FinancialOperation!
+  financialSummary(from: Date!, to: Date!): FinancialSummary!
+  expenseDocumentDownload(documentId: UUID!): FinancialFileTarget!
+}
+extend type Mutation {
+  verifyPaymentReference(orderId: UUID!, input: VerifyPaymentReferenceInput!): RecordPaymentReferenceResult!
+  recordServicePayment(orderId: UUID!, input: RecordServicePaymentInput!): RecordServicePaymentResult!
+  recordOperatingExpense(input: RecordOperatingExpenseInput!): RecordOperatingExpenseResult!
+  requestExpenseDocument(input: RequestExpenseDocumentInput!): ExpenseDocumentUpload!
+  confirmExpenseDocument(input: ConfirmExpenseDocumentInput!): ExpenseDocument!
+}

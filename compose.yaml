@@ -172,6 +172,7 @@ services:
   finance:
     image: "${COMPOSE_PROJECT_NAME:-autonexus-local}-finance:local"
     environment:
+      OPERATIONS_API_URL: "http://operations:8081"
       CU28_PENDING_QUOTE_HOURS: "${CU28_PENDING_QUOTE_HOURS:-24}"
       CU28_WEBHOOK_URL: "${CU28_WEBHOOK_URL:-}"
       CU28_WEBHOOK_SECRET: "${CU28_WEBHOOK_SECRET:-}"

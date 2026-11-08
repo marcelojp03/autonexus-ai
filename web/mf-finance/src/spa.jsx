@@ -22,7 +22,7 @@ export async function mount(props) {
   shadow.replaceChildren();
   const style = document.createElement('style');
   // The template reset is isolated from the Shell and both Angular apps.
-  style.textContent = templateCss.replaceAll(':root', ':host') + ' :host { display:block; font-family:Inter,system-ui,sans-serif; color:#1f1f1f; }';
+  style.textContent = templateCss.replaceAll(':root', ':host') + ' :host { display:block; font-family:Inter,system-ui,sans-serif; color:#1f1f1f; } :host .ant-btn:focus-visible, :host input:focus-visible, :host textarea:focus-visible, :host .ant-select:focus-within .ant-select-selector { outline:3px solid #005bbb; outline-offset:3px; } .ant-table-cell { font-variant-numeric:tabular-nums; }';
   const surface = document.createElement('div');
   const portals = document.createElement('div');
   portals.dataset.financePortals = '';
@@ -33,7 +33,7 @@ export async function mount(props) {
     flushSync(() => root.render(
       <React.StrictMode>
         <StyleProvider container={shadow}>
-          <ConfigProvider locale={esES} getPopupContainer={() => portals} getTargetContainer={() => portals} theme={{ token: { borderRadius: 6, colorPrimary: '#1677ff' } }}>
+          <ConfigProvider locale={esES} getPopupContainer={() => portals} getTargetContainer={() => portals} theme={{ token: { borderRadius: 6, colorPrimary: '#005bbb', colorPrimaryHover: '#004b9c', colorPrimaryActive: '#003d80', controlHeight: 44, controlHeightSM: 44, controlHeightLG: 48 } }}>
             <App message={{ getContainer: () => portals }} notification={{ getContainer: () => portals }}>
               <IntegratedApp session={props.session} basePath={props.basePath} />
             </App>

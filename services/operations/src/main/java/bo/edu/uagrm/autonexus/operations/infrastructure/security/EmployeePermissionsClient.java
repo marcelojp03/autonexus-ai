@@ -64,6 +64,14 @@ public class EmployeePermissionsClient {
     }
 
     public java.util.UUID requireBoundEmployee(String token, String permission) {
+        return requireBoundAnyPermission(token, Set.of(permission), "AUTOMATION_ACCESS_DENIED");
+    }
+
+    public java.util.UUID requireBoundAnyPermission(String token, Set<String> permissions) {
+        return requireBoundAnyPermission(token, permissions, "COLLECTION_ACCESS_DENIED");
+    }
+
+    private java.util.UUID requireBoundAnyPermission(String token, Set<String> permissions, String deniedCode) {
         BoundPermissionsResponse response;
         try {
             response = client.get().uri("/security/permissions")
@@ -72,13 +80,13 @@ public class EmployeePermissionsClient {
         } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized denied) {
             throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(401, "UNAUTHORIZED");
         } catch (org.springframework.web.client.HttpClientErrorException.Forbidden denied) {
-            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(403, "AUTOMATION_ACCESS_DENIED");
+            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(403, deniedCode);
         } catch (RuntimeException failure) {
             throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(503, "EMPLOYEE_AUTHORIZATION_UNAVAILABLE");
         }
-        if (response == null || response.effective() == null || !response.effective().contains(permission)
+        if (response == null || response.effective() == null || response.effective().stream().noneMatch(permissions::contains)
                 || !"active".equals(response.employeeStatus()) || response.employeeId() == null) {
-            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(403, "AUTOMATION_ACCESS_DENIED");
+            throw new bo.edu.uagrm.autonexus.operations.domain.OperationsError(403, deniedCode);
         }
         try {
             return java.util.UUID.fromString(response.employeeId());

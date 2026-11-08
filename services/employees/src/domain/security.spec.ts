@@ -40,8 +40,9 @@ describe('permission catalog', () => {
     expect(INITIAL_ROLES[2].permissions).toContain('receptions:write');
     expect(INITIAL_ROLES[2].permissions).toContain('quotes:decide');
     expect(INITIAL_ROLES[3].permissions).toEqual(['receptions:read', 'receptions:write', 'agenda:read:self', 'executions:read:self', 'executions:write', 'intelligence:analyze', 'intelligence:read']);
-    expect(INITIAL_ROLES[4].permissions).toEqual(['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide']);
-    expect(PERMISSIONS.length).toBe(31);
+    expect(INITIAL_ROLES[4].permissions).toEqual(['orders:read', 'quotes:read', 'quotes:write', 'quotes:decide', 'payments:read', 'payments:write', 'expenses:read', 'expenses:write']);
+    expect(INITIAL_ROLES[4].permissions).not.toContain('confirmations:read');
+    expect(PERMISSIONS.length).toBe(35);
     expect(INITIAL_ROLES[1].permissions).toContain('confirmations:write');
     expect(INITIAL_ROLES[1].permissions).toContain('executions:verify');
     expect(INITIAL_ROLES[3].permissions).not.toContain('executions:verify');
@@ -83,6 +84,12 @@ describe('role validation', () => {
 });
 
 describe('escalation guard', () => {
+  it('does not escalate financial permissions through security administration', () => {
+    for (const permission of ['payments:read', 'payments:write', 'expenses:read', 'expenses:write'] as const) {
+      expect(code(() => assertNoEscalation([permission], ['security:write']))).toBe('PERMISSION_ESCALATION');
+      expect(() => assertNoEscalation([permission], [permission])).not.toThrow();
+    }
+  });
   it('allows granting permissions inside the actor scope', () => {
     expect(() => assertNoEscalation(['schedules:read'], ['schedules:read', 'security:write'])).not.toThrow();
   });

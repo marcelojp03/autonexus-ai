@@ -78,3 +78,187 @@ La matriz posterior real6 quedó acreditada: output/cu15/distributed-real6.exit=
 
 Revisión independiente inicial no aprobatoria de 69de9bd; C1–C4/G1 corregidos y re-revisión de 69de9bd..bdf75fa aprobatoria, sin críticos residuales. Código y evidencia integrados por FF y publicados normalmente en main/work/marcelo, con ambos SHA remotos comprobados en 0350a46dab2a7dbedb209e42f704e00f2343cae0. El cierre posterior es solo documental. Los pendientes de rondas anteriores en este README son históricos; el estado final y los límites de evidencia están en [STATUS](../../docs/context/STATUS.md) y la [especificación CU15](../../docs/compose/spec/cu15-confirmation-saga.md). CU05, offline y Flutter no se acreditan.
 
+## CU19/CU20 — delta local y documentos privados (2026-11-07)
+
+El ledger de cobros/gastos se carga desde routes/api.php y mantiene dominio/casos de uso
+separados de HTTP y persistencia. Las migraciones000002/000003 se aplicaron al PostgreSQL
+propietario existente y su segunda ejecución fue no-op; imagen Finance construida y
+desplegada sin reinicializar bases. Los documentos
+son opcionales: sin configuración propia no se inventa un adjunto; se devuelve
+503 DOCUMENT_STORAGE_UNAVAILABLE. Un fallo SQL devuelve503 PERSISTENCE_UNAVAILABLE.
+
+### DTO documental para BFF/SDL
+
+| REST propietario | Permiso | Body / respuesta |
+| --- | --- | --- |
+| POST /expense-documents | expenses:write | operationId,fileName,contentType,sizeBytes,sha256 → ExpenseDocumentUpload |
+| POST /expense-documents/{id}/confirm | expenses:write | operationId → ExpenseDocument directo |
+| GET /expense-documents/{id}/download | expenses:read | sin body → FinancialFileTarget |
+| PUT/GET /finance-files/documents/{id}/content | grant opaco | binario; sin Authorization ni Cookie |
+
+Los campos corresponden a contracts/graphql/financial-ledger.graphql. El target usa URL
+relativa /finance-files/documents/{UUID}/content, method PUT/GET, expiresAt UTC y headersJson
+con X-Finance-Grant; PUT añade Content-Type. El proxy BFF debe preservar método, bytes,
+Content-Length, Content-Type y X-Finance-Grant, pero no reenviar cookies/JWT al endpoint
+binario ni al almacenamiento. Descarga responde attachment, nosniff y no-store.
+
+expense_documents.created_at es una cadena UTC ISO de24 caracteres, no timestamp SQL
+serializado con otro formato. La migración nueva2026_11_07_000003 es separada del ledger
+000002; ambas quedaron aplicadas en PostgreSQL local. El esquema conserva los nombres
+owner_subject/state/expense_id esperados por SqlLedgerStore; el gasto adjunta el documento
+available del mismo actor dentro de su transacción existente.
+
+### Adaptador S3-compatible independiente
+
+FINANCE_DOCUMENT_STORAGE_FILE apunta a un JSON privado propio con endpoint, region, bucket,
+accessKey y secretKey. No usar AWS_* ni copiar el perfil de Operaciones. No versionar el
+archivo ni registrar sus valores. Endpoint HTTPS; HTTP sólo para loopback local. El bucket
+debe estar provisionado privado, con versionado habilitado y una identidad exclusiva de
+Finanzas con PutObject/GetObject/GetObjectVersion sobre su prefijo finance/expense-documents/.
+El adaptador no crea buckets, políticas ni credenciales, y no requiere dependencias nuevas.
+
+Aceptación local independiente: `infra/local/finance-documents.compose.yaml` agrega un
+sidecar S3-compatible fijado a LocalStack4.0 por digest, con volumen propio, sin puerto
+publicado ni Docker socket. Comparte sólo la red de Finance, por eso el perfil confiable
+usa `http://127.0.0.1:4566`. Antes de usar el overlay, el operador prepara exclusivamente
+`output/stack/finance-documents.private.json` con las cinco claves anteriores y credenciales
+locales independientes; nunca copia el perfil de Operaciones ni versiona ese archivo.
+El modo base sin overlay no exige ese perfil y falla cerrado para adjuntos.
+
+Se ejecutaron, desde el worktree, estos pasos (rutas privadas conservadas):
+
+```text
+docker compose -p cu16-proof --project-directory <worktree> --env-file output/stack/cu16-s3.private.env -f compose.yaml -f output/stack/cu16-compose-s3.yaml -f infra/local/finance-documents.compose.yaml --profile finance-documents up -d --no-deps --no-build finance
+docker exec cu16-proof-finance-1 /usr/local/bin/service-entrypoint php artisan migrate --force --no-interaction
+docker compose -p cu16-proof --project-directory <worktree> --env-file output/stack/cu16-s3.private.env -f compose.yaml -f output/stack/cu16-compose-s3.yaml -f infra/local/finance-documents.compose.yaml --profile finance-documents up -d --no-deps --no-build finance-documents-storage
+```
+
+El bucket local propio se creó con `awslocal s3api`, con versionado Enabled y los cuatro
+bloqueos de acceso público. La segunda migración fue no-op. No acredita AWS cloud/IAM
+de producción ni sustituye el almacenamiento autorizado exclusivamente para CU16.
+Suite completa propia: PHP8.4.26, **79 pruebas/524 aserciones**; la clave APP_KEY de la
+suite se fijó sólo en el proceso de pruebas, sin modificar la configuración real.
+Aceptación real `scripts/finance/verify-ledger-real.mjs`: **83 comprobaciones**, incluidas
+dos conexiones PostgreSQL independientes, una sola recepción de dinero y documentos
+versionados reales en ese S3-compatible local. Transportes falsos de PHPUnit no son
+su evidencia de integración; los resultados reales están en `output/finance/cu19`.
+
+Firma AWS SigV4 propietaria; PUT If-None-Match:* impide sobrescritura. Sin versión de objeto
+real no se declara éxito. Si se pierde la respuesta/commit después del PUT, el reintento
+condicionado sólo recupera el objeto existente si coincide su hash; conserva la versión
+obtenida del servidor. Confirmación y descarga releen esa versión fija, verifican tamaño,
+SHA-256 y firma JPEG/PNG. Los bytes se limitan a5MiB; la metadata no admite URLs/claves ajenas.
+Grants aleatorios de256bits, hash persistido, TTL120s y alcance documento/método/versión.
+La emisión de descarga reautoriza metadata; el BFF no recibe claves S3 ni URL S3 firmada.
+
+Solicitud y confirmación usan financial_operations/audit atómicos, con huella actor/acción/
+body normalizado. Se conservan rechazos de negocio válidos y replay, pero503 no se registra
+como rechazo. Los resultados/audit nunca guardan grants/targets efímeros; replay de solicitud
+puede emitir otro grant corto para el mismo documento, sin duplicar metadata o auditoría.
+Consulta financial-operations clasifica request_document/confirm_document como expenses.
+
+### Evidencia y límites de esta continuación
+
+Comandos desde la raíz mediante output/cu27/run-check.mjs y el wrapper
+services/finance/scripts/run-check.mjs, con cwd services/finance y PHP
+C:/Users/marcelo/.config/herd/bin/php84/php.exe:
+
+- finance-documents-narrow-v1: exit2, fallos iniciales de fixtures de prueba (GET JSON con
+  body, bearer sintético faltante y casing de headers del fake); no se presenta como PASS.
+- finance-documents-narrow-v2: PHPUnit ExpenseDocumentsTest, **9 pruebas/85 aserciones,
+  exit0**. SQLite en memoria y DocumentStorage en memoria; prueba de adaptador usa HTTP fake
+  y perfil temporal sintético. No acredita S3, PostgreSQL, Keycloak ni BFF reales.
+- finance-ledger-routes-v1: artisan route:list --path=expense-documents, **exit0**, tres rutas
+  cargadas mediante el wiring de producción, sin registro artificial en la prueba nueva.
+
+Después de esos checks se añadió una regresión JWT de permisos documentales y se acotó la
+lectura streaming de S3; su ejecución y la suite completa están pendientes de la ventana
+de revisión CU28 solicitada por el principal. El PASS anterior no se extrapola a esos cambios.
+La evidencia19pruebas/208aserciones del núcleo procede de la entrega del actor120, no de una
+repetición efectuada aquí. No hay integración real S3 acreditada ni UI ejercitada por esta
+continuación. El principal debe actualizar STATUS/decisiones compartidos: esta unidad sólo
+puede modificar services/finance/**.
+
+### Traslado documental propietario — fuente congelada, verificación focalizada
+
+Corrección S2.6 de docs/compose/spec/financial-ledger.md: migración aditiva
+2026_11_07_000004_create_document_relocations.php y comando descubierto automáticamente
+en app/Console/Commands, como los publishers existentes. No cambia FinancialLedger,
+HTTP/MCP, roles, perfiles activos ni tablas monetarias. La migración sólo agrega journal,
+mappings inmutables e historia append-only, con triggers PostgreSQL/SQLite. No fue aplicada.
+
+Interfaz prevista, desde services/finance con las credenciales DB del operador y el
+FINANCE_DOCUMENT_STORAGE_FILE vigente (rutas ilustrativas, no ejecutar durante revisión):
+
+~~~text
+php artisan finance:relocate-documents prepare <operationId-UUID> --source-profile=<archivo-privado-origen> --target-profile=<archivo-privado-destino> --no-ansi --no-interaction
+php artisan finance:relocate-documents commit <mismo-operationId-UUID> --target-profile=<mismo-archivo-privado-destino> --no-ansi --no-interaction
+php artisan finance:relocate-documents status <mismo-operationId-UUID> --no-ansi --no-interaction
+~~~
+
+prepare comprueba que origen coincide con el perfil activo. Ambos stores explícitos
+congelan sus perfiles al primer uso, sin alterar config global. Copia por PUT condicionado
+del adaptador existente, lee versiones fijas originales y destino, verifica SHA256,
+tamaño y MIME de imagen. Incluye documentos subidos aún pending, no sólo available.
+Una repetición con iguales perfiles no vuelve a PUT pero sí relee/verifica los objetos.
+Una respuesta perdida del PUT se recupera mediante If-None-Match y hash en el adaptador.
+El proveedor/volumen original se conservan. La preparación es una transacción completa;
+si falla, las copias externas ya realizadas permanecen y el mismo operationId se reintenta.
+
+commit mantiene ACCESS EXCLUSIVE sobre expense_documents y sus tres tablas de traslado,
+sin locks/SQL de tablas monetarias. SQLite usa reserva de escritura sólo para fixtures.
+prepare/status usan la misma exclusión para una vista coherente. El operador debe
+coordinar una ventana sin tráfico documental: los locks duran la verificación y la espera.
+No hay reintento automático de transacción/handshake. Tras comprobar cobertura exacta y
+releer destino, emite una línea JSON cruda y vacía buffers, todavía dentro de los locks:
+
+~~~json
+{"event":"READY_TO_SWITCH","operationId":"<uuid>","documents":1,"sourceFingerprint":"<sha256>","targetFingerprint":"<sha256>"}
+~~~
+
+El coordinador ya debe tener backup privado. Sólo al recibir READY_TO_SWITCH reemplaza
+**in-place** el contenido del archivo privado activo montado, conserva el mismo path/inode
+y envía exactamente SWITCHED seguido de LF por stdin del proceso, mantenido abierto
+con docker exec -i u otro transporte equivalente. --no-interaction no omite esta barrera.
+EOF, ABORT u otra línea abortan la transacción. Después de la señal, una instancia nueva
+relee independientemente el archivo activo: su fingerprint debe coincidir con destino.
+Sólo entonces actualiza object_version, inserta historia y marca committed atómicamente.
+No cambia IDs, claves, hash, estado, asociación al gasto ni snapshots documentales.
+Metadata que cambie entre prepare/commit exige revisión y nueva preparación: no se edita
+un mapping histórico para acomodarla. Un upload adicional exige preparar su cobertura.
+
+El resultado final es RELOCATION_STATUS con operationId, state (prepared/committed),
+position (allOld/allNew/mixed), documents, old, new, unexpected, uploaded, covered y
+ambos fingerprints. status sólo usa DB: puede diagnosticar aun con proveedor inaccesible.
+allOld/allNew describen las referencias journalizadas; covered comprueba además todos
+los documentos actualmente subidos. Versiones opacas iguales entre proveedores se
+distinguen mediante historia y marca de commit, no por comparar strings únicamente.
+Replay de commit ya committed/allNew devuelve status sin volver a pedir SWITCHED.
+Errores son JSON RELOCATION_ERROR con código sanitizado y nextAction=status; nunca
+mensajes SQL/S3, secretos, grants, tokens, perfiles, URLs firmadas ni bytes. Exit0 es éxito,
+exit1 error/estado mixed y exit2 argumentos inválidos. Operación desconocida devuelve
+RELOCATION_NOT_FOUND: no inventa allOld. Fingerprint SHA256 canónico de endpoint público
+sin slash final, region, bucket y accessKeyHash SHA256; excluye secretKey deliberadamente.
+
+La escritura del perfil del host y el commit SQL no forman una transacción distribuida.
+Ante error/EOF/desconexión después de cambiar el archivo, consultar status con el MISMO
+operationId y comparar el perfil activo; nunca revertir perfil, dinero o versiones a ciegas.
+allOld con perfil destino requiere mantener la ventana y conciliar; mixed bloquea el
+procedimiento. El comando no restaura archivos ni elimina objetos, providers o volúmenes.
+
+Pruebas nuevas en tests/Feature/DocumentRelocationTest.php, escritas antes de la
+implementación: idempotencia, hash origen/destino, perfil activo erróneo, cobertura,
+EOF/ABORT, éxito/replay, snapshots y checksums monetarios, rollback por trigger SQLite,
+historia/mappings inmutables, versiones iguales y perfiles independientes. Tras aviso
+explícito del fin de revisión CU22, PHP8.4.26/PHPUnit11.5.57: 13 pruebas/46 aserciones,
+exit0. El primer intento imprimió OK pero el wrapper agotó10s; no se acredita como
+ejecución limpia. La repetición con presupuesto60s terminó exit0 en4,441s de PHPUnit.
+Regresión ExpenseDocumentsTest + FinancialLedgerTest: 29 pruebas/329 aserciones, exit0,
+incluido adaptador S3 por defecto con HTTP fake. APP_KEY sintética sólo en el proceso de
+pruebas; sin modificar privados. Lint PHP de los siete archivos propios/modificados exit0;
+artisan finance:relocate-documents --help --no-ansi exit0 confirma descubrimiento e interfaz.
+No hubo cambios posteriores en fuentes PHP. No acredita integración PostgreSQL/MinIO,
+handshake CLI contra proveedor real ni recreación persistente; son SQLite/almacenamiento
+en memoria y HTTP fake. No se ejecutaron migraciones reales, cobros,83checks reales, builds
+ni cambios de runtime. El principal conserva infraestructura y STATUS/decisiones globales.
+

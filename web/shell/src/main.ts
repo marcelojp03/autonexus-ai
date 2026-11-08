@@ -4,7 +4,7 @@ import Keycloak from 'keycloak-js';
 import { browserOidcConfig, createBrowserSession } from '../../browser-auth/session';
 import type { IntegratedProps } from '../../../contracts/auth/session';
 import type { AppProps, LifeCycles } from 'single-spa';
-import { matchesModule, moduleForPath, moduleProps, modules } from './routes';
+import { matchesModule, moduleForPath, moduleProps, modules, moduleEntryPermissions } from './routes';
 import type { ModuleId } from './routes';
 import { OfflineWorkspace } from './offline/workspace';
 
@@ -34,7 +34,7 @@ let navigationPermissions: readonly string[] = [];
 let permissionEpoch = 0;
 type GatedAccess = 'loading' | 'allowed' | 'forbidden' | 'unavailable';
 /** Modules whose entry needs a permission beyond "some workshop role" (CU10 quotes, CU23 analysis). */
-const MODULE_PERMISSION: Partial<Record<ModuleId, string>> = { finance: 'quotes:read', intelligence: 'intelligence:read' };
+const MODULE_PERMISSION = moduleEntryPermissions;
 const moduleAccess: Record<string, GatedAccess> = { finance: 'loading', intelligence: 'loading' };
 const canAccess = (module: ModuleId) => canMount() && (MODULE_PERMISSION[module] === undefined || moduleAccess[module] === 'allowed');
 async function loadModuleAccess(subject: string): Promise<void> {
@@ -45,8 +45,8 @@ async function loadModuleAccess(subject: string): Promise<void> {
     const data = result.data as { securityCatalog?: { effective?: string[] } } | undefined;
     navigationPermissions = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective) ? data.securityCatalog.effective : [];
     const effective = !result.errors?.length && Array.isArray(data?.securityCatalog?.effective) ? data.securityCatalog.effective : undefined;
-    for (const [id, permission] of Object.entries(MODULE_PERMISSION)) {
-      moduleAccess[id] = effective === undefined ? 'unavailable' : effective.includes(permission) ? 'allowed' : 'forbidden';
+    for (const [id, permissions] of Object.entries(MODULE_PERMISSION)) {
+      moduleAccess[id] = effective === undefined ? 'unavailable' : permissions.some(permission => effective.includes(permission)) ? 'allowed' : 'forbidden';
     }
   } catch {
     if (permissionSubject !== subject || epoch !== permissionEpoch) return;
@@ -69,7 +69,7 @@ function renderNavigation(): void {
   const gated = module !== undefined && MODULE_PERMISSION[module] !== undefined ? module : undefined;
   const access = gated ? moduleAccess[gated] : 'allowed';
   const label = gated === 'finance' ? 'Finanzas' : 'Inteligencia';
-  const denied = gated === 'finance' ? 'cotizaciones.' : 'análisis de Inteligencia.';
+  const denied = gated === 'finance' ? 'los módulos de Finanzas.' : 'análisis de Inteligencia.';
   accessNotice.hidden = !allowed || !gated || access === 'allowed';
   accessNotice.textContent = access === 'forbidden' ? 'Acceso insuficiente: no tenés permiso para consultar ' + denied : access === 'unavailable' ? 'No se pudieron verificar los permisos de ' + label + '. Recargá para reintentar.' : 'Comprobando permisos de ' + label + '…';
   document.querySelector<HTMLElement>('#session-identity')!.textContent = snapshot.identity ? snapshot.identity.username + ' · ' + snapshot.identity.roles.join(', ') : '';

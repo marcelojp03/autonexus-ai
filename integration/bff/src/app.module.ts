@@ -1,3 +1,4 @@
+import { HttpLedgerGateway } from './application/ledger-gateway.js';
 import { Module } from '@nestjs/common';
 import { BusinessGraphql } from './application/business-graphql.js';
 import { HttpEmployeesGateway } from './application/employees-gateway.js';
@@ -11,11 +12,12 @@ import { AccessTokenVerifier } from './infrastructure/auth/token-verifier.js';
 import { AdministratorGuard } from './infrastructure/auth/administrator.guard.js';
 import { bffEnvironment, type BffConfiguration } from './infrastructure/config/environment.js';
 import { GraphqlController } from './infrastructure/http/graphql.controller.js';
+import { FinanceFilesController } from './infrastructure/http/finance-files.controller.js';
 
 const configuration = (): BffConfiguration => bffEnvironment();
 
 @Module({
-  controllers: [GraphqlController],
+  controllers: [GraphqlController, FinanceFilesController],
   providers: [
     { provide: 'BFF_CONFIGURATION', useFactory: configuration },
     {
@@ -40,10 +42,15 @@ const configuration = (): BffConfiguration => bffEnvironment();
       useFactory: (config: BffConfiguration) => new HttpFinanceGateway(config.financeUrl),
     },
     {
+      provide: HttpLedgerGateway,
+      inject: ['BFF_CONFIGURATION'],
+      useFactory: (config: BffConfiguration) => new HttpLedgerGateway(config.financeUrl),
+    },
+    {
       provide: BusinessGraphql,
-      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION', HttpAgendaGateway, HttpIntelligenceGateway, HttpSyncGateway, HttpAssistantGateway],
-      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration, agenda: HttpAgendaGateway, intelligence: HttpIntelligenceGateway, sync: HttpSyncGateway, assistant: HttpAssistantGateway) =>
-        new BusinessGraphql(employees, operations, finance, config.schemaPaths, agenda, intelligence, sync, assistant),
+      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION', HttpAgendaGateway, HttpIntelligenceGateway, HttpSyncGateway, HttpAssistantGateway, HttpLedgerGateway],
+      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration, agenda: HttpAgendaGateway, intelligence: HttpIntelligenceGateway, sync: HttpSyncGateway, assistant: HttpAssistantGateway, ledger: HttpLedgerGateway) =>
+        new BusinessGraphql(employees, operations, finance, config.schemaPaths, agenda, intelligence, sync, assistant, ledger),
     },
     {
       provide: HttpSyncGateway,
