@@ -17,10 +17,16 @@ import 'journey_controller.dart';
 import 'journey_home.dart' show queueProgressLabel;
 
 class WorkPage extends StatefulWidget {
-  const WorkPage({super.key, required this.controller, required this.work});
+  const WorkPage({
+    super.key,
+    required this.controller,
+    required this.work,
+    this.loadClassifier = DamageClassifier.load,
+  });
 
   final JourneyController controller;
   final PreparedWork work;
+  final Future<InspectionClassifier> Function() loadClassifier;
 
   @override
   State<WorkPage> createState() => _WorkPageState();
@@ -39,7 +45,9 @@ class _WorkPageState extends State<WorkPage> {
   final Set<String> _humanLabels = {};
   StagedPhoto? _photo;
   Uint8List? _photoBytes;
-  DamageClassifier? _classifier;
+  InspectionClassifier? _classifier;
+  bool _manual = true;
+  String _reason = 'operator_manual';
   DeviceResult? _analysis;
   String? _photoError;
 
@@ -82,11 +90,19 @@ class _WorkPageState extends State<WorkPage> {
       if (photo == null || !mounted) return;
       final bytes = await File(photo.path).readAsBytes();
       await _analysePhoto(photo, bytes);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        setState(
-          () => _photoError = 'No se pudo preparar esa fotografía. Elegí otra imagen JPEG o PNG.',
-        );
+        setState(() {
+          if (_photo == null && !_humanReviewed) {
+            _reason = error is OutOfMemoryError
+                ? 'insufficient_resources'
+                : error is PhotoInputException
+                ? error.reason
+                : 'input_rejected';
+          }
+          _photoError =
+              'No se pudo preparar la foto: $error. Podés retomar o registrar manualmente.';
+        });
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -99,10 +115,14 @@ class _WorkPageState extends State<WorkPage> {
         _photo = photo;
         _photoBytes = bytes;
         _analysis = null;
+        _humanReviewed = false;
+        _humanLabels.clear();
+        _manual = true;
+        _reason = 'operator_manual';
       });
     }
     try {
-      final classifier = _classifier ?? await DamageClassifier.load();
+      final classifier = _classifier ?? await widget.loadClassifier();
       if (!mounted) {
         if (_classifier == null) classifier.dispose();
         return;
@@ -112,21 +132,26 @@ class _WorkPageState extends State<WorkPage> {
       if (!mounted) return;
       setState(() {
         _analysis = analysis;
-        _humanReviewed = false;
-        _humanLabels
-          ..clear()
-          ..addAll(
-            analysis.scores
-                .where((score) => score.flagged)
-                .map((score) => score.label),
-          );
+        _reason = analysis.inconclusive
+            ? 'below_thresholds'
+            : 'operator_manual';
         _photoError = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        setState(
-          () => _photoError = 'La foto quedó guardada localmente, pero no se pudo ejecutar el modelo.',
-        );
+        setState(() {
+          _manual = true;
+          _reason = error is OutOfMemoryError
+              ? 'insufficient_resources'
+              : _classifier == null
+              ? 'model_unavailable'
+              : 'inference_failed';
+          _photoError = _reason == 'model_unavailable'
+              ? 'Modelo no disponible o manifiesto inválido. La foto sigue local; registrá manualmente.'
+              : _reason == 'insufficient_resources'
+              ? 'Recursos insuficientes. La foto sigue local; registrá manualmente o reintentá.'
+              : 'Falló la inferencia. La foto sigue local; registrá manualmente o reintentá.';
+        });
       }
     }
   }
@@ -147,9 +172,11 @@ class _WorkPageState extends State<WorkPage> {
   Future<void> _save() async {
     final description = _description.text.trim();
     final minutes = int.tryParse(_minutes.text.trim());
-    if (description.length < 3) {
+    if (description.length < 3 ||
+        description.length > (_humanReviewed ? 1600 : 2000)) {
       setState(
-        () => _result = 'La descripción necesita al menos 3 caracteres.',
+        () => _result =
+            'La descripción necesita entre 3 y ${_humanReviewed ? 1600 : 2000} caracteres.',
       );
       return;
     }
@@ -157,12 +184,24 @@ class _WorkPageState extends State<WorkPage> {
       setState(() => _result = 'Los minutos deben estar entre 1 y 1440.');
       return;
     }
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _result = null;
+    });
     final created = await widget.controller.queueAdvance(
       work: widget.work,
       description: description,
       minutes: minutes,
       photo: _photo,
+      inspectionReview: _humanReviewed
+          ? InspectionReview(
+              mode: _manual || _analysis == null ? 'manual' : 'assisted',
+              reason: _reason,
+              interpretation: description,
+              labels: _humanLabels.toList()..sort(),
+              reviewedAt: DateTime.now().toUtc(),
+            )
+          : null,
       runId: _analysis == null ? null : _classifier?.manifest.runId,
       modelVersion: _analysis == null
           ? null
@@ -171,10 +210,12 @@ class _WorkPageState extends State<WorkPage> {
         for (final score in _analysis?.scores ?? const <DeviceScore>[])
           score.label: score.score,
       },
-      humanReviewLabels: _humanReviewed
+      humanReviewLabels: _humanReviewed && _analysis != null
           ? (_humanLabels.toList()..sort())
           : null,
-      humanReviewedAt: _humanReviewed ? DateTime.now().toUtc() : null,
+      humanReviewedAt: _humanReviewed && _analysis != null
+          ? DateTime.now().toUtc()
+          : null,
     );
     if (!mounted) return;
     setState(() {
@@ -239,6 +280,7 @@ class _WorkPageState extends State<WorkPage> {
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
+                maxLength: _humanReviewed ? 1600 : 2000,
               ),
               const SizedBox(height: 12),
               TextField(
@@ -346,6 +388,10 @@ class _WorkPageState extends State<WorkPage> {
                           'Señal experimental para revisión humana; no es un diagnóstico.',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                        if (_analysis!.inconclusive)
+                          const Text(
+                            'No concluyente: ninguna etiqueta alcanza su umbral experimental; no descarta daño. Se requiere interpretación humana.',
+                          ),
                         const SizedBox(height: 8),
                         ..._analysis!.scores.map(
                           (score) => Padding(
@@ -373,43 +419,71 @@ class _WorkPageState extends State<WorkPage> {
                             ),
                           ),
                         ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: _humanReviewed,
-                          onChanged: _saving
-                              ? null
-                              : (value) =>
-                                    setState(() => _humanReviewed = value),
-                          title: const Text('Registrar mi revisión'),
-                          subtitle: Text(
-                            'Se guarda aparte de la predicción · ${_classifier!.manifest.modelVersion}',
-                          ),
-                        ),
-                        if (_humanReviewed)
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: [
-                              for (final score in _analysis!.scores)
-                                FilterChip(
-                                  label: Text(_labelName(score.label)),
-                                  selected: _humanLabels.contains(score.label),
-                                  onSelected: _saving
-                                      ? null
-                                      : (selected) => setState(() {
-                                          if (selected) {
-                                            _humanLabels.add(score.label);
-                                          } else {
-                                            _humanLabels.remove(score.label);
-                                          }
-                                        }),
-                                ),
-                            ],
-                          ),
                       ],
                     ),
                   ),
                 ],
+              ],
+              SwitchListTile(
+                key: const Key('inspection-review'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Registrar mi revisión de inspección'),
+                subtitle: const Text(
+                  'Registro manual disponible sin modelo. Usa la descripción del avance; se guarda aparte de los puntajes.',
+                ),
+                value: _humanReviewed,
+                onChanged: _saving || _saved
+                    ? null
+                    : (value) => setState(() => _humanReviewed = value),
+              ),
+              if (_humanReviewed) ...[
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Usar registro manual'),
+                  value: _manual || _analysis == null,
+                  onChanged: _saving || _saved || _analysis == null
+                      ? null
+                      : (value) => setState(() => _manual = value),
+                ),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  key: ValueKey('inspection-reason-$_reason'),
+                  initialValue: _reason,
+                  decoration: const InputDecoration(
+                    labelText: 'Motivo de la revisión',
+                  ),
+                  items: InspectionReview.reasons
+                      .map(
+                        (reason) => DropdownMenuItem(
+                          value: reason,
+                          child: Text(_reasonName(reason)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _saving || _saved
+                      ? null
+                      : (value) => setState(() => _reason = value!),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final label in InspectionReview.labelCodes)
+                      FilterChip(
+                        label: Text(_labelName(label)),
+                        selected: _humanLabels.contains(label),
+                        onSelected: _saving || _saved
+                            ? null
+                            : (selected) => setState(() {
+                                if (selected) {
+                                  _humanLabels.add(label);
+                                } else {
+                                  _humanLabels.remove(label);
+                                }
+                              }),
+                      ),
+                  ],
+                ),
               ],
               if (_photoError != null) ...[
                 const SizedBox(height: 8),
@@ -481,4 +555,14 @@ String _labelName(String label) => switch (label) {
   'glass_shatter' => 'Vidrio roto',
   'scratch' => 'Raspón',
   _ => label,
+};
+
+String _reasonName(String reason) => switch (reason) {
+  'operator_manual' => 'Decisión del operador',
+  'model_unavailable' => 'Modelo no disponible',
+  'inference_failed' => 'Inferencia fallida',
+  'insufficient_resources' => 'Recursos insuficientes',
+  'below_thresholds' => 'Puntajes bajo los umbrales',
+  'input_rejected' => 'Imagen rechazada',
+  _ => reason,
 };

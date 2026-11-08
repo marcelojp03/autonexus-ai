@@ -59,7 +59,7 @@ test('export is JSON only, does not mutate source, and contains only the explici
 test('wrong subjects, unknown keys at every level, serialized credentials and prototype pointers are refused', async () => {
   await assert.rejects(decodeOfflineCopy(jsonBlob(raw()), 'another-subject'), /SUBJECT/);
   const mutations = [
-    copy => { copy.version = 2; },
+    copy => { copy.version = 3; },
     copy => { copy.authState = {}; },
     copy => { copy.works[0].runtime = {}; },
     copy => { copy.queue[0].cache = {}; },
@@ -118,7 +118,7 @@ let origin;
 before(async () => {
   const require = createRequire(new URL('../../mf-employees/package.json', import.meta.url));
   const { chromium } = require('@playwright/test');
-  const sources = Object.fromEntries(await Promise.all(['store', 'transfer'].map(async name =>
+  const sources = Object.fromEntries(await Promise.all(['store', 'transfer', 'review'].map(async name =>
     ['/' + name + '.ts', stripTypeScriptTypes(await readFile(new URL('../src/offline/' + name + '.ts', import.meta.url), 'utf8'))])));
   server = createServer((req, res) => {
     res.setHeader('Content-Type', sources[req.url] ? 'text/javascript' : 'text/html');
@@ -246,4 +246,14 @@ test('Chromium abort after a successful insert rolls back works, queue and local
       store.close(); return result;
     }, { subject, works: [work], queue: [item] }), [true, true, [], [], null]);
   } finally { await context.close(); }
+});
+
+test('format two roundtrips independent manual review and rejects malformed optional review fields', async () => {
+  const inspectionReview = { schemaVersion: 1, mode: 'manual', reason: 'inference_failed', interpretation: 'Revisión independiente', labels: ['dent'], reviewedAt: createdAt };
+  const store = { works: async () => [work], queue: async () => [{ ...item, inspectionReview }] };
+  const blob = await createOfflineCopy(store, subject, sourceOrigin); const rawCopy = JSON.parse(await blob.text());
+  assert.equal(rawCopy.version, 2); assert.deepEqual((await decodeOfflineCopy(blob, subject)).queue[0].inspectionReview, inspectionReview);
+  for (const bad of [null, { ...inspectionReview, labels: null }, { ...inspectionReview, mode: 'assisted' }, { ...inspectionReview, labels: ['dent', 'dent'] }]) {
+    const copy = structuredClone(rawCopy); copy.queue[0].inspectionReview = bad; await assert.rejects(decodeOfflineCopy(jsonBlob(copy), subject));
+  }
 });

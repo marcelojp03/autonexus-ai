@@ -139,7 +139,6 @@ void main() {
       photoDirectory: Directory('${temp.path}/evidence'),
     );
     await store.saveWork(work('user-a'));
-    await store.enqueue(advance('user-a'));
     final photo = await store.savePhoto('op-1', List<int>.filled(64, 7), 'jpg');
     await store.enqueue(
       QueuedAdvance(

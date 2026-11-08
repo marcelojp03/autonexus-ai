@@ -17,18 +17,23 @@ import 'package:sqflite/sqflite.dart';
 import 'offline_models.dart';
 import '../session/pending_authorization.dart';
 
+typedef PhotoFileWriter = Future<void> Function(File file, List<int> bytes);
+
 class OfflineStore {
-  OfflineStore._(this._database, this._photos);
+  OfflineStore._(this._database, this._photos, this._writePhoto);
+
+  final PhotoFileWriter _writePhoto;
 
   final Database _database;
   final Directory _photos;
 
-  static const int schemaVersion = 6;
+  static const int schemaVersion = 7;
 
   /// Opens the store. `directory` lets tests use an in-memory database and a temp photo folder.
   static Future<OfflineStore> open({
     String? path,
     Directory? photoDirectory,
+    PhotoFileWriter? writePhoto,
   }) async {
     final database = await openDatabase(
       path ?? 'autonexus_offline.db',
@@ -56,6 +61,7 @@ class OfflineStore {
             minutes_worked INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             state TEXT NOT NULL,
+            inspection_review_json TEXT,
             photo_path TEXT,
             photo_sha256 TEXT,
             human_labels_json TEXT,
@@ -96,6 +102,11 @@ class OfflineStore {
       onUpgrade: (db, from, to) async {
         // Version 2 remembers which subject owns the local copy so the app can reopen the prepared
         // work without a session. It is not a credential: it only scopes local rows.
+        if (from < 7) {
+          await db.execute(
+            'ALTER TABLE queue ADD COLUMN inspection_review_json TEXT',
+          );
+        }
         if (from < 2) {
           await db.execute(
             'CREATE TABLE IF NOT EXISTS local_state(key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL)',
@@ -149,7 +160,14 @@ class OfflineStore {
           '${(await getApplicationDocumentsDirectory()).path}/evidence',
         );
     await photos.create(recursive: true);
-    return OfflineStore._(database, photos);
+    return OfflineStore._(
+      database,
+      photos,
+      writePhoto ??
+          (file, bytes) async {
+            await file.writeAsBytes(bytes, flush: true);
+          },
+    );
   }
 
   Future<Map<String, dynamic>?> syncRequest(String operationId) async {
@@ -210,11 +228,16 @@ class OfflineStore {
 
   // -- queue -----------------------------------------------------------------------------------
   Future<void> enqueue(QueuedAdvance advance) async {
-    await _database.insert(
-      'queue',
-      advance.toRow(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _database.transaction((txn) async {
+      await txn.insert('queue', advance.toRow());
+      if (advance.photoPath != null) {
+        await txn.delete(
+          'staged_photos',
+          where: 'subject = ? AND assignment_id = ? AND photo_path = ?',
+          whereArgs: [advance.subject, advance.assignmentId, advance.photoPath],
+        );
+      }
+    });
   }
 
   Future<List<QueuedAdvance>> queue(
@@ -367,8 +390,8 @@ class OfflineStore {
     final path =
         '${_photos.path}/staged-${DateTime.now().microsecondsSinceEpoch}.jpg';
     final file = File(path);
-    await file.writeAsBytes(bytes, flush: true);
     try {
+      await _writePhoto(file, bytes);
       await _database.insert('staged_photos', {
         'subject': subject,
         'assignment_id': assignmentId,
@@ -382,8 +405,7 @@ class OfflineStore {
       rethrow;
     }
     if (previous != null) {
-      final old = File(previous.path);
-      if (await old.exists()) await old.delete();
+      await _deleteUnqueuedPhoto(previous.path);
     }
     return StagedPhoto(
       subject: subject,
@@ -412,8 +434,7 @@ class OfflineStore {
     );
   }
 
-  /// Promotes the staged file to the durable queue filename. The table is updated before the queue
-  /// insert, so a process death can retry without losing the private image.
+  // Ownership moves in enqueue's transaction; never move the only file before commit.
   Future<File?> promoteStagedPhoto(
     String subject,
     String assignmentId,
@@ -427,19 +448,7 @@ class OfflineStore {
         'La fotografía privada ya no está disponible.',
       );
     }
-    final target = File('${_photos.path}/$operationId.jpg');
-    if (source.path != target.path) {
-      if (await target.exists()) await target.delete();
-      final moved = await source.rename(target.path);
-      await _database.update(
-        'staged_photos',
-        {'photo_path': moved.path},
-        where: 'subject = ? AND assignment_id = ?',
-        whereArgs: [subject, assignmentId],
-      );
-      return moved;
-    }
-    return target;
+    return source;
   }
 
   Future<void> removeStagedPhoto(
@@ -454,9 +463,21 @@ class OfflineStore {
       whereArgs: [subject, assignmentId],
     );
     if (deleteFile && staged != null) {
-      final file = File(staged.path);
-      if (await file.exists()) await file.delete();
+      await _deleteUnqueuedPhoto(staged.path);
     }
+  }
+
+  Future<void> _deleteUnqueuedPhoto(String path) async {
+    final queued = await _database.query(
+      'queue',
+      columns: ['operation_id'],
+      where: 'photo_path = ?',
+      whereArgs: [path],
+      limit: 1,
+    );
+    if (queued.isNotEmpty) return;
+    final file = File(path);
+    if (await file.exists()) await file.delete();
   }
 
   /// Saves the pending PKCE state before the browser opens, so a restart mid-flow can still redeem the

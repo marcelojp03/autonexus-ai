@@ -1,0 +1,23 @@
+# Local optional artifacts, prepared beforehand with the authorized model.
+# Do not bake or publish weights/datasets; do not create missing host paths.
+services:
+  web:
+    volumes:
+      - type: bind
+        source: ./web/shell/public/offline-model
+        target: /usr/share/nginx/html/offline-model
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./web/shell/dist/offline-resources.json
+        target: /usr/share/nginx/html/offline-resources.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./web/shell/dist/sw.js
+        target: /usr/share/nginx/html/sw.js
+        read_only: true
+        bind:
+          create_host_path: false

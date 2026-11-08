@@ -1,9 +1,29 @@
 # Aplicación Android
-Tecnología prevista: Flutter.
+Tecnología: Flutter.
 Persistencia: SQLite y archivos privados.
 Responsabilidad: Bloque 1 base; bloque 2 offline/IA local; bloque 3 modelo.
 Alcance: Agenda, inspecciones, avances, evidencias, LiteRT local y sincronización posterior.
-## Estado
+## CU22 — inspección manual y asistida (2026-11-07)
+
+WorkPage ofrece revisión humana sin foto/modelo. `inspectionReview` permanece separado
+de los puntajes y de `humanReview` asociado a la predicción; sin predicción no se fabrica
+runId/modelVersion. SQLite usa esquema7, aditivo: no borra colas, fotos ni PKCE previos.
+En este incremento se conservan staging y borrador si el commit falla; no se devuelve
+un avance exitoso cuando enqueue falló. Ver contrato `contracts/ai/local-inspection.md`.
+
+Comprobados desde esta carpeta: `flutter test test/inspection_limits_test.dart
+test/inspection_review_test.dart test/offline_store_test.dart test/sync_service_test.dart`
+(52/52), `flutter analyze --no-pub`, y `flutter test
+integration_test/cu22_inspection_test.dart -d <dispositivo> --no-pub --reporter expanded`
+(5/5 en Android físico). El fixture usa únicamente directorios temporales propios y
+SQLite nativo, nunca la base habitual, login, sincronización o datos del usuario.
+
+Los fallos de inferencia/recursos y salida baja son inyectados y se rotulan como tales;
+el modelo ausente usa un asset realmente inexistente. El warmup del framework permite
+su primer cuadro nativo antes del baseline, sin desactivar aserciones de fugas. Evidencia:
+`docs/evidence/cu22-local-inspection-20261107.md`. No acredita capacidad visual validada.
+
+## Antecedente superado de inicialización
 Carpeta reservada. Aplicación todavía no generada. Leer el AGENTS raíz y local antes de inicializar. Los comandos para instalar, ejecutar y verificar se añadirán después de comprobarlos en el proyecto real.
 ## Estado real (2026-11-02)
 

@@ -1,4 +1,6 @@
 import { validateOfflineRecords } from './transfer.ts';
+import { validateInspectionReview } from './review.ts';
+import type { InspectionReview } from './review.ts';
 
 export interface PreparedWork {
   subject: string;
@@ -21,6 +23,7 @@ export interface QueuedAdvance {
   state: 'pending' | 'sending' | 'applied' | 'conflict' | 'rejected' | 'needs-reupload';
   photo?: Blob;
   photoSha256?: string;
+  inspectionReview?: InspectionReview;
   clientInference?: {
     runId: string;
     modelVersion: string;
@@ -78,14 +81,15 @@ function advanceRecord(item: QueuedAdvance): QueuedAdvance {
   requireSubject(item.subject);
   withoutCredentials(item);
   const { operationId, subject, assignmentId, baseVersion, description, minutesWorked, createdAt,
-    state, photo, photoSha256, clientInference, overlayId, lastCode, progress } = item;
+    state, photo, photoSha256, clientInference, inspectionReview, overlayId, lastCode, progress } = item;
+  if (inspectionReview !== undefined) validateInspectionReview(inspectionReview);
   if (!operationId || !assignmentId || !Number.isInteger(baseVersion)
     || typeof description !== 'string' || !Number.isFinite(minutesWorked) || minutesWorked < 0
     || !Number.isFinite(Date.parse(createdAt))
     || !['pending', 'sending', 'applied', 'conflict', 'rejected', 'needs-reupload'].includes(state)
     || (photo !== undefined && !(photo instanceof Blob))) throw new Error('OFFLINE_ADVANCE_INVALID');
   return structuredClone({ operationId, subject, assignmentId, baseVersion, description, minutesWorked,
-    createdAt, state, photo, photoSha256, clientInference, overlayId, lastCode, progress });
+    createdAt, state, photo, photoSha256, clientInference, inspectionReview, overlayId, lastCode, progress });
 }
 
 function request<T>(value: IDBRequest<T>): Promise<T> {

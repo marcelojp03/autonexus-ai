@@ -1,5 +1,58 @@
 # Estado comprobado
 
+## CU22 — core funcional revisado; nueva UX sigue abierta (2026-11-08)
+
+Incremento desde3f1e61d: alternativa manual sin IA, predicción/revisión separadas,
+guardado local sin éxito falso, límites y conservación ante fallos, reemplazo de
+foto y caché recuperable. Shell42/42+12/12, tipos/build0, Chromium recuperación
+3escenarios; Flutter57/57/analyze0 y físicoC3 previo1/1 reutilizado. Revisión
+directa focalizada autorizada tras revisor cancelado sin dictamen: cumplimiento
+del core conforme, sin críticos encontrados, consistencia conservada; **no
+independiente**. La spec continúa in-progress por UX nuevaT7.
+
+PWA baseline390→411px medido; PNG guardado sin canal de píxeles interpretable y
+dos modelos de visión fallaron por API. Flutter físico autorizado no conectado;
+otros dispositivos no se usaron. No conformidad visual ni cierre del modelo o
+licencia. PLAN sólo concilia esa dimensión y mantiene57/19/26 sin sumar CU22.
+
+Trabajo financiero aún no publicado: Docker se recuperó sin reinicio; mismos
+proyecto/configuración. Traslado3adjuntos committed y lecturas autorizadas antes/
+después de recreación conformes, metadatos/historial/versiones/hashes y dinero
+conservados. MinIO definitivo saludable; preparación retirada sin borrar su
+volumen y volumen histórico conservado. CU19/CU20 y su UX no se cierran por ello.
+
+## En curso — CU22 y CU19/CU20, sin nueva aceptación global (2026-11-08)
+
+Base publicada3f1e61d, work/marcelo. CU28 permanece cerrado y no se repitió su
+matriz. CU22 añade revisión manual independiente, conservación ante fallos y
+reemplazo de fotografía; Flutter57/57 y análisis sin incidencias, PWA42/42 y
+tipos/build correctos. Chromium real sobre worker fuente con recursos sintéticos
+verificó conservaciónA ante actualizaciónB fallida, transiciónB completa y retry
+en el mismo worker con coldboot sin servidor. Corregido fallback exclusivo del
+documento público offline, sin cachear APIs/credenciales. Revisión independiente
+del incremento pendiente; no publicado. Modelo experimental/no validado y
+autorización de distribución de pesos no acreditada, separados del funcionamiento.
+
+Finanzas conserva el ledger/BFF/React existente y sus datos. Suite propietaria
+fresca95/95,612aserciones; BFF56+27 focalizadas aprobadas tras retry por arranque
+Nest. React aún no tiene corrida fresca completa (timeouts de worker/test).
+Traslado de3adjuntos a MinIO bloqueado en PUT403 SignatureDoesNotMatch: cabecera
+MIME duplicada por el adaptador, fix y regresión preparados, aún sin verificar
+ni desplegar. Origen legible y perfil/punteros conservados; no retirar proveedores.
+Posteriormente, regresión de firma1/10aserciones y build de imagen corregida0;
+coordinador15/15. Reanudación de migración: el comando PHP terminó0, pero Docker
+dejó su contenedor y el de php--version en removing, manteniendo bloqueado el
+cliente --rm hasta timeout. No interpretar timeout del cliente como fallo SQL
+ni como traslado confirmado. Se detuvo sólo el cliente propio PID2752 tras
+verificarlo; daemon/volúmenes/proveedores no se reiniciaron ni borraron. Finance
+sigue healthy/no pausado. Revisión CU22 general-140 cancelada sin dictamen:
+falta una revisión efectiva antes de publicar. Mantenimiento global de Docker
+requiere autorización; no se ha efectuado commit/merge/push de este delta.
+
+CU25/CU26 ampliados todavía no implementados; fuentes identificadas, sin nuevos
+PASS de matriz ni puntos. Evidencia técnica detallada en cu22-local-inspection-20261107
+y cu19-cu20-20261108. No se tocó ICONIX ni se modificó PLAN por avances parciales.
+
 ## CU28 — aceptación local cerrada, incluido destinatario inexistente (2026-11-07)
 
 Sobre base `24f76a9`, receptor autenticado y registro explícito de destinos locales. El mismo

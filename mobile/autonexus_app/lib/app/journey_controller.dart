@@ -198,6 +198,7 @@ class JourneyController extends ChangeNotifier {
     required String description,
     required int minutes,
     StagedPhoto? photo,
+    InspectionReview? inspectionReview,
     String? runId,
     String? modelVersion,
     Map<String, double> labels = const {},
@@ -205,6 +206,7 @@ class JourneyController extends ChangeNotifier {
     DateTime? humanReviewedAt,
   }) async {
     QueuedAdvance? created;
+    if (busy) return null;
     await _run(() async {
       final subject = snapshot.subject ?? localSubject;
       if (subject == null || subject != work.subject) {
@@ -215,6 +217,13 @@ class JourneyController extends ChangeNotifier {
           (photo.subject != subject ||
               photo.assignmentId != work.assignmentId)) {
         lastError = 'La fotografía pertenece a otro trabajo o cuenta.';
+        return;
+      }
+      final ownerDescription =
+          inspectionReview?.ownerDescription ?? description;
+      if (ownerDescription.trim().length < 3 ||
+          ownerDescription.length > 2000) {
+        lastError = 'La descripción necesita entre 3 y 2000 caracteres.';
         return;
       }
       final operationId = _uuid();
@@ -229,12 +238,13 @@ class JourneyController extends ChangeNotifier {
         lastError = 'La fotografía privada ya no está disponible.';
         return;
       }
-      created = QueuedAdvance(
+      final candidate = QueuedAdvance(
         operationId: operationId,
         subject: subject,
         assignmentId: work.assignmentId,
         baseVersion: work.version,
-        description: description,
+        description: ownerDescription,
+        inspectionReview: inspectionReview,
         minutesWorked: minutes,
         createdAt: DateTime.now().toUtc(),
         state: QueueState.pending,
@@ -246,18 +256,17 @@ class JourneyController extends ChangeNotifier {
         modelVersion: modelVersion,
         labels: labels,
       );
-      await store.enqueue(created!);
-      if (photo != null) {
-        await store.removeStagedPhoto(
-          subject,
-          work.assignmentId,
-          deleteFile: false,
-        );
-      }
+      await store.enqueue(candidate);
+      created = candidate;
       notice =
           'Avance guardado como pendiente. Todavía no está en el servidor.';
     });
-    await load();
+    try {
+      await load();
+    } catch (_) {
+      lastError = 'No se pudo actualizar la lista local. Conservá el borrador si no se confirmó el guardado.';
+      notifyListeners();
+    }
     return created;
   }
 

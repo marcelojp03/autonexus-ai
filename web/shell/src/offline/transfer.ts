@@ -1,4 +1,5 @@
 import { withoutCredentials } from './store.ts';
+import { validateInspectionReview } from './review.ts';
 import type { OfflineStore, PreparedWork, QueuedAdvance } from './store.ts';
 
 type Copy = { subject: string; works: PreparedWork[]; queue: QueuedAdvance[] };
@@ -21,7 +22,7 @@ const workShape: Shape = { subject: 'text', assignmentId: 'uuid', orderId: 'uuid
 const queueShape: Record<string, Shape> = {
   operationId: 'uuid', subject: 'text', assignmentId: 'uuid', baseVersion: 'integer', description: 'description',
   minutesWorked: 'minutes', createdAt: 'date', state: 'state', 'photo?': 'blob', 'photoSha256?': 'hash',
-  'clientInference?': inferenceShape, 'overlayId?': 'uuid', 'lastCode?': 'text',
+  'clientInference?': inferenceShape, 'inspectionReview?': 'review', 'overlayId?': 'uuid', 'lastCode?': 'text',
   'progress?': { 'steps?': { '*': { input: { overlayId: 'uuid', deviceId: 'text', createdAt: 'date', operationsJson: 'operations' },
     'registered?': 'boolean' } }, 'advanceId?': 'uuid', 'evidenceId?': 'uuid', 'attempt?': 'attempt',
   'evidenceState?': 'evidenceState', 'inferenceApplied?': 'boolean' },
@@ -48,6 +49,7 @@ function check(value: unknown, shape: Shape): void {
   } else {
     let valid = false;
     switch (shape) {
+      case 'review': validateInspectionReview(value); valid = true; break;
       case 'text': valid = typeof value === 'string' && !!value.trim() && value.length <= 2000
         && !/(?:https?:|javascript:|data:|blob:|bearer\s)/i.test(value); break;
       case 'origin': valid = typeof value === 'string' && value.length <= 2000; break;
@@ -91,6 +93,7 @@ export async function validateOfflineRecords(copy: Copy): Promise<void> {
     assignments.add(work.assignmentId);
   }
   for (const item of copy.queue) {
+    if (item.inspectionReview && ((item.inspectionReview.mode === 'assisted') !== !!item.clientInference)) throw new Error('OFFLINE_COPY_REVIEW_MODE_MISMATCH');
     if (item.subject !== copy.subject || operations.has(item.operationId)) throw new Error('OFFLINE_COPY_OWNER_OR_DUPLICATE');
     operations.add(item.operationId);
     if (item.photo) {
@@ -137,7 +140,7 @@ export async function createOfflineCopy(store: OfflineStore, subject: string, so
     }
     serialized.push({ ...item, photo });
   }
-  const blob = new Blob([JSON.stringify({ version: 1, subject, sourceOrigin, createdAt: new Date().toISOString(), works, queue: serialized })], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ version: 2, subject, sourceOrigin, createdAt: new Date().toISOString(), works, queue: serialized })], { type: 'application/json' });
   if (blob.size > limit) throw new Error('OFFLINE_COPY_TOO_LARGE');
   return blob;
 }
@@ -148,7 +151,8 @@ export async function decodeOfflineCopy(blob: Blob, expectedSubject: string): Pr
   withoutCredentials(raw);
   check(raw, { version: 'integer', subject: 'text', sourceOrigin: 'origin', createdAt: 'date', works: [workShape],
     queue: [{ ...queueShape, 'photo?': { mime: 'mime', base64: 'base64' } }] });
-  if (raw.version !== 1 || raw.subject !== expectedSubject) throw new Error('OFFLINE_COPY_SUBJECT_OR_VERSION');
+  if (![1, 2].includes(raw.version) || raw.subject !== expectedSubject) throw new Error('OFFLINE_COPY_SUBJECT_OR_VERSION');
+  if (raw.version === 1 && raw.queue.some((item: Record<string, unknown>) => Object.hasOwn(item, 'inspectionReview'))) throw new Error('OFFLINE_COPY_SUBJECT_OR_VERSION');
   const origin = new URL(raw.sourceOrigin);
   if (!['http:', 'https:'].includes(origin.protocol) || origin.origin !== raw.sourceOrigin) throw new Error('OFFLINE_COPY_ORIGIN_INVALID');
   for (const item of raw.queue) if (item.photo) {

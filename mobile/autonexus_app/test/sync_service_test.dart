@@ -395,12 +395,15 @@ void main() {
     },
   );
 
-  test('a photographed advance authorizes, uploads without bearer, confirms and stores inference separately', () async {
+  for (final manual in [false, true]) {
+  test('a photographed advance syncs with optional real inference (manual: $manual)', () async {
     await store.updateState('op-1', QueueState.applied);
     const operationId = '11111111-1111-4111-8111-111111111111';
     const assignmentId = '22222222-2222-4222-8222-222222222222';
     const advanceId = '33333333-3333-4333-8333-333333333333';
     const evidenceId = '44444444-4444-4444-8444-444444444444';
+    final review = manual ? InspectionReview(mode: 'manual', reason: 'model_unavailable',
+      interpretation: 'Revisión de carrocería', reviewedAt: DateTime.utc(2026)) : null;
     final bytes = utf8.encode('fixture-image-bytes');
     final photo = await store.savePhoto(operationId, bytes, 'jpg');
     await store.enqueue(
@@ -409,17 +412,18 @@ void main() {
         subject: 'user-a',
         assignmentId: assignmentId,
         baseVersion: 3,
-        description: 'Revisión de carrocería',
+        description: review?.ownerDescription ?? 'Revisión de carrocería',
+        inspectionReview: review,
         minutesWorked: 15,
         createdAt: DateTime.utc(2026, 11, 4, 12),
         state: QueueState.pending,
         photoPath: photo.path,
         photoSha256: sha256.convert(bytes).toString(),
-        runId: 'run-1',
-        modelVersion: 'mobile-v1',
-        labels: const {'dent': 0.8},
-        humanReviewLabels: const [],
-        humanReviewedAt: DateTime.utc(2026, 11, 4, 12, 1),
+        runId: manual ? null : 'run-1',
+        modelVersion: manual ? null : 'mobile-v1',
+        labels: manual ? const {} : const {'dent': 0.8},
+        humanReviewLabels: manual ? null : const [],
+        humanReviewedAt: manual ? null : DateTime.utc(2026, 11, 4, 12, 1),
       ),
     );
 
@@ -518,7 +522,7 @@ void main() {
       'advance',
       'evidence-authorize',
       'evidence-confirm',
-      'client-inference',
+      if (!manual) 'client-inference',
     ]);
     expect(uploadAuthorization, isNull);
     expect(postedOperations[2]['payload']['expectedVersion'], 1);
@@ -528,11 +532,11 @@ void main() {
       'bytes': bytes.length,
       'contentType': 'image/jpeg',
     });
-    expect(
+    if (!manual) { expect(
       (postedOperations.last['clientInference']
           as Map<String, dynamic>)['humanReview'],
       {'modelVersion': 'mobile-v1', 'labels': <String>[]},
-    );
+    ); }
     expect(outcome.applied, [operationId]);
     final row = (await store.queue('user-a'))
         .singleWhere((item) => item.operationId == operationId);
@@ -540,9 +544,12 @@ void main() {
     expect(row.ownerAdvanceId, advanceId);
     expect(row.evidenceId, evidenceId);
     expect(row.evidenceState, 'available');
-    expect(row.inferenceState, 'applied');
+    expect(row.inferenceState, manual ? isNull : 'applied');
+    if (manual) expect(postedOperations.every((op) => op['clientInference'] == null), isTrue);
     service.dispose();
   });
+
+  }
 
   test(
     'lost upload response confirms once after restart without another PUT',
@@ -1077,6 +1084,7 @@ void main() {
       await store.close();
       final database = await openDatabase('${temp.path}/offline.db');
       await database.execute('DROP TABLE sync_requests');
+      await database.execute('ALTER TABLE queue DROP COLUMN inspection_review_json');
       await database.setVersion(5);
       await database.close();
       store = await OfflineStore.open(

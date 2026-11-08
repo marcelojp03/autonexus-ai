@@ -92,7 +92,7 @@ y no hay negativos fiables.
 | Equivalencia en navegador (Chromium, backend WebGL) | Diferencia máxima **2e-06**, 0 errores de consola |
 
 Artefacto: `tfjs/model.json` + 3 fragmentos de pesos, generado desde el `SavedModel` de la corrida
-servida. Scripts: `scripts/cu22/verify-tfjs.mjs` y `scripts/cu22/verify-tfjs-cu22-browser.mjs`
+servida. Scripts: `scripts/cu22/verify-tfjs.mjs` y `scripts/cu22/verify-tfjs-browser.mjs`
 (referencia y entradas fijas en `tfjs-check/`).
 ## Recorrido completo desde la fotografía original (2026-11-02)
 

@@ -1,7 +1,9 @@
 import type { SessionPort } from '../../../../contracts/auth/session';
 import { openOfflineStore } from './store.ts';
 import type { OfflineStore, PreparedWork, QueuedAdvance } from './store.ts';
-import { prepareModel, inferPhoto } from './inference.ts';
+import { prepareModel, inferPhoto, validatePhoto, inspectionError } from './inference.ts';
+import { inspectionLabels, reviewDescription } from './review.ts';
+import type { InspectionReview } from './review.ts';
 import { syncPending } from './sync.ts';
 import { createOfflineCopy, decodeOfflineCopy } from './transfer.ts';
 
@@ -14,13 +16,15 @@ export class OfflineWorkspace {
   private image?: Blob;
   private prediction?: Awaited<ReturnType<typeof inferPhoto>>;
   private revision = false;
+  private reviewReason: InspectionReview['reason'] = 'operator_manual';
+  private readonly infer: typeof inferPhoto;
   private requestEpoch = 0;
   private sessionEpoch = 0;
   private sessionKey = '';
 
   private readonly host: HTMLElement;
   private readonly session: SessionPort;
-  constructor(host: HTMLElement, session: SessionPort) { this.host = host; this.session = session; }
+  constructor(host: HTMLElement, session: SessionPort, ports: { infer?: typeof inferPhoto } = {}) { this.host = host; this.session = session; this.infer = ports.infer ?? inferPhoto; }
 
   async start(): Promise<void> {
     this.store = await openOfflineStore();
@@ -28,7 +32,7 @@ export class OfflineWorkspace {
     if (this.subject) await this.store.recoverInterrupted(this.subject);
     this.host.innerHTML =
       '<h1>Trabajo sin conexión</h1>' +
-      '<p>Prepará un trabajo autorizado y el modelo antes de perder la red. Guardar localmente no confirma cambios en el servidor.</p>' +
+      '<p>Prepará un trabajo autorizado antes de perder la red. El modelo es opcional: siempre podés registrar una inspección manual. Guardar localmente no confirma cambios en el servidor.</p>' +
       '<p id="offline-status" role="status" aria-live="polite"></p><p id="offline-account"></p>' +
       '<label for="offline-day">Día del trabajo (zona del taller)</label><input id="offline-day" type="date" required><div class="offline-actions"><button type="button" id="offline-download">Descargar trabajos autorizados</button><button type="button" id="offline-model">Preparar modelo local</button><button type="button" id="offline-forget">Descartar copia local</button></div>' +
       '<div id="offline-available"></div>' +
@@ -48,7 +52,16 @@ export class OfflineWorkspace {
     const datePart = (type: string) => dateParts.find(item=>item.type===type)!.value;
     this.el<HTMLInputElement>('offline-day').value=datePart('year')+'-'+datePart('month')+'-'+datePart('day');
     this.el<HTMLButtonElement>('offline-model').onclick = () => void this.run(async () => {
-      const model = await prepareModel(); await this.ensureResources();
+      let model;
+      try {
+        const worker = await this.ensureResources(true);
+        model = await prepareModel();
+        if (navigator.serviceWorker.controller !== worker) throw new Error('El controlador offline cambió. Volvé a preparar el modelo.');
+      } catch (error) {
+        const failure = inspectionError(error); this.reviewReason = failure.reason;
+        this.el('offline-model-status').textContent = failure.message;
+        throw new Error(failure.message + ' La revisión manual sigue disponible.');
+      }
       this.el('offline-model-status').textContent = 'Modelo preparado: ' + model.modelVersion + ' · ' + model.runId + '. Capacidad visual NO validada.';
       this.notice('Recursos y modelo disponibles sin red.');
     });
@@ -75,33 +88,40 @@ export class OfflineWorkspace {
       this.el<HTMLInputElement>('offline-import').value='';
     });
     this.el<HTMLSelectElement>('offline-work').onchange = () => this.showWork();
-    this.el<HTMLInputElement>('offline-photo').onchange = () => {
-      this.resetPhoto();
+    for (const name of inspectionLabels) {
+      const label = document.createElement('label'); label.className = 'offline-check';
+      const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'human-label'; input.value = name;
+      label.append(input, document.createTextNode(name)); this.el('offline-labels').append(label);
+    }
+    this.el<HTMLInputElement>('offline-photo').onchange = () => void this.run(async () => {
       const file = this.el<HTMLInputElement>('offline-photo').files?.[0];
-      if (!file) return;
-      if (!['image/jpeg', 'image/png'].includes(file.type) || file.size < 1 || file.size > 5 * 1024 * 1024) { this.notice('Elegí una fotografía JPEG o PNG de hasta 5 MiB.'); return; }
+      if (!file) { this.resetPhoto(); return; }
+      const epoch = this.sessionEpoch;
+      if (!['image/jpeg', 'image/png'].includes(file.type) || file.size < 1 || file.size > 5 * 1024 * 1024) { if (!this.image) this.reviewReason = 'input_rejected'; this.notice('Elegí una fotografía JPEG o PNG de hasta 5 MiB. La foto anterior se conserva si había una.'); return; }
+      try { await validatePhoto(file); } catch (error) { if (!this.image && epoch === this.sessionEpoch) this.reviewReason = 'input_rejected'; throw error; }
+      if (epoch !== this.sessionEpoch) return;
+      this.resetPhoto();
       this.image = file;
       const preview = this.el<HTMLImageElement>('offline-preview'); preview.src = URL.createObjectURL(file); preview.hidden = false;
       this.el<HTMLButtonElement>('offline-infer').disabled = false;
-    };
+    });
     this.el<HTMLButtonElement>('offline-infer').onclick = () => void this.run(async () => {
       if (!this.image) return;
       const image = this.image;
-      const prediction = await inferPhoto(image);
+      const prediction = await this.analyzePhoto(image);
+      if (!prediction) return;
       if (this.image !== image) throw new Error('La fotografía cambió durante la inferencia. Volvé a analizar la imagen seleccionada.');
       this.prediction = prediction;
       const area = this.el('offline-scores'); area.replaceChildren();
-      const labels = this.el('offline-labels'); labels.replaceChildren(Object.assign(document.createElement('legend'), { textContent: 'Mi revisión: ninguna etiqueta significa no concluyente' }));
+      this.reviewReason = prediction.belowThresholds ? 'below_thresholds' : 'operator_manual';
       for (const item of this.prediction.labels) {
         const score = document.createElement('p'); score.textContent = item.name + ': ' + (item.score * 100).toFixed(1) + '%'; area.append(score);
-        const label = document.createElement('label'); label.className = 'offline-check';
-        const input = document.createElement('input'); input.type = 'checkbox'; input.value = item.name; input.name = 'human-label';
-        label.append(input, document.createTextNode(item.name)); labels.append(label);
+
       }
       this.el('offline-model-status').textContent = 'Inferencia local · ' + this.prediction.runId + ' · Capacidad visual NO validada. No es un diagnóstico.';
-      this.notice('Inferencia realizada localmente; todavía no enviada.');
+      this.notice(prediction.belowThresholds ? 'No concluyente: ninguna etiqueta alcanza su umbral experimental; no descarta daño. Registrá tu interpretación humana.' : 'Inferencia realizada localmente; todavía no enviada.');
     });
-    this.el<HTMLInputElement>('offline-review').onchange = () => { this.revision = this.el<HTMLInputElement>('offline-review').checked; this.el('offline-labels').hidden = !this.revision; };
+    this.el<HTMLInputElement>('offline-review').onchange = () => { this.revision = this.el<HTMLInputElement>('offline-review').checked; this.el('offline-labels').hidden = !this.revision; this.el<HTMLTextAreaElement>('offline-description').maxLength = this.revision ? 1600 : 2000; };
     this.el<HTMLFormElement>('offline-form').onsubmit = event => { event.preventDefault(); void this.run(() => this.save()); };
     this.el<HTMLButtonElement>('offline-sync').onclick = () => void this.run(async () => {
       const actor = this.session.snapshot().identity?.subject;
@@ -118,6 +138,18 @@ export class OfflineWorkspace {
     await this.refresh();
   }
 
+  private async analyzePhoto(image: Blob): Promise<Awaited<ReturnType<typeof inferPhoto>> | undefined> {
+    const epoch = this.sessionEpoch;
+    try {
+      const result = await this.infer(image);
+      return image === this.image && epoch === this.sessionEpoch ? result : undefined;
+    } catch (error) {
+      if (image !== this.image || epoch !== this.sessionEpoch) return;
+      const failure = inspectionError(error); this.reviewReason = failure.reason;
+      this.el('offline-model-status').textContent = failure.message;
+      throw new Error(failure.message + ' Podés reintentar o registrar una revisión manual.');
+    }
+  }
   private el<T extends HTMLElement = HTMLElement>(id: string): T { return this.host.querySelector<T>('#' + id)!; }
   async clearForLogout(): Promise<boolean> {
     const store = this.store ?? await openOfflineStore();
@@ -185,22 +217,69 @@ export class OfflineWorkspace {
       button.onclick = () => void this.run(async () => {
         const { myExecution: execution } = await this.query<{myExecution:{orderId:string;orderNumber:string;assignmentId:string;version:number;status:string}}>('query PrepareOffline($id:UUID!){myExecution(assignmentId:$id){orderId orderNumber assignmentId version status}}',{id:work.assignmentId});
         if (execution.status !== 'in_progress' || this.session.snapshot().identity?.subject !== actor) throw new Error('El trabajo no es editable o la cuenta cambió.');
-        const model = await prepareModel(); await this.ensureResources();
+        await this.ensureResources();
         if (this.session.snapshot().identity?.subject !== actor) throw new Error('La cuenta cambió durante la preparación.');
         const now = new Date();
         await this.store.saveWork({ subject: actor, assignmentId: execution.assignmentId, orderId: execution.orderId, orderNumber: execution.orderNumber, version: execution.version, preparedAt: now.toISOString(), expiresAt: new Date(now.getTime()+7*86400000).toISOString() });
-        this.el('offline-model-status').textContent = 'Modelo local preparado · ' + model.runId + ' · Capacidad visual NO validada.';
-        this.notice('Trabajo y modelo preparados para usar sin conexión.'); await this.refresh();
+        this.notice('Trabajo preparado para usar sin conexión. La revisión manual está disponible sin modelo.'); await this.refresh();
       });
       line.append(button); list.append(line);
     }
     this.notice(result.myAgenda.items.length ? 'Seleccioná un trabajo en ejecución para prepararlo.' : 'No hay trabajos autorizados para el día del taller.');
   }
-  private async ensureResources(): Promise<void> {
+  private async ensureResources(requireModel = false): Promise<ServiceWorker | undefined> {
     if (!('serviceWorker' in navigator)) throw new Error('El navegador no admite preparación offline.');
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    const ready = await Promise.race([navigator.serviceWorker.ready, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Los recursos offline no terminaron de descargarse.')), 60000))]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const ready = await Promise.race([navigator.serviceWorker.ready, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Los recursos offline no terminaron de descargarse.')), 60000); })]).finally(() => clearTimeout(timer));
     if (!registration.active && !ready.active) throw new Error('La aplicación todavía no está preparada sin red.');
+    if (requireModel) {
+      const unavailable = () => new Error('No se pudo conservar el modelo para usarlo sin red. La revisión manual sigue disponible; comprobá los artefactos y el espacio antes de reintentar.');
+      const serviceWorker = navigator.serviceWorker;
+      if (!serviceWorker.controller) await new Promise<void>((resolve, reject) => {
+        const cleanup = () => { clearTimeout(timeout); serviceWorker.removeEventListener('controllerchange', changed); };
+        const changed = () => { if (serviceWorker.controller) { cleanup(); resolve(); } };
+        const timeout = setTimeout(() => { cleanup(); reject(unavailable()); }, 15000);
+        serviceWorker.addEventListener('controllerchange', changed); changed();
+      });
+      const worker = serviceWorker.controller;
+      if (!worker) throw unavailable();
+      if (worker.state === 'activating') await new Promise<void>((resolve, reject) => {
+        const cleanup = () => { clearTimeout(timeout); worker.removeEventListener('statechange', changed); };
+        const changed = () => {
+          if (worker.state === 'activated') { cleanup(); resolve(); }
+          else if (worker.state === 'redundant') { cleanup(); reject(unavailable()); }
+        };
+        const timeout = setTimeout(() => { cleanup(); reject(unavailable()); }, 15000);
+        worker.addEventListener('statechange', changed); changed();
+      });
+      if (worker.state !== 'activated' || serviceWorker.controller !== worker) throw unavailable();
+      await new Promise<void>((resolve, reject) => {
+        const channel = new MessageChannel();
+        const requestId = crypto.randomUUID();
+        const cleanup = () => {
+          clearTimeout(timeout); serviceWorker.removeEventListener('controllerchange', changed);
+          channel.port1.onmessage = null; channel.port1.onmessageerror = null;
+          channel.port1.close(); channel.port2.close();
+        };
+        const fail = () => { cleanup(); reject(unavailable()); };
+        const changed = () => { if (serviceWorker.controller !== worker) fail(); };
+        const timeout = setTimeout(fail, 35000);
+        serviceWorker.addEventListener('controllerchange', changed);
+        channel.port1.onmessageerror = fail;
+        channel.port1.onmessage = event => {
+          const receipt = event.data;
+          if (!receipt || Object.keys(receipt).sort().join(',') !== 'code,modelVersion,ok,protocol,requestId,runId,type,version'
+            || receipt.type !== 'AUTONEXUS_MODEL_PREPARED' || receipt.protocol !== 1 || receipt.requestId !== requestId
+            || receipt.ok !== true || receipt.code !== 'MODEL_CACHED' || typeof receipt.version !== 'string'
+            || !/^[a-f0-9]{64}$/.test(receipt.version) || receipt.modelVersion !== 'automotive-damage-mobilenetv2-v1'
+            || receipt.runId !== '20261101T-with-negatives' || serviceWorker.controller !== worker) { fail(); return; }
+          cleanup(); resolve();
+        };
+        try { worker.postMessage({ type: 'AUTONEXUS_PREPARE_MODEL', protocol: 1, requestId }, [channel.port2]); } catch { fail(); }
+      });
+      return worker;
+    }
   }
   private async refresh(): Promise<void> {
     if (!this.store) return;
@@ -236,8 +315,10 @@ export class OfflineWorkspace {
   }
   private resetPhoto(): void {
     const preview = this.el<HTMLImageElement>('offline-preview'); if (preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
-    preview.hidden = true; preview.removeAttribute('src'); this.image = undefined; this.prediction = undefined; this.revision = false;
+    preview.hidden = true; preview.removeAttribute('src'); this.image = undefined; this.prediction = undefined; this.revision = false; this.reviewReason = 'operator_manual';
+    this.host.querySelectorAll<HTMLInputElement>('input[name="human-label"]').forEach(input => { input.checked = false; });
     this.el('offline-scores').replaceChildren(); this.el('offline-labels').hidden = true; this.el<HTMLInputElement>('offline-review').checked = false;
+    this.el<HTMLTextAreaElement>('offline-description').maxLength = 2000;
     this.el<HTMLButtonElement>('offline-infer').disabled = true;
   }
   private async save(): Promise<void> {
@@ -253,12 +334,19 @@ export class OfflineWorkspace {
     const humanLabels=Array.from(this.host.querySelectorAll<HTMLInputElement>('input[name="human-label"]:checked')).map(el=>el.value);
     const description = this.el<HTMLTextAreaElement>('offline-description').value.trim();
     const minutesWorked = Number(this.el<HTMLInputElement>('offline-minutes').value);
-    if (description.length < 3 || description.length > 2000 || !Number.isInteger(minutesWorked) || minutesWorked < 1 || minutesWorked > 1440) throw new Error('Descripción: 3–2000 caracteres. Minutos: entero entre 1 y 1440.');
+    const descriptionLimit = revision ? 1600 : 2000;
+    if (description.length < 3 || description.length > descriptionLimit || !Number.isInteger(minutesWorked) || minutesWorked < 1 || minutesWorked > 1440) throw new Error('Descripción: 3–' + descriptionLimit + ' caracteres. Minutos: entero entre 1 y 1440.');
     const photoSha256 = image ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await image.arrayBuffer()))).map(v=>v.toString(16).padStart(2,'0')).join('') : undefined;
     if(epoch!==this.sessionEpoch || subject!==this.subject || image!==this.image || prediction!==this.prediction) throw new Error('La cuenta o la fotografía cambió durante el guardado. No se creó un avance incompleto; verificá la cuenta y volvé a intentar.');
-    const inference = prediction ? { ...prediction, ...(revision ? {humanReview:{modelVersion:prediction.modelVersion,labels:humanLabels}} : {}) } : undefined;
-    const item: QueuedAdvance = { operationId:crypto.randomUUID(), subject, assignmentId:work.assignmentId, baseVersion:work.version, description, minutesWorked, createdAt:new Date().toISOString(), state:'pending', ...(image?{photo:image,photoSha256}:{}), ...(inference?{clientInference:inference}:{}) };
-    await this.store.enqueue(item); this.el<HTMLTextAreaElement>('offline-description').value=''; this.el<HTMLInputElement>('offline-photo').value=''; this.resetPhoto();
+    const inspectionReview: InspectionReview | undefined = revision ? { schemaVersion: 1, mode: prediction ? 'assisted' : 'manual', reason: this.reviewReason, interpretation: description, labels: humanLabels, reviewedAt: new Date().toISOString() } : undefined;
+    const inference = prediction ? { runId: prediction.runId, modelVersion: prediction.modelVersion, imageSha256: prediction.imageSha256, labels: prediction.labels, ...(revision ? {humanReview:{modelVersion:prediction.modelVersion,labels:humanLabels}} : {}) } : undefined;
+    const item: QueuedAdvance = { operationId:crypto.randomUUID(), subject, assignmentId:work.assignmentId, baseVersion:work.version, description: inspectionReview ? reviewDescription(inspectionReview) : description, ...(inspectionReview ? { inspectionReview } : {}), minutesWorked, createdAt:new Date().toISOString(), state:'pending', ...(image?{photo:image,photoSha256}:{}), ...(inference?{clientInference:inference}:{}) };
+    try { await this.store.enqueue(item); } catch (error) {
+      if (error instanceof Error && error.name === 'QuotaExceededError') throw new Error('Sin espacio local. No se guardó: conservamos el texto y la foto para reintentar después de liberar espacio.');
+      throw error;
+    }
+    if (epoch !== this.sessionEpoch || subject !== this.subject || image !== this.image) return;
+    this.el<HTMLTextAreaElement>('offline-description').value=''; this.el<HTMLInputElement>('offline-photo').value=''; this.resetPhoto();
     this.notice('Avance, foto y revisión guardados localmente como pendientes; todavía no confirmados por el servidor.'); await this.refresh();
   }
 }

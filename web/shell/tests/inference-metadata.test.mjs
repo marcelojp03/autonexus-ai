@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateMetadata, weightPaths } from '../scripts/prepare-offline-model.mjs';
-import { inferPhoto, prepareModel } from '../src/offline/inference.ts';
+import { inferPhoto, prepareModel, belowThresholds, inspectionError } from '../src/offline/inference.ts';
 
 const manifest = {
+  thresholds: { crack: 0.25, dent: 0.35, glass_shatter: 0.4, scratch: 0.5 },
   modelVersion: 'automotive-damage-mobilenetv2-v1', runId: '20261101T-with-negatives',
   labels: ['crack', 'dent', 'glass_shatter', 'scratch'],
   preprocessing: { inputSize: [224, 224], colorMode: 'RGB' },
@@ -11,6 +12,13 @@ const manifest = {
 };
 
 test('offline artifact metadata preserves experimental quality and ordered labels', () => {
+  const scores = manifest.labels.map(name => ({ name, score: manifest.thresholds[name] - 0.01 }));
+  const original = structuredClone(scores);
+  assert.equal(belowThresholds(scores, manifest.thresholds), true);
+  assert.deepEqual(scores, original);
+  assert.equal(belowThresholds([{ name: 'crack', score: 0.3 }], manifest.thresholds), false);
+  assert.equal(inspectionError(new RangeError('allocation failed')).reason, 'insufficient_resources');
+  assert.equal(inspectionError(new Error('execute failed')).reason, 'inference_failed');
   assert.doesNotThrow(() => validateMetadata(manifest, { status: 'experimental' }));
   for (const change of [{ runId: 'other' }, { labels: [...manifest.labels].reverse() },
     { preprocessing: { inputSize: [256, 256], colorMode: 'RGB' } }, { preprocessingFingerprint: 'other' }]) {
@@ -49,4 +57,8 @@ test('photograph byte and pixel limits fail before loading a model or decoding',
   view.setUint32(0, 0x89504e47); view.setUint32(4, 0x0d0a1a0a); view.setUint32(12, 0x49484452);
   view.setUint32(16, 8192); view.setUint32(20, 8192);
   await assert.rejects(inferPhoto(new Blob([png])), /24 megapixels/);
+  view.setUint32(16, 31); view.setUint32(20, 32);
+  await assert.rejects(inferPhoto(new Blob([png])), /Calidad insuficiente/);
+  view.setUint32(16, 8193); view.setUint32(20, 32);
+  await assert.rejects(inferPhoto(new Blob([png])), /8192 pixels/);
 });

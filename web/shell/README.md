@@ -1,5 +1,32 @@
 # Shell y PWA — primera integración local
 
+## CU22 — revisión manual independiente y fallos locales
+
+La preparación del trabajo y los recursos básicos no exige modelo. La revisión humana
+se guarda en `inspectionReview`, separada de `clientInference`; sin inferencia real no
+se inventan puntajes, runId o modelVersion ni se envía un análisis ficticio a MS04.
+La interpretación admite 3–1600 caracteres; los avances ordinarios conservan 3–2000.
+Las copias nuevas usan versión2 y el lector conserva compatibilidad con versión1.
+Preparar IA exige que los archivos estén realmente en la caché offline: cargar el
+modelo en RAM no permite anunciar disponibilidad tras cerrar el navegador.
+
+Para Compose local, `infra/local/offline-model.compose.yaml` monta artefactos autorizados
+ya preparados, el worker y el manifiesto construido, todos readonly. No incluye pesos
+en Git/imágenes ni descarga modelos. Antes del montaje se ejecutó desde la raíz
+`node scripts/cu22/verify-offline-overlay.mjs cu16-proof-web:cache-ready`: guard0,
+5recursos básicos y8de modelo,10.6MB, sin descargas. Rechaza si el Shell preparado y
+la imagen tienen hashes distintos. No crea rutas host faltantes. Después se añadió ese
+overlay al `compose up -d --no-deps --no-build web` del entorno existente.
+
+JPEG/PNG hasta5MiB, mínimo32px/lado, máximo8192px/lado y24MP antes de decode. Modelo
+ausente, fallo de inferencia/recursos y cuota permiten retomar o registrar manualmente.
+No concluyente significa que ninguna clase alcanza su umbral experimental: no descarta
+daño. Los errores no confirman guardado ni eliminan el borrador/foto antes del commit.
+
+Pruebas focalizadas y aceptación real por superficie en
+`docs/evidence/cu22-local-inspection-20261107.md` desde la raíz. La capacidad visual
+permanece experimental/no validada; los tests funcionales no son métricas diagnósticas.
+
 ## CU27 — preparación y trabajo offline del Shell (parcial)
 
 La entrada es /offline.html. La gestión normal de los microfrontends sigue siendo online: esta
@@ -22,10 +49,12 @@ imágenes, datasets ni credenciales a servicios externos. Sin esos archivos el b
 declara modelReady:false; «Preparar modelo local» falla honestamente hasta disponer del artefacto.
 
 El build genera offline.html, offline-resources.json y sw.js. El worker precarga la lista exacta
-con integridad; una descarga incompleta conserva la versión anterior. No cachea OAuth, GraphQL,
+con integridad; los recursos básicos se descargan atómicamente y el modelo usa una caché
+opcional separada: su ausencia no invalida el registro manual. No cachea OAuth, GraphQL,
 APIs, URLs firmadas, tráfico autenticado ni binarios de usuarios. Las fotos/colas se guardan
-explícitamente en IndexedDB por subject, no en Cache Storage. La preparación y el modelo deben
-completarse antes de cortar la red. El navegador debe admitir service workers en HTTPS o loopback.
+explícitamente en IndexedDB por subject, no en Cache Storage. La preparación básica debe
+completarse antes de cortar la red; preparar el modelo sólo es obligatorio para inferir.
+El navegador debe admitir service workers en HTTPS o loopback.
 
 El usuario selecciona el día del taller, descarga sus trabajos, elige uno en ejecución y lo prepara.
 Offline puede consultarlo, seleccionar una foto, inferir localmente y registrar aparte su revisión.

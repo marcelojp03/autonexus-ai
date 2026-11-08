@@ -1,6 +1,6 @@
 # Plan de cobertura del segundo parcial
 
-Actualizado: 2026-11-07. Fuente de alcance: `docs/context/PROJECT.md`, `docs/use-cases/CU01..CU31` y
+Actualizado: 2026-11-08. Fuente de alcance: `docs/context/PROJECT.md`, `docs/use-cases/CU01..CU31` y
 contratos vigentes. Estado reconstruido desde la evidencia registrada en `docs/evidence/` y
 `docs/context/STATUS.md`, no desde el plan anterior.
 
@@ -46,7 +46,7 @@ pero sin recorrido real se cuenta como parcial y **no** entra en el total.
 | CU19 Cobro de servicio | 3 | Ninguna | **Pendiente** | — | — | — | Cobro local, sin pasarela |
 | CU20 Gastos operativos | 2 | Ninguna | **Pendiente** | — | — | — | Registro de gastos |
 | CU21 Indicadores | 4 | Ninguna | **Pendiente** | — | — | — | Indicadores derivados de cobros/gastos/órdenes |
-| CU22 IA visual local (web/móvil) | 5 | Inferencia local en Flutter y PWA (CU27), conversión TFJS ejecutada | **Parcial**: ejecución local acreditada; falta conciliación completa de pasos y excepciones del CU22 | No revisada | Compose local + Android físico | STATUS comparación TFJS; `docs/evidence/cu27-20261105.md` | Verificar cobertura de excepciones y alternativa manual del CU22; comparación visual diferida, no conversión pendiente |
+| CU22 IA visual local (web/móvil) | 5 | Inferencia local Flutter/PWA; revisión manual independiente y conservación de predicción/revisión; recuperación de caché | **Parcial global**: recorrido y excepciones core verificados, revisión directa declarada; capacidad del modelo no validada | UX nueva pendiente; captura sin inspección visual no acredita conformidad | Compose local + Android físico previo; teléfono autorizado ausente en nueva revisión | `docs/evidence/cu22-local-inspection-20261107.md`, decisión029; Shell42+12, Flutter57, Chromium recuperación | Calidad del modelo y autorización de distribución de pesos siguen pendientes; UX antes/después y teléfono sin aceptar. No suma5puntos |
 | CU23 IA de servidor | 5 | `services/intelligence` desplegado, MongoDB, BFF, MF | **Parcial**: infraestructura e inferencia integradas, capacidad diagnóstica experimental y no validada (no suma) | No revisada | Compose local | Decisión 021, evidencia cu23 | Validación de la capacidad visual y de la calidad del modelo |
 | CU24 ML de duración | 5 | Ninguna | **Pendiente** | — | — | — | Dataset, entrenamiento, evaluación y límites |
 | CU25 Asistente con agentes | 5 | `integration/agent` en Compose, Ollama externo configurable, catálogo cerrado, BFF, MF | **Parcial verificada**: pregunta con herramientas, aclaración, denegación y reserva determinista en navegador real | No revisada | Compose local (servicio `agent` sin puerto) | Evidencia cu25-cu26-shell §8–§10, decisión 026 | Evaluación funcional acotada contra APIs propietarias y cobertura operativa/financiera/administrativa del CU25; ver matriz técnica |

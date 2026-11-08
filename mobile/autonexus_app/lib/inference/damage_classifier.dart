@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:image/image.dart' as img;
+
+import '../evidence/photo_capture.dart';
 
 import 'antialias_resize.dart';
 
@@ -17,7 +18,13 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 /// The preprocessing mirrors training: RGB, bilinear resize to 224x224 and MobileNetV2 scaling to
 /// [-1, 1]. A mismatch in any of those steps silently changes every score, so the device test
 /// compares against the Python reference instead of only checking that inference runs.
-class DamageClassifier {
+abstract interface class InspectionClassifier {
+  ManifestData get manifest;
+  Future<DeviceResult> analyse(Uint8List bytes);
+  void dispose();
+}
+
+class DamageClassifier implements InspectionClassifier {
   DamageClassifier._(this._interpreter, this.manifest);
 
   static const int inputSize = 224;
@@ -25,27 +32,35 @@ class DamageClassifier {
       'Capacidad visual experimental: el modelo no está validado para uso profesional ni para decidir reparaciones.';
 
   final Interpreter _interpreter;
+  @override
   final ManifestData manifest;
 
   static Future<DamageClassifier> load({
     String asset = 'assets/models/model.tflite',
     String manifestAsset = 'assets/models/manifest.json',
+    Future<Interpreter> Function()? openInterpreter,
+    Future<String> Function()? readManifest,
   }) async {
-    final interpreter = await Interpreter.fromAsset(
-      asset,
-      options: InterpreterOptions()..threads = 4,
-    );
-    final manifestRaw = await rootBundle.loadString(manifestAsset);
-    return DamageClassifier._(interpreter, ManifestData.parse(manifestRaw));
+    final interpreter =
+        await (openInterpreter?.call() ??
+            Interpreter.fromAsset(
+              asset,
+              options: InterpreterOptions()..threads = 4,
+            ));
+    try {
+      final manifestRaw =
+          await (readManifest?.call() ?? rootBundle.loadString(manifestAsset));
+      return DamageClassifier._(interpreter, ManifestData.parse(manifestRaw));
+    } catch (_) {
+      interpreter.close();
+      rethrow;
+    }
   }
 
   /// Decode, apply the EXIF orientation, downscale with the same antialiased kernel as training and
   /// normalize. Exposed so the device test compares the whole pipeline, not only the interpreter.
   List<List<List<List<double>>>> preprocess(Uint8List bytes) {
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) {
-      throw const FormatException('La imagen no se pudo decodificar');
-    }
+    final decoded = PhotoProcessor.decodeBounded(bytes);
     return [AntialiasResize.run(decoded, inputSize)];
   }
 
@@ -78,9 +93,11 @@ class DamageClassifier {
     );
   }
 
+  @override
   Future<DeviceResult> analyse(Uint8List bytes) async =>
       runTensor(preprocess(bytes));
 
+  @override
   void dispose() => _interpreter.close();
 }
 
@@ -107,6 +124,7 @@ class DeviceResult {
 
   final List<DeviceScore> scores;
   final double latencyMs;
+  bool get inconclusive => scores.every((score) => !score.flagged);
 }
 
 /// Subset of the CU23 manifest the device needs: labels, thresholds, run identity and the gate.
@@ -135,13 +153,40 @@ class ManifestData {
     final thresholdsRaw =
         decoded['thresholds'] as Map<String, dynamic>? ?? const {};
     final quality = decoded['quality'] as Map<String, dynamic>?;
+    final version = decoded['modelVersion'];
+    final run = decoded['runId'];
+    if (version is! String ||
+        version.trim().isEmpty ||
+        run is! String ||
+        run.trim().isEmpty ||
+        labels.length != 4 ||
+        labels.toSet().length != 4 ||
+        labels.any(
+          (label) => !const [
+            'crack',
+            'dent',
+            'glass_shatter',
+            'scratch',
+          ].contains(label),
+        ) ||
+        labels.any(
+          (label) =>
+              thresholdsRaw[label] is! num ||
+              !(thresholdsRaw[label] as num).isFinite ||
+              (thresholdsRaw[label] as num) < 0 ||
+              (thresholdsRaw[label] as num) > 1,
+        )) {
+      throw const FormatException(
+        'Manifiesto inválido: identidad, etiquetas o umbrales ausentes.',
+      );
+    }
     return ManifestData(
       labels: labels,
       thresholds: labels
-          .map((label) => (thresholdsRaw[label] as num?)?.toDouble() ?? 0.5)
+          .map((label) => (thresholdsRaw[label] as num).toDouble())
           .toList(),
-      modelVersion: (decoded['modelVersion'] ?? 'sin-version').toString(),
-      runId: (decoded['runId'] ?? 'sin-corrida').toString(),
+      modelVersion: version,
+      runId: run,
       qualityStatus: (quality?['status'] ?? 'unknown').toString(),
       qualityNote:
           (quality?['note'] ?? 'Sin declaración de calidad del operador.')

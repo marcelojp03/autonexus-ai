@@ -13,7 +13,7 @@ let page;
 let origin;
 
 before(async () => {
-  const sources = Object.fromEntries(await Promise.all(['store', 'transfer'].map(async name =>
+  const sources = Object.fromEntries(await Promise.all(['store', 'transfer', 'review'].map(async name =>
     ['/' + name + '.ts', stripTypeScriptTypes(await readFile(new URL('../src/offline/' + name + '.ts', import.meta.url), 'utf8'))])));
   server = createServer((req, res) => {
     res.setHeader('Content-Type', sources[req.url] ? 'text/javascript' : 'text/html');
@@ -169,4 +169,56 @@ test('mutation promise resolves after the transaction complete event', async () 
     try { await store.saveWork(work('alice')); return committed; }
     finally { IDBDatabase.prototype.transaction = original; }
   }), true);
+});
+
+test('manual review survives IndexedDB close and reopen without model and leaves legacy rows untouched', async () => {
+  const result = await page.evaluate(async () => {
+    const legacy = window.item('actor-a', 'legacy'); await window.store.enqueue(legacy);
+    const inspectionReview = { schemaVersion: 1, mode: 'manual', reason: 'model_unavailable', interpretation: 'Revisión del panel', labels: [], reviewedAt: '2026-11-07T12:00:00Z' };
+    await window.store.enqueue({ ...window.item('actor-a', 'manual'), inspectionReview });
+    window.store.close(); window.store = await window.openStore(); return window.store.queue('actor-a');
+  });
+  assert.equal(result.find(row => row.operationId === 'manual').inspectionReview.mode, 'manual');
+  assert.equal(result.find(row => row.operationId === 'manual').clientInference, undefined);
+  assert.equal(result.find(row => row.operationId === 'legacy').inspectionReview, undefined);
+});
+
+test('bounded Chromium quota rejects a real write without replacing data; same ID retries once', async () => {
+  // Set quota before the first IDB write: an already-open client may retain its old write budget.
+  const quotaContext = await browser.newContext();
+  const quotaPage = await quotaContext.newPage();
+  const cdp = await quotaContext.newCDPSession(quotaPage);
+  try {
+    // Browser-level quota, not a mocked successful/failed IndexedDB request. Maximum payload 2 MiB.
+    await cdp.send('Storage.overrideQuotaForOrigin', { origin, quotaSize: 256 * 1024 });
+    await quotaPage.goto(origin);
+    const quota = await cdp.send('Storage.getUsageAndQuota', { origin });
+    assert.equal(quota.overrideActive, true);
+    assert.equal(quota.quota, 256 * 1024);
+    const failed = await quotaPage.evaluate(async () => {
+      window.openStore = (await import('/store.ts')).openOfflineStore;
+      window.store = await window.openStore();
+      window.item = operationId => ({subject:'actor-a',operationId,assignmentId:'a1',baseVersion:1,description:'Inspection',minutesWorked:5,createdAt:'2026-11-07T00:00:00Z',state:'pending'});
+      await window.store.enqueue(window.item('previous'));
+      const bytes = new Uint8Array(2 * 1024 * 1024);
+      for (let offset = 0; offset < bytes.length; offset += 65536) crypto.getRandomValues(bytes.subarray(offset, offset + 65536));
+      window.quotaItem = { ...window.item('quota-retry'), photo: new Blob([bytes], { type: 'image/jpeg' }) };
+      let code = null;
+      try { await window.store.enqueue(window.quotaItem); } catch (error) { code = error.name; }
+      return { code, ids: (await window.store.queue('actor-a')).map(row => row.operationId) };
+    });
+    assert.equal(failed.code, 'QuotaExceededError');
+    assert.deepEqual(failed.ids, ['previous']);
+    await cdp.send('Storage.overrideQuotaForOrigin', { origin });
+    const after = await quotaPage.evaluate(async () => {
+      await window.store.enqueue(window.quotaItem);
+      window.store.close(); window.store = await window.openStore();
+      return (await window.store.queue('actor-a')).map(row => ({ id: row.operationId, bytes: row.photo?.size ?? 0 }));
+    });
+    assert.deepEqual(after, [{ id: 'previous', bytes: 0 }, { id: 'quota-retry', bytes: 2 * 1024 * 1024 }]);
+  } finally {
+    await cdp.send('Storage.overrideQuotaForOrigin', { origin });
+    await cdp.detach();
+    await quotaContext.close();
+  }
 });

@@ -5,6 +5,8 @@
 /// without inventing anything.
 library;
 
+import 'dart:convert';
+
 enum QueueState {
   /// Saved locally, never sent. The default after capturing an advance offline.
   pending,
@@ -92,6 +94,61 @@ class PreparedWork {
   );
 }
 
+class InspectionReview {
+  InspectionReview({
+    required this.mode,
+    required this.reason,
+    required this.interpretation,
+    required this.reviewedAt,
+    this.labels = const [],
+  }) {
+    if (!const ['manual', 'assisted'].contains(mode) ||
+        !reasons.contains(reason) ||
+        interpretation.trim().length < 3 ||
+        interpretation.length > 1600 ||
+        labels.toSet().length != labels.length ||
+        labels.any((label) => !labelCodes.contains(label))) {
+      throw const FormatException('Revisión de inspección inválida.');
+    }
+  }
+  static const labelCodes = ['crack', 'dent', 'glass_shatter', 'scratch'];
+  static const reasons = [
+    'operator_manual',
+    'model_unavailable',
+    'inference_failed',
+    'insufficient_resources',
+    'below_thresholds',
+    'input_rejected',
+  ];
+  final String mode;
+  final String reason;
+  final String interpretation;
+  final List<String> labels;
+  final DateTime reviewedAt;
+  String get ownerDescription =>
+      'Inspección humana · modo: $mode · motivo: $reason · etiquetas: ${labels.isEmpty ? "ninguna indicada" : labels.join(", ")}\n$interpretation';
+  Map<String, Object?> toJson() => {
+    'schemaVersion': 1,
+    'mode': mode,
+    'reason': reason,
+    'interpretation': interpretation,
+    'labels': labels,
+    'reviewedAt': reviewedAt.toUtc().toIso8601String(),
+  };
+  static InspectionReview fromJson(Map<String, dynamic> json) {
+    if (json['schemaVersion'] != 1) {
+      throw const FormatException('Revisión incompatible.');
+    }
+    return InspectionReview(
+      mode: json['mode'] as String,
+      reason: json['reason'] as String,
+      interpretation: json['interpretation'] as String,
+      labels: (json['labels'] as List? ?? []).cast<String>(),
+      reviewedAt: DateTime.parse(json['reviewedAt'] as String),
+    );
+  }
+}
+
 /// A pending advance with its local photograph and the client inference, if any.
 class QueuedAdvance {
   const QueuedAdvance({
@@ -103,6 +160,7 @@ class QueuedAdvance {
     required this.minutesWorked,
     required this.createdAt,
     required this.state,
+    this.inspectionReview,
     this.photoPath,
     this.photoSha256,
     this.humanReviewLabels,
@@ -130,6 +188,7 @@ class QueuedAdvance {
   final DateTime createdAt;
   final QueueState state;
 
+  final InspectionReview? inspectionReview;
   /// Private file inside the app's documents directory; never the gallery.
   final String? photoPath;
   final String? photoSha256;
@@ -162,6 +221,7 @@ class QueuedAdvance {
     minutesWorked: minutesWorked,
     createdAt: createdAt,
     state: state ?? this.state,
+    inspectionReview: inspectionReview,
     photoPath: photoPath,
     photoSha256: photoSha256,
     humanReviewLabels: humanReviewLabels,
@@ -189,6 +249,9 @@ class QueuedAdvance {
     'minutes_worked': minutesWorked,
     'created_at': createdAt.toUtc().toIso8601String(),
     'state': state.wire,
+    'inspection_review_json': inspectionReview == null
+        ? null
+        : jsonEncode(inspectionReview!.toJson()),
     'photo_path': photoPath,
     'photo_sha256': photoSha256,
     'human_labels_json': humanReviewLabels?.join(','),
@@ -216,6 +279,12 @@ class QueuedAdvance {
     minutesWorked: row['minutes_worked']! as int,
     createdAt: DateTime.parse(row['created_at']! as String),
     state: QueueState.fromWire(row['state']! as String),
+    inspectionReview: row['inspection_review_json'] == null
+        ? null
+        : InspectionReview.fromJson(
+            jsonDecode(row['inspection_review_json'] as String)
+                as Map<String, dynamic>,
+          ),
     photoPath: row['photo_path'] as String?,
     photoSha256: row['photo_sha256'] as String?,
     humanReviewLabels: row['human_labels_json'] == null

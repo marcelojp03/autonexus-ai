@@ -3,6 +3,7 @@ export interface ModelMetadata {
   runId: string;
   labels: string[];
   qualityStatus: string;
+  thresholds: Record<string, number>;
 }
 
 interface Asset { url: string; bytes: number; sha256: string }
@@ -161,6 +162,10 @@ async function loadModel() {
     return JSON.parse(new TextDecoder().decode(bytes));
   };
   const manifest = json('manifest.json');
+  if (!manifest.thresholds || index.labels.some(name => typeof manifest.thresholds[name] !== 'number'
+    || !Number.isFinite(manifest.thresholds[name]) || manifest.thresholds[name] < 0 || manifest.thresholds[name] > 1)) {
+    throw new Error('Offline model thresholds corrupt');
+  }
   const quality = json('quality.json');
   if (manifest.modelVersion !== index.modelVersion || manifest.runId !== index.runId ||
       JSON.stringify(manifest.labels) !== JSON.stringify(index.labels) || quality.status !== index.qualityStatus ||
@@ -192,7 +197,7 @@ async function loadModel() {
   for (const chunk of chunks) { weightData.set(new Uint8Array(chunk), offset); offset += chunk.byteLength; }
   // A verified in-memory IOHandler prevents graph URLs or a second fetch from changing the weights.
   const model = await tf.loadGraphModel({ load: async () => ({ ...graph, weightSpecs, weightData: weightData.buffer }) });
-  const metadata = { modelVersion: index.modelVersion, runId: index.runId, labels: [...index.labels], qualityStatus: index.qualityStatus };
+  const metadata = { modelVersion: index.modelVersion, runId: index.runId, labels: [...index.labels], qualityStatus: index.qualityStatus, thresholds: { ...manifest.thresholds } };
   let input: Tensor | undefined;
   let outputs: Tensor[] = [];
   try {
@@ -215,7 +220,7 @@ function prepared() {
 
 export async function prepareModel(): Promise<ModelMetadata> {
   const { metadata } = await prepared();
-  return { ...metadata, labels: [...metadata.labels] };
+  return { ...metadata, labels: [...metadata.labels], thresholds: { ...metadata.thresholds } };
 }
 
 function imageDimensions(bytes: ArrayBuffer): [number, number] {
@@ -244,10 +249,29 @@ function checkDimensions(width: number, height: number) {
   if (width < 1 || height < 1 || width > 8192 || height > 8192 || width * height > 24_000_000) {
     throw new Error('Photograph exceeds 24 megapixels or 8192 pixels per side');
   }
+  if (width < 32 || height < 32) throw new Error('Calidad insuficiente: mínimo 32 píxeles por lado. Retomá la imagen o registrá manualmente.');
+}
+
+export async function validatePhoto(blob: Blob): Promise<void> {
+  if (!blob.size || blob.size > 5 * 1024 * 1024) throw new Error('Photograph must be between 1 byte and 5 MiB');
+  checkDimensions(...imageDimensions(await blob.arrayBuffer()));
+}
+
+export function belowThresholds(labels: { name: string; score: number }[], thresholds: Record<string, number>): boolean {
+  if (labels.some(label => !Number.isFinite(thresholds[label.name]))) throw new Error('Offline model thresholds corrupt');
+  return labels.every(label => label.score < thresholds[label.name]!);
+}
+
+export function inspectionError(error: unknown): { reason: 'model_unavailable' | 'inference_failed' | 'insufficient_resources' | 'input_rejected'; message: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof RangeError || /memory|alloc|resource|context lost|out of/i.test(message)) return { reason: 'insufficient_resources', message: 'Recursos insuficientes para la IA local. Cerrá otras tareas y reintentá.' };
+  if (/model|runtime|backend|fetch/i.test(message) && !/output|scores/i.test(message)) return { reason: 'model_unavailable', message: 'Modelo local ausente, incompatible o dañado. Preparalo con conexión.' };
+  if (/photograph|JPEG|PNG|calidad/i.test(message)) return { reason: 'input_rejected', message };
+  return { reason: 'inference_failed', message: 'Falló la inferencia local. No se generó una predicción.' };
 }
 
 export async function inferPhoto(blob: Blob): Promise<{
-  runId: string; modelVersion: string; imageSha256: string; labels: { name: string; score: number }[];
+  runId: string; modelVersion: string; imageSha256: string; labels: { name: string; score: number }[]; belowThresholds: boolean;
 }> {
   if (!blob.size || blob.size > 5 * 1024 * 1024) throw new Error('Photograph must be between 1 byte and 5 MiB');
   const bytes = await blob.arrayBuffer();
@@ -255,11 +279,12 @@ export async function inferPhoto(blob: Blob): Promise<{
   const imageSha256 = await hash(bytes);
   const { metadata, model, tf } = await prepared();
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  let canvas: HTMLCanvasElement | undefined;
   let input: Tensor | undefined;
   let outputs: Tensor[] = [];
   try {
     checkDimensions(bitmap.width, bitmap.height);
-    const canvas = document.createElement('canvas');
+    canvas = document.createElement('canvas');
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
     const context = canvas.getContext('2d', { willReadFrequently: true });
@@ -276,8 +301,10 @@ export async function inferPhoto(blob: Blob): Promise<{
     const scores = await outputs[0].data();
     if (scores.length !== metadata.labels.length || Array.from(scores).some((score) => !Number.isFinite(score) || score < 0 || score > 1)) throw new Error('Offline model returned invalid scores');
     return { runId: metadata.runId, modelVersion: metadata.modelVersion, imageSha256,
+      belowThresholds: belowThresholds(metadata.labels.map((name, index) => ({ name, score: scores[index]! })), metadata.thresholds),
       labels: metadata.labels.map((name, index) => ({ name, score: scores[index] })) };
   } finally {
+    if (canvas) canvas.width = canvas.height = 0;
     bitmap.close();
     input?.dispose();
     outputs.forEach((tensor) => tensor.dispose());

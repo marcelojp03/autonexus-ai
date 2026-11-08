@@ -31,11 +31,14 @@ class MobilePhotoCapture implements PhotoCapturePort {
       source: source == PhotoSource.camera
           ? ImageSource.camera
           : ImageSource.gallery,
-      maxWidth: 2048,
-      maxHeight: 2048,
-      imageQuality: 90,
     );
-    return file?.readAsBytes();
+    if (file == null) return null;
+    if (await file.length() > PhotoProcessor.maxBytes) {
+      throw const FormatException(
+        'La imagen supera 5 MiB. Elegí otra o registrá manualmente.',
+      );
+    }
+    return file.readAsBytes();
   }
 
   @override
@@ -51,8 +54,16 @@ class MobilePhotoCapture implements PhotoCapturePort {
         'Android no devolvió la fotografía interrumpida.',
       );
     }
+    if (await file.length() > PhotoProcessor.maxBytes) {
+      throw const FormatException('La imagen supera 5 MiB.');
+    }
     return file.readAsBytes();
   }
+}
+
+class PhotoInputException extends FormatException {
+  const PhotoInputException(super.message, this.reason);
+  final String reason;
 }
 
 class PhotoProcessor {
@@ -61,10 +72,61 @@ class PhotoProcessor {
   static const int maxBytes = 5 * 1024 * 1024;
   static const int maxSide = 1920;
 
+  static img.Image decodeBounded(List<int> source) {
+    if (source.isEmpty || source.length > maxBytes) {
+      throw const FormatException(
+        'La imagen debe ocupar entre 1 byte y 5 MiB.',
+      );
+    }
+    final bytes = source is Uint8List ? source : Uint8List.fromList(source);
+    final img.Decoder decoder;
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xff &&
+        bytes[1] == 0xd8 &&
+        bytes[2] == 0xff) {
+      decoder = img.JpegDecoder(maxPixels: 24000000);
+    } else if (bytes.length >= 8 &&
+        bytes.take(8).join(',') == '137,80,78,71,13,10,26,10') {
+      if (bytes.length < 24 ||
+          bytes.sublist(12, 16).join(',') != '73,72,68,82') {
+        throw const FormatException('Cabecera PNG inválida.');
+      }
+      final header = ByteData.sublistView(bytes);
+      _checkDimensions(header.getUint32(16), header.getUint32(20));
+      decoder = img.PngDecoder(maxPixels: 24000000);
+    } else {
+      throw const FormatException('Sólo se admiten imágenes JPEG o PNG.');
+    }
+    final info = decoder.startDecode(bytes);
+    if (info == null) {
+      throw const FormatException('Cabecera JPEG/PNG inválida.');
+    }
+    _checkDimensions(info.width, info.height);
+    final decoded = decoder.decodeFrame(0);
+    if (decoded == null) {
+      throw const FormatException('La imagen no se pudo decodificar.');
+    }
+    return decoded;
+  }
+
+  static void _checkDimensions(int width, int height) {
+    if (width > 8192 || height > 8192 || width * height > 24000000) {
+      throw const PhotoInputException(
+        'Recursos insuficientes: máximo 8192 px por lado y 24 MP.',
+        'insufficient_resources',
+      );
+    }
+    if (width < 32 || height < 32) {
+      throw const PhotoInputException(
+        'Calidad insuficiente: mínimo 32 × 32 px.',
+        'input_rejected',
+      );
+    }
+  }
+
   static PreparedPhoto prepare(List<int> source) {
-    if (source.isEmpty) throw const FormatException('La imagen está vacía.');
-    final decoded = img.decodeImage(Uint8List.fromList(source));
-    if (decoded == null || decoded.width < 32 || decoded.height < 32) {
+    final decoded = decodeBounded(source);
+    if (decoded.width < 32 || decoded.height < 32) {
       throw const FormatException(
         'Elegí una fotografía JPEG o PNG válida, de al menos 32 × 32 px.',
       );
