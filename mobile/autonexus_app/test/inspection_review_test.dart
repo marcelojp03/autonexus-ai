@@ -300,6 +300,7 @@ void main() {
           find.byKey(const Key('advance-description')),
           'Revisión manual propia',
         );
+        await tester.enterText(find.byKey(const Key('advance-minutes')), '15');
         await db.execute(
           "CREATE TRIGGER fail_queue BEFORE INSERT ON queue BEGIN SELECT RAISE(ABORT, 'SQLITE_FULL controlled'); END",
         );
@@ -376,6 +377,8 @@ void main() {
         find.textContaining('No se pudo preparar la foto:'),
         findsOneWidget,
       );
+      await tester.enterText(find.byKey(const Key('advance-description')), 'Revisión deliberada');
+      await tester.enterText(find.byKey(const Key('advance-minutes')), '15');
       await tester.ensureVisible(find.byKey(const Key('inspection-review')));
       await tester.drag(find.byType(ListView), const Offset(0, -150));
       await tester.pumpAndSettle();
@@ -640,6 +643,8 @@ void main() {
           await tester.tap(find.widgetWithText(FilterChip, 'Abolladura'));
           await tester.pumpAndSettle();
         }
+        await tester.enterText(find.byKey(const Key('advance-description')), 'Revisión deliberada');
+        await tester.enterText(find.byKey(const Key('advance-minutes')), '15');
         await tester.scrollUntilVisible(
           find.byKey(const Key('save-advance')),
           180,

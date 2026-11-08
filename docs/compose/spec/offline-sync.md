@@ -1,13 +1,16 @@
 ---
 feature: offline-sync
-status: delivered
-updated: 2026-11-05
-source: main
+status: in-progress
+updated: 2026-11-08
+source: work/marcelo
 ---
 
 # Recorrido offline y sincronización (MS05 / DynamoDB)
 
 ## Report
+
+Entrega funcional anterior conservada; ampliación UX acotada de S2.10–S2.12
+en curso. No reabre ni repite por rutina la aceptación CU27/CU22 ya acreditada.
 
 **What was built** — MS05 coordina intenciones/resultados durables; PWA y Flutter preparan
 trabajos, conservan archivos e inferencia local/revisión separada y sincronizan con autorización
@@ -149,6 +152,35 @@ terminal puede listar un UUID aplicado sin repetir su body. Flutter recupera el 
 en una etapa dependiente. Nunca reemplaza el UUID, sobre, cuerpo ni baseVersion guardados.
 Una respuesta 5xx conserva el pendiente; no se acredita rechazo hasta el 403 real del propietario.
 
+### [S2.10] Borrador ligado al trabajo PWA
+
+Texto, minutos, fotografía, predicción y revisión humana son de un único trabajo.
+Cambiar selección con material sin guardar exige decisión explícita: cancelar
+conserva selección y borrador; confirmar descarte limpia el formulario antes de
+adoptar el otro trabajo. No se traslada silenciosamente el borrador de A a B.
+Si cambia selección/cuenta/foto durante hash o guardado, no se encola bajo otra
+asignación. Una actualización de la lista conserva la selección válida y no
+descarta el borrador por refrescar permisos. Sin nuevos IDs para cola existente.
+
+### [S2.11] Preparación editable y entrada deliberada Flutter
+
+La agenda sólo habilita Preparar para ejecución in_progress y explica las demás
+situaciones en lenguaje del taller. El controlador revalida el status obtenido
+del propietario antes de persistir; una lista vieja no autoriza preparación.
+Copias/cola previas se conservan aunque la ejecución ya no sea editable. El
+formulario no trae descripción ni minutos ficticios precargados: entrada
+deliberada, validación visible y foco del primer campo inválido. Guardado local
+no se presenta como confirmación del servidor; no cambia inferencia ni modelo.
+
+### [S2.12] Verificación proporcional de UX operativa
+
+Regresiones focalizadas del cambio, no repetición de la matriz CU22/CU28.
+Comparar antes/después sobre app servida y teléfono autorizado ff77c09b1c12
+si está disponible, sin limpiar datos ni usar el otro dispositivo. Teclado,
+foco, etiquetas/orden legible, carga/error/vacío y controles táctiles; declarar
+por separado semántica/DOM, inspección visual real y límites del hardware.
+Sin canal de píxeles interpretable no se cierra conformidad visual por capturas.
+
 ## [S3] Out of Scope
 
 Reservas de horario, confirmaciones de servicio y cobros offline: requieren validación en línea y no
@@ -169,3 +201,6 @@ parada ordenada/recreación con volumen conservado, no corte abrupto. Sin reentr
 - [x] T8: Flutter: SQLite + archivos privados + cola y sincronización — acceptance: recorrido completo en Mi A3 con red cortada, reinicio, foto/S3/MS04 y reintentos (covers: S2.5).
 - [x] T9: PWA: service worker + IndexedDB + cola — acceptance: preparación, inferencia/captura sin red, reapertura offline, S3/MS04 real, replay y rechazo propietario con foto conservada; evidencia por fases en `docs/evidence/cu27-20261105.md` (covers: S2.6).
 - [x] T10: Verificación real de aceptación en ambas plataformas: persistencia tras reinicio, respuesta perdida sin duplicar, conflicto de versión y rechazo de autorización; evidencia por superficie en `docs/evidence/cu27-20261105.md` (covers: S2.3, S2.4, S2.5, S2.6).
+- [x] T11: Aislar borrador PWA — acceptance: cambio A→B cancelar conserva A/foto, descarte explícito adopta B limpio y un cambio durante hash no encola bajo otra asignación (covers: S2.10).
+- [x] T12: Preparación/formulario Flutter — acceptance: estados no editables no preparan ni persisten, cambio de estado propietario falla conservando copia anterior y formulario vacío exige entradas válidas con foco (covers: S2.11).
+- [ ] T13: Verificación/revisión/publicación UX operativa — acceptance: regresiones afectadas y recorrido real delimitado, evidencia antes/después; conformidad visual sólo si se inspeccionaron píxeles reales (covers: S2.12, depends: T11,T12).

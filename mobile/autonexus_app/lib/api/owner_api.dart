@@ -108,7 +108,7 @@ class ExecutionSnapshot {
         assignmentId: json['assignmentId'] as String,
         orderId: json['orderId'] as String,
         orderNumber: json['orderNumber'] as String,
-        status: (json['status'] as String?) ?? 'in_progress',
+        status: (json['status'] as String?) ?? 'unknown',
         version: ((json['version'] as num?) ?? 0).toInt(),
         advances: ((json['advances'] as List?) ?? const []).length,
         evidences: [

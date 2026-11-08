@@ -142,11 +142,29 @@ class JourneyController extends ChangeNotifier {
   }
 
   Future<void> prepare(AgendaWorkItem item) async {
+    if (busy) return;
     await _run(() async {
+      if (!item.canReceiveAdvances) {
+        lastError = 'Este trabajo no está en ejecución y no admite nuevos avances.';
+        return;
+      }
       final token = await _token();
       if (token == null) return;
       final subject = snapshot.subject!;
       final execution = await api.execution(token, item.assignmentId);
+      if (snapshot.subject != subject || !snapshot.authenticated) {
+        lastError = 'La cuenta cambió. Volvé a descargar tus trabajos.';
+        return;
+      }
+      if (execution.assignmentId != item.assignmentId ||
+          execution.orderId != item.orderId) {
+        lastError = 'La asignación cambió. Volvé a descargar tus trabajos.';
+        return;
+      }
+      if (execution.status != 'in_progress') {
+        lastError = 'El trabajo ya no está en ejecución. Se conservan la copia local y los avances pendientes.';
+        return;
+      }
       final now = DateTime.now().toUtc();
       await store.saveWork(
         PreparedWork(

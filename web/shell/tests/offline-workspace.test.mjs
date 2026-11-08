@@ -9,7 +9,7 @@ function fixture() {
   const buffer = new Promise(resolve => { release = resolve; });
   class DelayedPhoto extends Blob { async arrayBuffer() { return buffer; } }
   const photo = new DelayedPhoto(['photo'], { type: 'image/jpeg' });
-  const fields = { 'offline-work': { value: 'assignment-1' }, 'offline-description': { value: 'Reviewed photo' }, 'offline-minutes': { value: '15' } };
+  const fields = { 'offline-work': { value: 'assignment-1' }, 'offline-description': { value: 'Reviewed photo' }, 'offline-minutes': { value: '15' }, 'offline-photo': { value: 'photo.jpg' } };
   const host = { querySelector: selector => fields[selector.slice(1)], querySelectorAll: () => [{ value: 'crack' }] };
   const workspace = new OfflineWorkspace(host, { snapshot: () => ({authenticated:true,identity:{subject:'actor-a'}}) });
   let enqueued = 0;
@@ -42,6 +42,38 @@ test('switching away and back during hashing invalidates even an unchanged selec
   assert.equal(f.enqueued(), 0);
 });
 
+test('changing selected work during photo hashing never enqueues another assignment', async () => {
+  const f = fixture();
+  f.workspace.resetPhoto = () => {}; f.workspace.refresh = async () => {}; f.workspace.notice = () => {};
+  const saving = f.workspace.save();
+  f.workspace.host.querySelector('#offline-work').value = 'assignment-2';
+  f.release();
+  await assert.rejects(saving, /trabajo/);
+  assert.equal(f.enqueued(), 0);
+});
+
+for (const discard of [false, true]) test('switching work with an unsaved draft requires explicit discard: ' + discard, () => {
+  const f = fixture(); const fields = f.workspace.host;
+  f.workspace.draftAssignmentId = 'assignment-1';
+  const originalPhoto = f.workspace.image; const originalPrediction = f.workspace.prediction;
+  let prompts = 0; let cleared = 0;
+  const prior = Object.getOwnPropertyDescriptor(globalThis, 'confirm');
+  Object.defineProperty(globalThis, 'confirm', { configurable: true, value: () => { prompts++; return discard; } });
+  f.workspace.showWork = () => {};
+  f.workspace.resetPhoto = () => { cleared++; f.workspace.image = undefined; f.workspace.prediction = undefined; f.workspace.revision = false; };
+  try {
+    fields.querySelector('#offline-work').value = 'assignment-2';
+    f.workspace.changeWork();
+    assert.equal(prompts, 1);
+    assert.equal(fields.querySelector('#offline-work').value, discard ? 'assignment-2' : 'assignment-1');
+    assert.equal(fields.querySelector('#offline-description').value, discard ? '' : 'Reviewed photo');
+    assert.equal(f.workspace.image, discard ? undefined : originalPhoto);
+    assert.equal(f.workspace.prediction, discard ? undefined : originalPrediction);
+    assert.equal(cleared, discard ? 1 : 0);
+    assert.equal(f.enqueued(), 0);
+  } finally { if (prior) Object.defineProperty(globalThis, 'confirm', prior); else delete globalThis.confirm; }
+});
+
 test('account change during restore never adopts the previous account in the visible workspace', async () => {
   let actor = 'actor-a'; let release; let entered;
   const started = new Promise(resolve => { entered = resolve; });
@@ -65,6 +97,16 @@ function manualFixture() {
   workspace.resetPhoto = () => {}; workspace.refresh = async () => {}; workspace.notice = () => {};
   return { workspace, fields };
 }
+test('a bound text-only draft cannot be saved under another selected work', async () => {
+  const { workspace, fields } = manualFixture();
+  workspace.draftAssignmentId = 'assignment-1';
+  workspace.prepared.push({ subject: 'actor-a', assignmentId: 'assignment-2', version: 1 });
+  fields['offline-work'].value = 'assignment-2';
+  let enqueued = 0; workspace.store = { enqueue: async () => { enqueued++; } };
+  await assert.rejects(workspace.save(), /borrador pertenece a otro trabajo/);
+  assert.equal(enqueued, 0);
+  assert.equal(fields['offline-description'].value, 'Inspección humana del panel');
+});
 test('missing model manual save creates no client inference; quota preserves draft and retry creates one intention', async () => {
   const { workspace, fields } = manualFixture();
   let full = true; const rows = [];

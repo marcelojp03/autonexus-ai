@@ -33,10 +33,12 @@ class WorkPage extends StatefulWidget {
 }
 
 class _WorkPageState extends State<WorkPage> {
-  final TextEditingController _description = TextEditingController(
-    text: 'Avance registrado sin conexión',
-  );
-  final TextEditingController _minutes = TextEditingController(text: '15');
+  final TextEditingController _description = TextEditingController();
+  final TextEditingController _minutes = TextEditingController();
+  final FocusNode _descriptionFocus = FocusNode();
+  final FocusNode _minutesFocus = FocusNode();
+  String? _descriptionError;
+  String? _minutesError;
   String? _result;
   bool _saving = false;
   bool _saved = false;
@@ -61,6 +63,8 @@ class _WorkPageState extends State<WorkPage> {
   void dispose() {
     _description.dispose();
     _minutes.dispose();
+    _descriptionFocus.dispose();
+    _minutesFocus.dispose();
     _classifier?.dispose();
     super.dispose();
   }
@@ -172,16 +176,23 @@ class _WorkPageState extends State<WorkPage> {
   Future<void> _save() async {
     final description = _description.text.trim();
     final minutes = int.tryParse(_minutes.text.trim());
-    if (description.length < 3 ||
-        description.length > (_humanReviewed ? 1600 : 2000)) {
-      setState(
-        () => _result =
-            'La descripción necesita entre 3 y ${_humanReviewed ? 1600 : 2000} caracteres.',
-      );
-      return;
-    }
-    if (minutes == null || minutes < 1 || minutes > 1440) {
-      setState(() => _result = 'Los minutos deben estar entre 1 y 1440.');
+    setState(() {
+      _descriptionError = description.length < 3 ||
+              description.length > (_humanReviewed ? 1600 : 2000)
+          ? 'La descripción necesita entre 3 y ${_humanReviewed ? 1600 : 2000} caracteres.'
+          : null;
+      _minutesError = minutes == null || minutes < 1 || minutes > 1440
+          ? 'Los minutos deben estar entre 1 y 1440.'
+          : null;
+    });
+    if (_descriptionError != null || _minutesError != null) {
+      final focus = _descriptionError != null ? _descriptionFocus : _minutesFocus;
+      focus.requestFocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && focus.context != null) {
+          Scrollable.ensureVisible(focus.context!, alignment: 0.2);
+        }
+      });
       return;
     }
     setState(() {
@@ -191,7 +202,7 @@ class _WorkPageState extends State<WorkPage> {
     final created = await widget.controller.queueAdvance(
       work: widget.work,
       description: description,
-      minutes: minutes,
+      minutes: minutes!,
       photo: _photo,
       inspectionReview: _humanReviewed
           ? InspectionReview(
@@ -240,7 +251,7 @@ class _WorkPageState extends State<WorkPage> {
         final authenticated = widget.controller.snapshot.authenticated;
         return Scaffold(
           appBar: AppBar(title: Text(work.orderNumber)),
-          body: ListView(
+          body: SafeArea(child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               Card(
@@ -275,7 +286,9 @@ class _WorkPageState extends State<WorkPage> {
               TextField(
                 key: const Key('advance-description'),
                 controller: _description,
-                decoration: const InputDecoration(
+                focusNode: _descriptionFocus,
+                decoration: InputDecoration(
+                  errorText: _descriptionError,
                   labelText: 'Descripción del avance',
                   border: OutlineInputBorder(),
                 ),
@@ -286,11 +299,15 @@ class _WorkPageState extends State<WorkPage> {
               TextField(
                 key: const Key('advance-minutes'),
                 controller: _minutes,
-                decoration: const InputDecoration(
+                focusNode: _minutesFocus,
+                decoration: InputDecoration(
+                  errorText: _minutesError,
                   labelText: 'Minutos trabajados',
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _minutesFocus.unfocus(),
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
               const SizedBox(height: 12),
@@ -542,7 +559,7 @@ class _WorkPageState extends State<WorkPage> {
                   ),
                 ),
             ],
-          ),
+          )),
         );
       },
     );

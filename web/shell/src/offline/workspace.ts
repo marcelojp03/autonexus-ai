@@ -21,6 +21,7 @@ export class OfflineWorkspace {
   private requestEpoch = 0;
   private sessionEpoch = 0;
   private sessionKey = '';
+  private draftAssignmentId = '';
 
   private readonly host: HTMLElement;
   private readonly session: SessionPort;
@@ -67,7 +68,7 @@ export class OfflineWorkspace {
     });
     this.el<HTMLButtonElement>('offline-forget').onclick = () => void this.run(async () => {
       if (!this.subject || !confirm('Se descartarán trabajos, fotografías y pendientes locales de esta cuenta. ¿Continuar?')) return;
-      await this.store.forget(this.subject); this.subject = null; this.resetPhoto();
+      await this.store.forget(this.subject); this.subject = null; this.resetDraft();
       this.notice('Copia local descartada.'); await this.refresh();
     });
     this.el<HTMLButtonElement>('offline-export').onclick = () => void this.run(async () => {
@@ -87,7 +88,7 @@ export class OfflineWorkspace {
       this.notice('Copia trasladada: se conservaron los identificadores, archivos, versiones y estados. Todavía debe sincronizarse con autorización del servidor.');
       this.el<HTMLInputElement>('offline-import').value='';
     });
-    this.el<HTMLSelectElement>('offline-work').onchange = () => this.showWork();
+    this.el<HTMLSelectElement>('offline-work').onchange = () => this.changeWork();
     for (const name of inspectionLabels) {
       const label = document.createElement('label'); label.className = 'offline-check';
       const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'human-label'; input.value = name;
@@ -158,7 +159,7 @@ export class OfflineWorkspace {
       const queue = await store.queue(subject);
       if (queue.some(item=>item.state!=='applied') && !confirm('Cerrar sesión descartará fotos y pendientes locales de esta cuenta. ¿Continuar?')) return false;
       await store.forget(subject);
-      if (this.subject===subject) { this.subject=null; if(this.store) { this.resetPhoto(); await this.refresh(); } }
+      if (this.subject===subject) { this.subject=null; if(this.store) { this.resetDraft(); await this.refresh(); } }
     }
     return true;
   }
@@ -199,7 +200,7 @@ export class OfflineWorkspace {
     if (this.subject && this.subject !== actor) {
       const queue = await this.store.queue(this.subject);
       if (!confirm('Esta sesión es de otra cuenta. La copia anterior tiene ' + queue.filter(item => item.state !== 'applied').length + ' pendiente(s). ¿Descartar esa copia para cambiar de cuenta?')) throw new Error('Cambio cancelado. La copia anterior se conserva y no se muestra a esta cuenta.');
-      await this.store.forget(this.subject); this.resetPhoto();
+      await this.store.forget(this.subject); this.resetDraft();
     }
     this.subject = actor; await this.store.setLocalSubject(actor); return actor;
   }
@@ -288,8 +289,7 @@ export class OfflineWorkspace {
     const wrongAccount = !!actor && !!this.subject && actor !== this.subject;
     this.el('offline-form').hidden = wrongAccount;
     if (wrongAccount) {
-      this.resetPhoto();
-      this.el<HTMLTextAreaElement>('offline-description').value='';
+      this.resetDraft();
       this.el('offline-available').replaceChildren();
     }
     this.el('offline-account').textContent = wrongAccount ? 'Copia anterior oculta: la sesión pertenece a otra cuenta.' : this.subject ? 'Copia por usuario preparada en este navegador; sincronizar requiere la sesión de su propietario.' : 'Todavía no hay una copia preparada en este navegador.';
@@ -301,6 +301,11 @@ export class OfflineWorkspace {
     if (!works.length) select.append(Object.assign(document.createElement('option'), { value: '', textContent: 'Todavía no hay trabajo preparado' }));
     for (const work of works) select.append(Object.assign(document.createElement('option'), { value: work.assignmentId, textContent: work.orderNumber }));
     if (works.some(work => work.assignmentId === previous)) select.value = previous;
+    else if (previous && this.draftAssignmentId === previous && this.hasDraft()) {
+      // Losing a prepared entry must not silently attach its draft to the first remaining work.
+      select.append(Object.assign(document.createElement('option'), { value: previous, textContent: 'Trabajo anterior no disponible · borrador conservado' }));
+      select.value = previous;
+    }
     this.showWork();
     const ul = this.el('offline-queue'); ul.replaceChildren();
     for (const item of queue) {
@@ -310,8 +315,27 @@ export class OfflineWorkspace {
     if (!queue.length) ul.append(Object.assign(document.createElement('li'),{textContent:'Sin avances guardados en esta copia.'}));
   }
   private showWork(): void {
+    if (!this.hasDraft()) this.draftAssignmentId = this.el<HTMLSelectElement>('offline-work').value;
     const work = this.prepared.find(item => item.assignmentId === this.el<HTMLSelectElement>('offline-work').value);
     this.el('offline-work-info').textContent = work ? 'Versión ' + work.version + ' · preparado ' + work.preparedAt + ' · vigente hasta ' + work.expiresAt + (Date.parse(work.expiresAt)<=Date.now() ? ' · vencido: revalidar con conexión antes de sincronizar' : '') : 'Descargá un trabajo autorizado antes de trabajar sin red.';
+  }
+  private hasDraft(): boolean {
+    return !!(this.image || this.prediction || this.revision || this.el<HTMLTextAreaElement>('offline-description').value.trim()
+      || this.el<HTMLInputElement>('offline-minutes').value !== '15');
+  }
+  private changeWork(): void {
+    const select = this.el<HTMLSelectElement>('offline-work');
+    if (select.value === this.draftAssignmentId) { this.showWork(); return; }
+    if (this.hasDraft() && !confirm('El texto, la foto y la revisión sin guardar pertenecen al trabajo anterior. ¿Descartar ese borrador y cambiar de trabajo? Cancelar conserva el trabajo y todo su borrador.')) {
+      select.value = this.draftAssignmentId; return;
+    }
+    this.resetDraft(); this.draftAssignmentId = select.value; this.showWork();
+  }
+  private resetDraft(): void {
+    this.el<HTMLTextAreaElement>('offline-description').value = '';
+    this.el<HTMLInputElement>('offline-minutes').value = '15';
+    this.el<HTMLInputElement>('offline-photo').value = '';
+    this.resetPhoto(); this.draftAssignmentId = '';
   }
   private resetPhoto(): void {
     const preview = this.el<HTMLImageElement>('offline-preview'); if (preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
@@ -324,6 +348,7 @@ export class OfflineWorkspace {
   private async save(): Promise<void> {
     const work = this.prepared.find(item=>item.assignmentId===this.el<HTMLSelectElement>('offline-work').value);
     if (!work || !this.subject || work.subject !== this.subject) throw new Error('Primero seleccioná un trabajo preparado de esta cuenta.');
+    if (this.draftAssignmentId && this.draftAssignmentId !== work.assignmentId) throw new Error('El borrador pertenece a otro trabajo. Volvé a seleccionarlo antes de guardar.');
     const actor = this.session.snapshot().identity?.subject;
     if (actor && actor !== this.subject) throw new Error('La copia local pertenece a otra cuenta.');
     const subject = this.subject;
@@ -337,7 +362,7 @@ export class OfflineWorkspace {
     const descriptionLimit = revision ? 1600 : 2000;
     if (description.length < 3 || description.length > descriptionLimit || !Number.isInteger(minutesWorked) || minutesWorked < 1 || minutesWorked > 1440) throw new Error('Descripción: 3–' + descriptionLimit + ' caracteres. Minutos: entero entre 1 y 1440.');
     const photoSha256 = image ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await image.arrayBuffer()))).map(v=>v.toString(16).padStart(2,'0')).join('') : undefined;
-    if(epoch!==this.sessionEpoch || subject!==this.subject || image!==this.image || prediction!==this.prediction) throw new Error('La cuenta o la fotografía cambió durante el guardado. No se creó un avance incompleto; verificá la cuenta y volvé a intentar.');
+    if(epoch!==this.sessionEpoch || subject!==this.subject || image!==this.image || prediction!==this.prediction || this.el<HTMLSelectElement>('offline-work').value !== work.assignmentId) throw new Error('La cuenta o la fotografía cambió durante el guardado, o se seleccionó otro trabajo. No se creó un avance incompleto; verificá la cuenta y volvé a intentar.');
     const inspectionReview: InspectionReview | undefined = revision ? { schemaVersion: 1, mode: prediction ? 'assisted' : 'manual', reason: this.reviewReason, interpretation: description, labels: humanLabels, reviewedAt: new Date().toISOString() } : undefined;
     const inference = prediction ? { runId: prediction.runId, modelVersion: prediction.modelVersion, imageSha256: prediction.imageSha256, labels: prediction.labels, ...(revision ? {humanReview:{modelVersion:prediction.modelVersion,labels:humanLabels}} : {}) } : undefined;
     const item: QueuedAdvance = { operationId:crypto.randomUUID(), subject, assignmentId:work.assignmentId, baseVersion:work.version, description: inspectionReview ? reviewDescription(inspectionReview) : description, ...(inspectionReview ? { inspectionReview } : {}), minutesWorked, createdAt:new Date().toISOString(), state:'pending', ...(image?{photo:image,photoSha256}:{}), ...(inference?{clientInference:inference}:{}) };
@@ -346,7 +371,7 @@ export class OfflineWorkspace {
       throw error;
     }
     if (epoch !== this.sessionEpoch || subject !== this.subject || image !== this.image) return;
-    this.el<HTMLTextAreaElement>('offline-description').value=''; this.el<HTMLInputElement>('offline-photo').value=''; this.resetPhoto();
+    this.resetDraft();
     this.notice('Avance, foto y revisión guardados localmente como pendientes; todavía no confirmados por el servidor.'); await this.refresh();
   }
 }

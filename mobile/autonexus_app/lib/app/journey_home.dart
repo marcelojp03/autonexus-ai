@@ -159,11 +159,12 @@ class _SessionCard extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   title: Text('${item.orderNumber} · ${item.vehiclePlate}'),
                   subtitle: Text(
-                    '${item.description} · ejecución ${item.executionStatus} · ${item.advances} avance(s)',
+                    '${item.description} · ${_executionReason(item.executionStatus)} · ${item.advances} avance(s)',
                   ),
                   trailing: TextButton(
                     key: Key('prepare-${item.assignmentId}'),
-                    onPressed: controller.busy
+                    style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                    onPressed: controller.busy || !item.canReceiveAdvances
                         ? null
                         : () => controller.prepare(item),
                     child: const Text('Preparar'),
@@ -379,6 +380,14 @@ class _Banner extends StatelessWidget {
     );
   }
 }
+
+String _executionReason(String status) => switch (status) {
+  'in_progress' => 'En ejecución: admite nuevos avances',
+  'not_started' => 'Sin iniciar: el taller debe iniciar la ejecución antes de preparar',
+  'completed' => 'Ejecución finalizada: no admite nuevos avances',
+  'cancelled' => 'Trabajo cancelado: no admite nuevos avances',
+  _ => 'Estado no disponible: actualizá la agenda antes de preparar',
+};
 
 enum _Tone { info, warning, error }
 
