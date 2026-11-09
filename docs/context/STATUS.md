@@ -32,7 +32,9 @@ recorrió en navegador y por los límites de prompt/verificador registrados.
 APK nuevo instalado en el S21 FE autorizado (`RZCTA127N1F`) conservando datos (misma
 `firstInstallTime`, base migrada en el sitio): preparación editable, formulario vacío, errores
 inline con foco y teclado numérico con acción «Done» verificados en el dispositivo. Se corrigieron
-el inset inferior, la etiqueta «Iniciar sesión» y el mensaje de validación recortado. **El borrador
+el inset inferior, la etiqueta «Iniciar sesión» y el mensaje de validación recortado (**verificadas
+en código**: análisis 0 y 29/29 pruebas; el APK se reconstruyó, pero ambos teléfonos se desconectaron
+antes de poder re-verificarlas en dispositivo, así que ese paso queda pendiente). **El borrador
 de texto sigue perdiéndose al volver atrás** (sólo vive en memoria): es la brecha concreta abierta
 de esa pantalla, no una regresión de este incremento.
 

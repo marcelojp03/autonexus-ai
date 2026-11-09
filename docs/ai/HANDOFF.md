@@ -26,7 +26,9 @@ dureza del verificador con fechas.
 
 **APK.** Instalado con `-r` en el S21 FE autorizado conservando datos: preparación editable,
 formulario vacío, errores inline con foco y teclado numérico con «Done» verificados en el
-dispositivo; corregidos inset inferior, etiqueta «Iniciar sesión» y mensaje de validación recortado.
+dispositivo; correcciones de inset inferior, etiqueta «Iniciar sesión» y mensaje de validación recortado verificadas
+en código (análisis 0, 29/29); su re-verificación en dispositivo quedó pendiente porque el teléfono se
+desconectó.
 Brecha abierta: el borrador de texto no sobrevive a volver atrás (sólo memoria).
 
 **Arranque.** `docs/deployment/local-compose.md` separa instalación nueva y reanudación existente, y
