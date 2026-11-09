@@ -1,3 +1,4 @@
+import {FINANCIAL_TOOL, financialIntent, financialWriteIntent, requestedFinancialPeriod} from "./assistant/financial-summary.js";
 /** Deterministic planner: safety first, then intent → one authorized read tool. No LLM, no writes. */
 export interface PlanInput {
   readonly query: string;
@@ -30,11 +31,18 @@ export function laPazRange(days = 7, now: Date = new Date()): {from: string; to:
 }
 
 export function plan(input: PlanInput): Decision {
+  if (financialWriteIntent(input.query)) return {kind: "refuse", reason: READ_ONLY_REASON, message: READ_ONLY_MESSAGE};
   for (const pattern of WRITE_OR_ESCALATION) {
     if (pattern.test(input.query)) return {kind: "refuse", reason: READ_ONLY_REASON, message: READ_ONLY_MESSAGE};
   }
   if (input.phase === "safety") return {kind: "continue"};
   const has = (name: string) => input.tools.includes(name);
+  if (financialIntent(input.query)) {
+    const period = requestedFinancialPeriod(input.query);
+    if (!period) return {kind: "refuse", reason: "financial_clarification", message: "Necesito dos fechas civiles AAAA-MM-DD (desde/hasta), máximo 31 días. Sólo resumo cobros y gastos; no admito otros filtros, cotizaciones ni facturación fiscal."};
+    if (!has(FINANCIAL_TOOL)) return {kind: "refuse", reason: "sin_alcance_finanzas", message: "No hay acceso autorizado al resumen financiero."};
+    return {kind: "call", tool: FINANCIAL_TOOL, arguments: {...period, responseFormat: "json"}};
+  }
   const range = laPazRange();
   const wantsExecution = /\b(avance|avances|ejecuci[oó]n|progreso|inspecci[oó]n)\b/i.test(input.query);
   // Accented words break \b in the ASCII sense, so match the stems directly.

@@ -14,7 +14,9 @@
 # Cifras: el servicio las calcula de forma determinista desde las herramientas y el LLM solo redacta
 # sobre ellas. El BFF proyecta campo por campo, no suma, resta ni deriva ningún total, y falla cerrado
 # si el propietario omite una cifra: nunca publica un 0 en lugar de un dato ausente. No hay campos
-# financieros: el reporte no inventa importes, cotizaciones ni facturación.
+# financieros en OperationsReport: ese reporte no inventa importes, cotizaciones ni facturación.
+# assistantAnswer sí puede consultar el resumen financiero real autorizado; los centavos
+# permanecen strings en el propietario y se publican como texto determinista, no GraphQL Int.
 #
 # Cuerpo esperado del servicio (propietario externo en ASSISTANT_API_URL):
 #   POST /assistant {"query": String}
@@ -56,7 +58,7 @@ type AssistantRecordReference {
 
 "Procedencia de un dato: qué servicio, qué recurso y qué herramienta lo produjo."
 type AssistantProvenance {
-  "Servicio propietario consultado (operations, employees, intelligence)."
+  "Servicio propietario consultado (operations, employees, finance, intelligence)."
   service: String!
   "Recurso o ruta consultada por el asistente."
   resource: String!
@@ -74,7 +76,7 @@ type AssistantAnswer {
   refused: Boolean!
   "Herramientas del catálogo cerrado que el servidor ejecutó para responder."
   toolsUsed: [String!]!
-  "Modelo que redactó la respuesta (`modelVersion` declarada por el servicio)."
+  "Identificador del modelo o versión del modo determinista. Una versión determinista no implica generación por LLM."
   model: String!
   "Instante de generación en ISO-8601 UTC."
   generatedAt: DateTime!

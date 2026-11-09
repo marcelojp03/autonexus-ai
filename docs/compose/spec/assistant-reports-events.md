@@ -1,7 +1,7 @@
 ---
 feature: assistant-reports-events
 status: in-progress
-updated: 2026-11-07
+updated: 2026-11-08
 source: work/marcelo
 ---
 
@@ -211,6 +211,44 @@ convierte en duplicate exitoso. La repetición contra workshop puede devolver du
 Se reutilizan las pruebas de transporte aprobadas y se concilian ocho pasos y siete excepciones
 del CU28; no se envían mensajes externos ni se reinicia la operación empresarial.
 
+### [S2.14] Primera fuente financiera real de CU25
+
+Incremento acotado posterior al ledger publicado fb27230: herramienta de lectura
+autonexus_get_financial_summary sobre GET Finance /financial-summary?from=&to=.
+Sólo la sesión entrante, sin client_credentials, acceso SQL, MCP nuevo ni
+escrituras financieras. No convierte el reporte operativo CU26/CU28 en financiero.
+
+- Catálogo financiero sólo con FINANCE_API_URL configurada y consulta fresca de
+  Empleados que confirme employeeId, employeeStatus active y payments:read más
+  expenses:read. Se comprueba de nuevo al ejecutar; Finance reautoriza la misma
+  sesión. Roles mcp_read_* del JWT no conceden finanzas. Catálogo operacional
+  existente conserva su comportamiento; no se amplía por fallo del propietario.
+- Período explícito desde/hasta AAAA-MM-DD, fechas civiles válidas, máximo31días.
+  Sin período o filtro no soportado se aclara/rechaza, no se usa por defecto la
+  agenda ni fechas que invente el modelo. Sólo from/to; GET a host/ruta de
+  configuración fija, redirect error, plazo acotado, sin cabeceras/URLs arbitrarias.
+- DTO obligatorio: from,to,timeZone America/La_Paz,currency BOB,paymentCount,
+  expenseCount,receivedAmountMinor,expenseAmountMinor,netMovementMinor,generatedAt.
+  Centavos como strings canónicos, cuentas enteras no negativas, neto puede ser
+  negativo. Comprobar período/coherencia de recibido−gasto=neto con BigInt. Campo
+  ausente/contradictorio es error, nunca cero. Cero auténtico del propietario sí
+  se muestra como cero. No se suman páginas ni cotizaciones para obtener ingresos.
+- La intención financiera de este incremento evita el LLM por completo: parser
+  y respuesta deterministas sobre campos comprobados, rotulados como tales.
+  Otras preguntas no ofrecen esta herramienta al modelo, de modo que no puede
+  inventar su período ni seleccionar una lectura financiera ajena a la consulta.
+  Incluye período/moneda/actualización y procedencia Finance, no Operations.
+  Movimiento neto no es rentabilidad ni saldo bancario. No es evidencia de
+  interpretación financiera generativa ni requiere descargar/calentar modelos.
+- Consultas financieras no caen en formato de agenda; importes cotizados,
+  facturación fiscal u otros filtros/capacidades aún ausentes se declaran.
+  Registrar/pagar/anular/reembolsar/modificar cobros o gastos se rechaza antes
+  de LLM/herramientas. Datos de herramientas no amplían autoridad.
+- Aceptación: permisos/binding actuales y por llamada; expiración/fallo honesto,
+  argumentos cerrados, cantidades grandes/ceros/ausentes y procedencia; contraste
+  real por APIs de Finance y pregunta desde el Shell con las mismas cifras.
+  No cierre global CU25/CU26 ni cambio de puntuación por una sola herramienta.
+
 ## [S3] Out of Scope
 
 CU30 (escrituras), CU31 (administración web de clientes), notificaciones externas, nuevos recursos
@@ -231,3 +269,5 @@ cloud, autonomía indefinida de credenciales, calidad diagnóstica del modelo vi
 - [x] T11: `docs/context/PLAN.md` desde la evidencia — acceptance: cada CU queda separado en implementación, aceptación funcional, calidad visual y despliegue, y ningún CU parcial se cuenta como completo (covers: S2.8).
 - [x] T12: cerrar F1–F3 de revisión — acceptance: revocación sólo de ejecución impide leer/repetir reporte guardado; entrega semanal fallida + reinicio + semana siguiente recupera IDs/documento originales; cita concurrente serializada con envío (covers: S2.12).
 - [x] T13: aceptar destinatario local inexistente — acceptance: dos 404 reales, auditoría durable sin delivered/efecto ni reversión; matriz ocho pasos/siete excepciones y revisión independiente conforme. Evidencia: `docs/evidence/cu28-recipient-local-20261107.md` (covers: S2.13).
+- [ ] T14: CU25 resumen financiero real — acceptance: fuente, respuesta y permisos conformes a S2.14 con oráculo Finance, revisión focalizada y publicación independiente (covers: S2.14).
+- [ ] T15: CU26 financiero separado — acceptance: contrato/documento/claims monetarios exactos y trabajo autorizado separado de operaciones, fuentes reales, interfaz/filtros/exportación y evidencia; diseñar antes de implementar sin debilitar jobs históricos ni CU28.

@@ -1,3 +1,4 @@
+import {FINANCIAL_TOOL, financialPeriod, validateFinancialSummary, formatFinancialSummary} from "./assistant/financial-summary.js";
 /** Answers are built only from known fields of real results; tool text is data, never instruction. */
 import type {ToolResult} from "./agent.js";
 
@@ -10,6 +11,11 @@ export function compose(result: ToolResult): string {
     const status = result.error?.status;
     return "La consulta a " + result.tool + " no se completó (" + code + (status ? " · HTTP " + status : "") +
       "). No hay datos que presentar y no relleno el hueco.";
+  }
+  if (result.tool === FINANCIAL_TOOL) {
+    const period = financialPeriod(result.arguments);
+    const summary = period ? validateFinancialSummary(record(result.data)["data"], period) : null;
+    return summary ? formatFinancialSummary(summary) : "Error: resumen de Finance ausente o contradictorio. No invento cifras ni ceros.";
   }
   const body = record(result.data);
   const data = body["data"];

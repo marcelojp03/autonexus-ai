@@ -1,7 +1,7 @@
 /**
  * Loopback HTTP service for the CU25 assistant and the CU26 narrative report.
  *
- * The caller's own bearer token is forwarded to Operations: this process mints no identity and
+ * The caller's own bearer token is forwarded to authorized owners: this process mints no identity and
  * never talks MCP. Tokens and question text are never logged; only digests, lengths and outcomes.
  */
 import {createServer, type IncomingMessage, type Server, type ServerResponse} from "node:http";
@@ -12,6 +12,8 @@ import {createOllamaClient, type LlmClient} from "./llm/ollama.js";
 import {ASSISTANT_PROMPT_VERSION, askWithLlm, type AssistantAnswer} from "./assistant/llm-assistant.js";
 import {answerDeterministically} from "./assistant/deterministic.js";
 import {createTokenSource} from "./assistant/token-source.js";
+import {FINANCIAL_TOOL, FINANCIAL_RESPONSE_VERSION} from "./assistant/financial-summary.js";
+import type {ToolInfo} from "./agent.js";
 import {buildNarrativeReport, ReportError, validatePeriod} from "./report/narrative-report.js";
 import {ReportJobStore, type ReportJob} from "./report/jobs.js";
 import {publicJob, QUEUE_FULL, ReportJobRunner} from "./report/job-runner.js";
@@ -104,6 +106,7 @@ const READ_ROLES = ["mcp_read_team", "mcp_read_self"];
 
 /** The owner resource each catalogue tool reads; provenance names the source, not the payload. */
 const TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
+  autonexus_get_financial_summary: "/financial-summary",
   autonexus_list_orders: "/orders",
   autonexus_get_order: "/orders/{orderId}",
   autonexus_list_my_agenda: "/agenda/me",
@@ -128,11 +131,13 @@ export function publishedAnswer(answer: AssistantAnswer, at: Date): Record<strin
     generatedAt: at.toISOString(),
     references: [],
     provenance: [...new Set(answer.tools.filter(tool => tool.ok).map(tool => tool.tool))]
-      .map(tool => ({service: "operations", resource: TOOL_RESOURCES[tool] ?? tool, tool, observedAt: at.toISOString()})),
+      .map(tool => ({service: tool === "autonexus_get_financial_summary" ? "finance" : "operations", resource: TOOL_RESOURCES[tool] ?? tool, tool, observedAt: at.toISOString()})),
     limitations: [
       ...answer.warnings,
       ...(answered ? [] : ["La respuesta no se completó dentro de los límites del asistente."]),
-      ...(answer.path === "llm" ? [] : ["La respuesta la redactó el planificador determinista"
+      ...(answer.path === "llm" ? [] : answer.promptVersion === FINANCIAL_RESPONSE_VERSION
+        ? ["La respuesta financiera es determinista: no se ejecutó un modelo de lenguaje."]
+        : ["La respuesta la redactó el planificador determinista"
         + (answer.fallbackFrom === undefined ? " (modelo deshabilitado)." : " (el modelo no respondió: " + answer.fallbackFrom + ").")]),
     ],
   };
@@ -143,6 +148,7 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
   const logger = deps.logger ?? defaultLogger;
   const maxBodyBytes = deps.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const now = deps.now ?? ((): Date => new Date());
+  const financialEnabled = Boolean(process.env["FINANCE_API_URL"]?.trim());
   const llm = deps.llm === undefined ? createOllamaClient() : deps.llm;
   const authorizeReport = deps.authorizeReport ?? createReportAuthorizer({sourceFactory});
 
@@ -156,8 +162,8 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
   const interrupted = jobs.recover();
   if (interrupted > 0) logger({at: now().toISOString(), outcome: "jobs-interrupted-on-start", count: interrupted});
 
-  const assist = async (query: string, source: ToolSource): Promise<AssistantAnswer> => {
-    const tools = await source.listTools();
+  const assist = async (query: string, source: ToolSource, declared?: readonly ToolInfo[]): Promise<AssistantAnswer> => {
+    const tools = declared ?? await source.listTools();
     if (llm === null) return await answerDeterministically({query, tools, source, promptVersion: "cu25-planner-v1"});
     const answer = await askWithLlm({query, tools, source, llm, now});
     if (answer.kind !== "unavailable") return answer;
@@ -206,7 +212,8 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           fail(401, "TOKEN_EXPIRED", "El token expiró.", challenge);
           return;
         }
-        if (!claims.roles.some(role => READ_ROLES.includes(role))) {
+        const operationalScope = claims.roles.some(role => READ_ROLES.includes(role));
+        if (!operationalScope && (path !== "/assistant" || !financialEnabled)) {
           fail(403, "NO_READ_SCOPE", "El token no tiene un rol de lectura de AutoNexus.");
           return;
         }
@@ -322,7 +329,16 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
               fail(400, "INVALID_QUERY", "La consulta debe tener entre " + String(MIN_QUERY) + " y " + String(MAX_QUERY) + " caracteres.");
               return;
             }
-            const answer = await assist(query, source);
+            let declared: readonly ToolInfo[] | undefined;
+            if (!operationalScope) {
+              // Financial authority comes from current employee grants, never from MCP roles.
+              declared = await source.listTools();
+              if (!declared.some(tool => tool.name === FINANCIAL_TOOL)) {
+                fail(403, "NO_READ_SCOPE", "No hay una capacidad financiera autorizada para esta sesión."); return;
+              }
+              declared = declared.filter(tool => tool.name === FINANCIAL_TOOL);
+            }
+            const answer = await assist(query, source, declared);
             const unauthorized = answer.tools.some(tool => tool.error === "OWNER_UNAUTHORIZED");
             if (unauthorized) { fail(401, "TOKEN_REJECTED", "El propietario rechazó el token.", challenge); return; }
             const forbidden = answer.tools.some(tool => tool.error === "OWNER_FORBIDDEN");

@@ -1,3 +1,4 @@
+import {FINANCIAL_TOOL, financialPeriod} from "./financial-summary.js";
 /**
  * Closed tool catalogue (CU25).
  *
@@ -84,6 +85,12 @@ const executionCheck = (args: Readonly<Record<string, unknown>>): ArgumentCheck 
 };
 
 const DEFINITIONS: Readonly<Record<string, Definition>> = {
+  [FINANCIAL_TOOL]: {
+    description: "Resumen de cobros recibidos y gastos reales de Finance, no rentabilidad ni saldo bancario.",
+    parameters: {type: "object", additionalProperties: false, properties: {from: {type: "string"}, to: {type: "string"}}, required: ["from", "to"]},
+    check: args => { const period = financialPeriod(args); return period ? {kind: "ok", args: {...period, responseFormat: "json"}}
+      : {kind: "missing_reference", message: "Sólo from/to válidos, período explícito de hasta 31 días, sin filtros adicionales."}; },
+  },
   autonexus_list_orders: {
     description: "Lista órdenes del taller autorizadas globalmente: número, estado, prioridad, versiones y servicios sin tarifas.",
     parameters: {type: "object", additionalProperties: false,

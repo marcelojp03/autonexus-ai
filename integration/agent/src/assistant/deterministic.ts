@@ -6,6 +6,7 @@
 import {createHash} from "node:crypto";
 import {plan} from "../planner.js";
 import {compose} from "../answer.js";
+import {FINANCIAL_TOOL, FINANCIAL_RESPONSE_VERSION, financialIntent} from "./financial-summary.js";
 import type {AssistantAnswer} from "./llm-assistant.js";
 import type {ToolInfo, ToolResult} from "../agent.js";
 import type {ToolSource} from "../sources/mcp.js";
@@ -23,7 +24,7 @@ export async function answerDeterministically(options: DeterministicOptions): Pr
   const meta = {
     querySha256: createHash("sha256").update(options.query).digest("hex"),
     queryLength: options.query.length,
-    promptVersion: options.promptVersion,
+    promptVersion: financialIntent(options.query) ? FINANCIAL_RESPONSE_VERSION : options.promptVersion,
     elapsedMs: 0,
   };
   const finish = (answer: Omit<AssistantAnswer, keyof typeof meta | "fallbackFrom">): AssistantAnswer =>
@@ -52,7 +53,9 @@ export async function answerDeterministically(options: DeterministicOptions): Pr
     const text = compose(result);
     return finish({kind: "answer", text, path: "deterministic", model: null, steps: 1, tools: [record],
       warnings: outcome.ok ? [] : ["deterministic_fallback_partial"],
-      stopReason: outcome.ok ? "deterministic_fallback" : "deterministic_fallback_tool_error"});
+      stopReason: decision.tool === FINANCIAL_TOOL
+        ? (outcome.ok ? "financial_summary_deterministic" : "financial_summary_tool_error")
+        : (outcome.ok ? "deterministic_fallback" : "deterministic_fallback_tool_error")});
   } catch (error) {
     const code = (error as {code?: string}).code ?? "TOOL_SOURCE_UNAVAILABLE";
     return finish({kind: "unavailable", path: "deterministic", model: null, steps: 1,

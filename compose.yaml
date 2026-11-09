@@ -358,12 +358,13 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     # No published port: the BFF is the only client and reaches it by service name on the project
-    # network. The assistant forwards the caller token to Operations and mints no identity.
+    # network. The assistant forwards the caller token to authorized owners and mints no identity.
     environment:
       AGENT_PORT: "3099"
       AGENT_HOST: "0.0.0.0"
       OPERATIONS_URL: "http://operations:8081"
       EMPLOYEES_API_URL: "http://employees:3002"
+      FINANCE_API_URL: "http://finance:8000"
       # The model stays an external, configurable provider on the host: no model is bundled or downloaded.
       OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
       REPORT_JOBS_DIR: "/var/lib/autonexus-agent/jobs"

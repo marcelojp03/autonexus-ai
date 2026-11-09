@@ -8,6 +8,8 @@ CU15: [Saga y comandos aprobados de los participantes](saga.md), con vínculo fi
 - [technical-auth.openapi.yaml](technical-auth.openapi.yaml): diagnósticos técnicos CU01; no CRUD empresarial.
 - [operations.openapi.yaml](operations.openapi.yaml): conserva CU06–CU10 y documenta recepciones CU11, órdenes CU12 y las cinco operaciones públicas CU15. Referencias de asignación/vínculo en ConfirmationSaga, no en WorkOrder.
 - [finance.openapi.yaml](finance.openapi.yaml): CU13/CU14 humanos con bearer y permiso; cuatro operaciones privadas CU15 con client_credentials y scopes acotados. JSON válido como YAML 1.2; sin credenciales. Sin APIs públicas de vínculo ni borrado de cotizaciones/decisiones.
+- [financial-ledger.md](financial-ledger.md): CU19/CU20, dinero recibido/gastos/documentos y resumen propietario, sin cotizaciones como ingreso.
+- [assistant.md](assistant.md): CU25 interno, primera lectura de resumen financiero con la sesión y permisos vigentes; no modifica el reporte operativo ni entrega CU26 financiero.
 - [employees.openapi.yaml](employees.openapi.yaml): contrato temprano CU03 S2.2–S2.5 aprobado para alinear implementación; todos los endpoints requieren administrador. Incluye entradas completas, paginación, snapshots, concurrencia, idempotencia y acceso IdP separado.
 - [Autorización y semántica CU03](../auth/employees.md): reglas normativas complementarias y códigos de error. Contrato publicado no equivale a implementación/integración verificada.
 

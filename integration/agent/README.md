@@ -3,6 +3,39 @@
 Proceso interno de consulta. No aloja ni depende exclusivamente del servidor MCP: la fuente de
 herramientas es intercambiable.
 
+## Primera lectura financiera CU25 (2026-11-08)
+
+El servicio HTTP añade autonexus_get_financial_summary, GET de Finance
+/financial-summary con from/to explícitos, fechas civiles válidas y máximo31días.
+FINANCE_API_URL habilita la capacidad; EMPLOYEES_API_URL permite comprobar
+empleado activo vinculado y payments:read más expenses:read en catálogo y
+ejecución. Finance reautoriza ese mismo bearer. No requiere roles mcp_read_*
+ni concede por ellos permisos financieros; tampoco acuña una cuenta técnica.
+
+Importes BOB como strings de centavos, cálculo propietario y comprobación
+BigInt; faltante/contradicción no se convierte en cero. Cobros por día de
+recordedAt convertido a La Paz; gastos por expenseDate. No cotizaciones como
+ingreso, páginas parciales como total ni movimiento neto como rentabilidad/caja.
+
+Esta consulta evita el LLM por completo. Respuesta y versión deterministas
+cu25-financial-summary-v1, período, actualización y procedencia Finance visibles.
+No es generación financiera CU26: su documento, trabajos, filtros/gráficos y
+aceptación permanecen separados. Otras preguntas no ofrecen al modelo esta
+herramienta. Registrar/pagar/anular/reembolsar/modificar dinero se rechaza.
+El reporte operativo y los documentos/semanal existentes conservan su contrato.
+
+Desde la raíz, con el stack y fixtures sintéticas autorizadas ya preparados:
+
+```sh
+node scripts/cu25/verify-financial-summary-real.mjs 2026-11-07 2026-11-08 etiqueta --ui
+```
+
+Requiere Node22.22.3, Docker y el Playwright del proyecto; no crea usuarios ni
+cambia permisos. Lee credenciales dentro del proceso sin imprimirlas. Oráculo
+Finance real, respuesta GraphQL/Shell, aclaración, rechazo de escritura,
+denegación al mecánico y comparación de8tablas monetarias; artefactos privados
+ignorados en output/agent y output/playwright. No aprobación visual por PNG.
+
 ## Reportes guardados y entrega semanal (2026-11-07)
 
 El servicio corre como agent del Compose, sin puerto publicado, con OPERATIONS_URL y

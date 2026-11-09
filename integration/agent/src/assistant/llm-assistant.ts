@@ -1,3 +1,5 @@
+import {FINANCIAL_TOOL, financialIntent} from "./financial-summary.js";
+import {answerDeterministically} from "./deterministic.js";
 /**
  * CU25 — LLM assistant over the read-only tool catalogue.
  *
@@ -127,7 +129,9 @@ export async function askWithLlm(options: AskOptions): Promise<AssistantAnswer> 
       tools: [], warnings: [], stopReason: "safety_precheck"});
   }
 
-  const catalogue: Catalogue = buildCatalogue(options.tools);
+  if (financialIntent(options.query)) return answerDeterministically({query: options.query, tools: options.tools,
+    source: options.source, promptVersion});
+  const catalogue: Catalogue = buildCatalogue(options.tools.filter(tool => tool.name !== FINANCIAL_TOOL));
   const model = options.llm.model;
   if (catalogue.entries.length === 0) {
     return build({kind: "refused", path: "deterministic", model: null, steps: 0, tools: [], warnings: [],

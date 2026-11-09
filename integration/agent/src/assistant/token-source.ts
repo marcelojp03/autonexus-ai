@@ -1,9 +1,10 @@
+import {FINANCIAL_TOOL, financialPeriod, validateFinancialSummary} from "./financial-summary.js";
 /**
  * Token-scoped REST tool source for the local HTTP service.
  *
  * The assistant service never mints an identity: it forwards the caller's `Authorization: Bearer`
- * token to Operations and lets the owner decide. The catalogue is derived from the roles carried by
- * that same token, so what the model may call and what the owner accepts come from one source.
+ * token to each owner and lets it decide. Operational catalogue roles retain their existing filter;
+ * financial authority instead comes from current employee binding and both owner read permissions.
  */
 import type {ToolInfo, ToolOutcome} from "../agent.js";
 import type {ToolSource} from "../sources/mcp.js";
@@ -81,6 +82,8 @@ const projectAgenda = (value: unknown): Record<string, unknown> => {
 
 export interface TokenSourceOptions {
   readonly operationsUrl?: string;
+  readonly financeUrl?: string;
+  readonly employeesUrl?: string;
   readonly timeoutMs?: number;
 }
 
@@ -91,11 +94,13 @@ export function createTokenSource(accessToken: string, options: TokenSourceOptio
   const timeoutMs = options.timeoutMs
     ?? (Number.isFinite(configured) && configured >= 1_000 ? configured : DEFAULT_TIMEOUT_MS);
   const tools = catalogueForToken(accessToken);
+  const finance = (options.financeUrl ?? process.env["FINANCE_API_URL"] ?? "").replace(/\/+$/, "");
+  const employees = (options.employeesUrl ?? process.env["EMPLOYEES_API_URL"] ?? "http://127.0.0.1:3002").replace(/\/+$/, "");
 
-  const get = async (path: string): Promise<ToolOutcome> => {
+  const get = async (path: string, owner = base): Promise<ToolOutcome> => {
     let response: Response;
     try {
-      response = await fetch(base + path, {method: "GET", redirect: "error", signal: AbortSignal.timeout(timeoutMs),
+      response = await fetch(owner + path, {method: "GET", redirect: "error", signal: AbortSignal.timeout(timeoutMs),
         headers: {accept: "application/json", authorization: "Bearer " + accessToken}});
     } catch {
       return {ok: false, error: {code: "OWNER_UNAVAILABLE"}};
@@ -110,6 +115,18 @@ export function createTokenSource(accessToken: string, options: TokenSourceOptio
     } catch {
       return {ok: false, error: {code: "OWNER_UNAVAILABLE", status: response.status}};
     }
+  };
+
+  const financialAuthorization = async (): Promise<ToolOutcome> => {
+    if (!finance) return {ok: false, error: {code: "TOOL_NOT_AVAILABLE", status: 404}};
+    const response = await get("/security/permissions", employees);
+    if (!response.ok) return response;
+    const grants = record(response.data);
+    if (grants["employeeStatus"] !== "active" || typeof grants["employeeId"] !== "string" || !UUID.test(grants["employeeId"])
+      || !Array.isArray(grants["effective"]) || !grants["effective"].includes("payments:read") || !grants["effective"].includes("expenses:read")) {
+      return {ok: false, error: {code: "OWNER_FORBIDDEN", status: 403}};
+    }
+    return {ok: true};
   };
 
   const execution = async (scope: "me" | "team", args: Readonly<Record<string, unknown>>): Promise<ToolOutcome> => {
@@ -139,8 +156,23 @@ export function createTokenSource(accessToken: string, options: TokenSourceOptio
   };
 
   return {
-    async listTools() { return tools; },
+    async listTools() {
+      if (!finance) return tools;
+      const authorization = await financialAuthorization();
+      return authorization.ok ? [...tools, {name: FINANCIAL_TOOL, description: "Read authorized financial summary"}] : tools;
+    },
     async call(name, args) {
+      if (name === FINANCIAL_TOOL) {
+        const period = financialPeriod(args);
+        if (!period) return {ok: false, error: {code: "VALIDATION_ERROR", status: 400}};
+        const authorization = await financialAuthorization();
+        if (!authorization.ok) return authorization;
+        const raw = await get("/financial-summary?from=" + period.from + "&to=" + period.to, finance);
+        if (!raw.ok) return raw;
+        const summary = validateFinancialSummary(raw.data, period);
+        if (!summary) return {ok: false, error: {code: "INVALID_OWNER_RESPONSE"}};
+        return {ok: true, data: {source: "finance", data: summary}};
+      }
       if (name === "autonexus_list_orders") {
         const raw = await get("/orders?limit=" + String(bounded(args["limit"], 20, 50)) + "&offset=0");
         if (!raw.ok) return raw;
