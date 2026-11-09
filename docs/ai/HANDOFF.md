@@ -1,5 +1,43 @@
 # Cierre y continuidad de sesión
 
+Publicado **`edbceaa`** sobre `98d6f58`: T8 de Finanzas, CU26 financiero, correcciones nativas del APK y arranque local en dos caminos. Revisión independiente hecha; `CU19` y `CU20` cerrados con **62 puntos verificados**; `CU26` sigue parcial.
+
+**Finanzas (T8).** Revisión visual hecha sobre el build servido, con capturas inspeccionadas como
+píxeles (sin máscara magenta) en 1440 y 390, más conciliación requisito por requisito de CU19 y
+CU20 en `docs/evidence/cu19-cu20-20261108.md` (§T8). Diez hallazgos corregidos; el más grave era
+que en pantalla estrecha las tablas anchas recortaban la acción principal (abrir el cobro,
+descargar el respaldo, cotizar). Ambas pantallas usan ahora presentación apilada bajo `md`, con la
+acción a ancho completo y la misma fuente de datos. Estados en español, fechas en zona del taller,
+política de cobro y referencias técnicas como información secundaria. `0` mutaciones GraphQL y `0`
+errores de página. **CU19 y CU20 cumplen**; el cierre y los 5 puntos se anotan después de la
+revisión y la publicación. P3 conocido: el enlace «Saltar al contenido» aparece cuando el navegador
+lo enfoca al volver del IdP.
+
+**CU26 financiero.** Tipo separado con documento `financial-narrative`, verificador, trabajo
+aislado en `financial-jobs/`, autorización propia (`payments:read`+`expenses:read` vigentes),
+GraphQL y sección de interfaz con exportación JSON/CSV. Real: cifras idénticas a Finance
+(50850/8302/42548), ceros auténticos en período vacío, replay con el mismo `jobId`, conflicto por
+otro período rechazado, mecánico `403`, `jobId` financiero inexistente en la ruta operativa. El
+modelo se invocó y su texto **no** se publicó: primero un falso positivo de «rentabilidad»
+(corregido con regresión) y después una cifra equivocada (`42.54` en vez de `425.48`); se publicó la
+plantilla determinista rotulada. Agente 149/149, BFF 28/28, mf 14/14. Pendientes concretos:
+recorrer la interfaz en navegador, mapear el conflicto a un código distinguible y revisar la
+dureza del verificador con fechas.
+
+**APK.** Instalado con `-r` en el S21 FE autorizado conservando datos: preparación editable,
+formulario vacío, errores inline con foco y teclado numérico con «Done» verificados en el
+dispositivo; corregidos inset inferior, etiqueta «Iniciar sesión» y mensaje de validación recortado.
+Brecha abierta: el borrador de texto no sobrevive a volver atrás (sólo memoria).
+
+**Arranque.** `docs/deployment/local-compose.md` separa instalación nueva y reanudación existente, y
+corrige el inventario de servicios; `run.mjs` queda explícitamente como entrada de instalación
+existente, no como instalador.
+
+**Siguiente paso.** Revisión independiente del delta, corregir lo que surja, reconstruir el web una
+vez con el estado final, recapturar, publicar y recién entonces registrar el cierre de CU19/CU20.
+Después: recorrido visual del reporte financiero CU26 y persistencia del borrador de texto en Flutter.
+
+
 Último código publicado: CU25 fuente financiera `de03fa1`, ambas ramas/remotos
 confirmados. 15focales/136suite,7checks realesShell+6vacío propietario,
 revisión152/153 y auditoría19rutas sin hallazgos. Sólo resumen calculado sin

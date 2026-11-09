@@ -43,14 +43,14 @@ pero sin recorrido real se cuenta como parcial y **no** entra en el total.
 | CU16 Ejecución y evidencias | 4 | Operaciones + BFF + MF + S3 | **Verificada** | No revisada | Compose local + S3 real | 15+12+7 etapas, decisión 019 | Deuda: identidad IAM mínima |
 | CU17 Verificar y finalizar | 2 | Operaciones + BFF + MF | **Verificada** | No revisada | Compose local | Suites 44 + BFF 144, auditoría 8/8, `6f954a7` | — |
 | CU18 Entrega de vehículo | 2 | Ninguna | **Pendiente** | — | — | — | Registro de entrega separado de la finalización |
-| CU19 Cobro de servicio | 3 | Ledger propietario + contexto Operaciones + BFF + React, publicado fb27230 | **Parcial**: saldo íntegro, replay/recibo y recuperación de referencia real verificados; revisiones147/149conformes para publicación parcial | Antes/después1440/390 y foco medidos, sin inspección de píxeles | Compose local, imagen3c6abd4a26b6 servida | cu19-cu20-20261108, decisión030; React42/PHP3+evidencia previa | UX visual pendiente; política conservadora no acredita abonos ni pasarela/factura fiscal. No suma3puntos |
-| CU20 Gastos operativos | 2 | Ledger/categorías/documentos privados + BFF + React, publicado fb27230 | **Parcial**: gasto/documento/hash, duplicado explícito y recuperación reales; consulta read-only UI corregida | Antes/después1440/390 medidos, sin inspección visual acreditada | Compose local + MinIO persistente propio | cu19-cu20-20261108, traslado3/3 y conservación posterior4/4; React42 | UX visual pendiente. Worker Windows falló, suite Linux42/42 sí ejecutada. No suma2puntos |
+| CU19 Cobro de servicio | 3 | Ledger propietario + contexto Operaciones + BFF + React, publicado fb27230 | **Verificada**: los ocho pasos y las excepciones del CU conciliados contra el build servido | Revisada sobre píxeles reales 1440/390 (T8) | Compose local | cu19-cu20-20261108 §T8; revisión152/153 + revisión de T8 | Sólo falta publicar este delta para sumar. Sin abonos, pasarela ni factura fiscal por decisión |
+| CU20 Gastos operativos | 2 | Ledger/categorías/documentos privados + BFF + React, publicado fb27230 | **Verificada**: los ocho pasos y las excepciones del CU conciliados contra el build servido | Revisada sobre píxeles reales 1440/390 (T8) | Compose local + MinIO propio | cu19-cu20-20261108 §T8; traslado3/3 y conservación4/4 | Sólo falta publicar este delta para sumar. Sin pasarela ni factura fiscal |
 | CU21 Indicadores | 4 | Ninguna | **Pendiente** | — | — | — | Indicadores derivados de cobros/gastos/órdenes |
 | CU22 IA visual local (web/móvil) | 5 | Inferencia local Flutter/PWA; revisión manual independiente y conservación de predicción/revisión; recuperación de caché | **Parcial global**: recorrido y excepciones core verificados, revisión directa declarada; capacidad del modelo no validada | UX nueva pendiente; captura sin inspección visual no acredita conformidad | Compose local + Android físico previo; teléfono disponible pero acceso de nueva revisión sin completar | `docs/evidence/cu22-local-inspection-20261107.md`, decisión029; nueva UX separada en offline-workspace-ux-20261108 | Calidad del modelo/licencia sin cambios. Borrador PWA aislado y preparación/formulario Flutter en verificación separada, sin volver a aceptar CU22. No suma5puntos |
 | CU23 IA de servidor | 5 | `services/intelligence` desplegado, MongoDB, BFF, MF | **Parcial**: infraestructura e inferencia integradas, capacidad diagnóstica experimental y no validada (no suma) | No revisada | Compose local | Decisión 021, evidencia cu23 | Validación de la capacidad visual y de la calidad del modelo |
 | CU24 ML de duración | 5 | Ninguna | **Pendiente** | — | — | — | Dataset, entrenamiento, evaluación y límites |
 | CU25 Asistente con agentes | 5 | `integration/agent` en Compose, Ollama externo configurable, catálogo cerrado, BFF, MF y primer resumen financiero S2.14 | **Parcial verificada**: pregunta con herramientas, aclaración, denegación, reserva y resumen financiero real calculado | No revisada | Compose local (servicio `agent` sin puerto) | cu25-cu26-shell §8–§10 + cu25-financial-source-20261108; decisiones026/032 | S2.14 publicado de03fa1, revisión152/153; matriz literal aún pendiente; resumen no acredita cotizaciones, administración, toda interpretación/seguimiento ni CU26 financiero |
-| CU26 Reportes generativos | 4 | Reporte operativo con cifras deterministas, trabajo asíncrono, exportación JSON/CSV | **Parcial verificada**: reporte escrito por el modelo con 8 afirmaciones y contrato sin violaciones | No revisada | Compose local + proveedor Ollama externo | Evidencia cu25-cu26-shell §4, §9–§10 | Tipos financiero/productividad, filtros e indicadores seleccionables, gráficos y entrada texto/audio de referencia 07 sin aceptación acreditada; matriz técnica |
+| CU26 Reportes generativos | 4 | Reporte operativo asíncrono + **reporte financiero separado** (documento/verificador/trabajo/autorización/UI propios) | **Parcial verificada**: operativo con narrativa del modelo; financiero con cifras idénticas a Finance, ceros auténticos, replay y denegaciones | No revisada | Compose local + Ollama externo | cu25-cu26-shell §4; cu26-financial-20261108 | Interfaz financiera sin recorrer en navegador; el modelo no acreditó cifras (publicó plantilla rotulada); productividad, gráficos y filtros por indicador siguen sin contrato del propietario |
 | CU27 Sincronización offline | 5 | `services/sync` desplegado, PWA + Flutter, DynamoDB | **Verificada** (aceptación funcional PWA y Android físico) | No revisada | Compose local + dispositivo | Evidencia cu27-20261105 | Conflictos avanzados y multi-dispositivo no ejercidos |
 | CU28 Automatizaciones n8n | 3 | Cinco flujos originales: Outbox propietarios, temporizadores n8n y CU26; revisión adicional | **Verificada, alcance local configurado**: ocho pasos y siete excepciones conciliados, incluidos dos rechazos de destinatario inexistente sin efecto/reversión | No revisada | Compose local (n8n en su propio compose) | cu28-recipient-local-20261107 + evidencia previa del catálogo/transporte; decisiones 025/027/028; revisión independiente conforme | No acredita mensajes externos, cloud ni autonomía indefinida de la sesión delegada |
 | CU29 MCP consulta | 4 | `integration/mcp-server` con PKCE y alcance cerrado | **Verificada** (10 etapas reales) | No revisada | Compose local (loopback) | Evidencia cu29-20261105 | — |
@@ -63,13 +63,13 @@ Sólo suma la aceptación funcional **verificada**; un CU parcial no aporta punt
 
 | Dimensión | Puntos | Detalle |
 | --- | ---: | --- |
-| Aceptación funcional verificada | **57** | CU01–CU07, CU09–CU17, CU27, CU28 local configurado y CU29 |
-| Parcial, no suma | 24 | CU19 (3), CU20 (2), CU22 (5), CU23 (5), CU25 (5), CU26 (4) |
+| Aceptación funcional verificada | **62** | CU01–CU07, CU09–CU17, **CU19**, **CU20**, CU27, CU28 local configurado y CU29 |
+| Parcial, no suma | 19 | CU22 (5), CU23 (5), CU25 (5), CU26 (4) |
 | Sin implementación | 21 | CU08 (2), CU18 (2), CU21 (4), CU24 (5), CU30 (5), CU31 (3) |
 | Calidad visual | 0 acreditados | Sólo CU05 tiene una revisión declarada pendiente; el resto no se revisó |
 | Despliegue | Compose local | Todos los servicios, incluido el asistente, corren en Compose reproducible; el despliegue cloud es una propuesta sin ejecutar |
 
-Referencia del 70 % sobre 102: **72 puntos**. Faltan **15** puntos verificados; CU24 (5),
+Referencia del 70 % sobre 102: **72 puntos**. Faltan **10** puntos verificados; CU24 (5),
 CU25 (5), CU26 (4), CU22 (5) y CU30 (5) conservan sus requisitos y aceptación pendientes.
 
 La continuación financiera **no añade puntos verificados: siguen57**. Sólo mueve
@@ -103,6 +103,8 @@ Publicación técnica posterior: Finanzas `fb27230` y UX operativa `aed5dd9`,
 ambas revisadas, integradas y confirmadas en remoto. React42/42 Linux y
 Flutter31/análisis/APK, Shell10/tipos y conservación4/4 registrados; no nuevos
 puntos ni cierre visual/físico por esas verificaciones.
+
+**T8 y CU26 financiero (2026-11-08, publicado `edbceaa`).** CU19 y CU20 quedan con aceptación funcional verificada y revisión visual real; el total de puntos sube a **62** con este delta ya publicado. CU26 sigue parcial: su reporte financiero está implementado y verificado contra Finance, pero la interfaz no se recorrió en navegador y el modelo no acreditó las cifras, de modo que se publicó la plantilla determinista rotulada. Ningún cierre se apoya en pruebas unitarias solas.
 
 ## Ruta orientativa por entregas
 

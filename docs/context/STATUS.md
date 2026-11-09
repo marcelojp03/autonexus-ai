@@ -1,5 +1,44 @@
 # Estado comprobado
 
+## Publicado — T8 Finanzas cerrado y CU26 financiero implementado (2026-11-08)
+
+Publicado **`edbceaa`** sobre `98d6f58` (FF de `main` y push normal de `main`/`work/marcelo`, ambas refs remotas confirmadas). Auditoría de las 30 rutas del delta sin hallazgos; revisión independiente hecha y sus hallazgos corregidos antes de publicar. Revisión visual **real** de cotizaciones, cobros y
+gastos sobre el build servido (1440×1000 y 390×844), con capturas inspeccionadas como píxeles y sin
+la máscara magenta anterior. Diez hallazgos corregidos: tablas anchas que recortaban la acción
+principal en pantalla estrecha (no se podía abrir el cobro, descargar un respaldo ni cotizar),
+aviso de plantilla y enlace suelto en pantalla empresarial, jerga técnica como contenido principal
+(`FULL_AFTER_COMPLETION_V1`, «Versión de saldo», ISO con milisegundos, estados en inglés),
+fechas/importes partidos, título truncado en móvil, filtro sin guía, tabla de pagos previos
+recortada y textos «CU03/CU15/Ruta del módulo». `0` mutaciones GraphQL y `0` errores de página en
+todas las capturas.
+
+Conciliación requisito por requisito en `docs/evidence/cu19-cu20-20261108.md` (§T8): **CU19 y CU20
+cumplen sus requisitos en el alcance declarado**; el cierre y los 5 puntos se registran tras la
+revisión independiente de este delta y su publicación. Sigue abierto un P3 conocido: el enlace
+«Saltar al contenido» se dibuja cuando el navegador lo enfoca al volver del IdP; su corrección
+propuesta (mover el foco a `#main` al terminar la redirección) queda para un incremento de Shell.
+
+CU26 financiero implementado como tipo **separado** (documento `financial-narrative`, contrato y
+verificador propios, trabajo aislado en `financial-jobs/`, autorización de empleado con
+`payments:read`+`expenses:read`, GraphQL y sección de interfaz con exportación JSON/CSV). Verificado
+real contra Finance: período con datos con cifras idénticas al propietario, período vacío con ceros
+auténticos, repetición con el mismo `jobId`, conflicto por otro período rechazado, mecánico `403` y
+`jobId` financiero inexistente en la ruta operativa. El modelo se invocó y **no se publicó su
+texto**: primero por un falso positivo de «rentabilidad» (corregido con regresión) y después porque
+escribió `42.54` en lugar de `425.48`; se publicó la plantilla determinista rotulada. Agente
+**149/149**, BFF **28/28**, microfrontend **14/14**; CU26 sigue parcial porque su interfaz no se
+recorrió en navegador y por los límites de prompt/verificador registrados.
+
+APK nuevo instalado en el S21 FE autorizado (`RZCTA127N1F`) conservando datos (misma
+`firstInstallTime`, base migrada en el sitio): preparación editable, formulario vacío, errores
+inline con foco y teclado numérico con acción «Done» verificados en el dispositivo. Se corrigieron
+el inset inferior, la etiqueta «Iniciar sesión» y el mensaje de validación recortado. **El borrador
+de texto sigue perdiéndose al volver atrás** (sólo vive en memoria): es la brecha concreta abierta
+de esa pantalla, no una regresión de este incremento.
+
+Arranque local separado en dos caminos documentados (instalación nueva desde clon limpio y
+reanudación de la instalación existente), corrigiendo además el inventario obsoleto de servicios.
+
 ## Publicado — CU25 primera lectura financiera (2026-11-08)
 
 `de03fa11ada8a143279390e4188157cfa13c11ff`: FF main y push normal de main/

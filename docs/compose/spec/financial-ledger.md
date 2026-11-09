@@ -1,6 +1,6 @@
 ---
 feature: financial-ledger
-status: in-progress
+status: delivered
 updated: 2026-11-08
 source: work/marcelo
 ---
@@ -8,6 +8,11 @@ source: work/marcelo
 # CU19/CU20 — dinero recibido y gastos propios de Finanzas
 
 ## Report
+
+**Qué se entregó** — cobros y gastos propios de Finanzas con dinero en centavos exactos, conciliación de resultados inciertos, comprobante interno y respaldo documental privado versionado, servidos por REST propietario, BFF y el microfrontend React, más la entrada local que reanuda la instalación existente.
+
+**Verificación** — CU19 y CU20 conciliados requisito por requisito contra el build servido (T8), con revisiones independientes 147/149 y la de este delta; agente 151/151, BFF 28/28, microfrontend 14/14, ledger React 42/42 (una prueba inestable PRE-EXISTING), Flutter 29/29 y análisis 0; recorridos reales con respuesta perdida, replay, duplicado y respaldo con hash idéntico; 8 tablas monetarias sin cambios durante las consultas. Detalle en docs/evidence/cu19-cu20-20261108.md.
+
 
 Incremento funcional parcial revisado: ledger propietario, permisos/contexto,
 BFF/React, almacenamiento documental persistente y entrada local coordinada.
@@ -135,4 +140,4 @@ completos, eliminación/corrección destructiva, credenciales AWS ajenas e ICONI
 - [x] T5: aceptación real/revisión/publicación — acceptance: fuentes y límites documentados; cobertura sólo por requisitos demostrados (covers: S2.5).
 - [x] T6: persistencia documental local y traslado auditado — acceptance: copias de hash idéntico, referencias migradas sin tocar dinero, versiones recuperadas tras recreación; resultado incierto conciliado por journal (covers: S2.6, depends: T3).
 - [x] T7: recuperación acotada y entrada oficial — acceptance: instalación/configuración conservadas y arranque coordinado documentado, sin otra plataforma (covers: S2.7, depends: T6).
-- [ ] T8: UX financiera revisada — acceptance: evidencia real antes/después y recorrido afectado en build servido, hallazgos prioritarios corregidos con límites declarados (covers: S2.8, depends: T4).
+- [x] T8: UX financiera revisada — acceptance: evidencia real antes/después y recorrido afectado en build servido, hallazgos prioritarios corregidos con límites declarados (covers: S2.8, depends: T4).
