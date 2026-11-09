@@ -1,5 +1,12 @@
 # Cierre y continuidad de sesión
 
+Último código publicado: CU25 fuente financiera `de03fa1`, ambas ramas/remotos
+confirmados. 15focales/136suite,7checks realesShell+6vacío propietario,
+revisión152/153 y auditoría19rutas sin hallazgos. Sólo resumen calculado sin
+LLM; CU26 financiero no implementado. Siguiente T15/T59.2: diseñar documento/
+claims monetarios string y jobs/guardas/UI/exportación financieros separados
+del contrato operativo, sin reabrir CU28. Visual/phone anteriores pendientes.
+
 Código publicado confirmado: `fb27230` Finanzas/arranque/documentos y `aed5dd9`
 UX operativa parcial PWA/Flutter, ambas ramas main/work/marcelo y remotas.
 Verificación/revisión147/149 y auditorías97/13rutas registradas. Visual y

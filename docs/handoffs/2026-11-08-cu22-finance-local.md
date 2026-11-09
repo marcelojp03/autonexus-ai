@@ -4,6 +4,26 @@ Fecha2026-11-08, work/marcelo. No documentación académica ICONIX.
 
 ## Publicado y alcance
 
+Continuación fuente financiera CU25 publicada `de03fa1`, main/work/marcelo/
+remotos confirmados; auditoría19rutas sin hallazgos. Revisión152hallazgos
+cerrados por153. 15tests focales/136suite/build0; imagenagente7a6ee6c64ee3
+desplegada sólo agent,13reportfiles bytesidénticos. Misma sesión/activo/
+ambos permisos actuales en E/Finance, sin depender de roles MCP; salida
+cu25-financial-summary-v1determinista, no generación CU26.
+
+Guion scripts/cu25/verify-financial-summary-real.mjs:7checks positivos/Shell
+1440/390 y6vacío propietario, pregunta sólo neto incluida,0writes y8tablas
+monetarias intactas. No Root/AuthIssuerrelajado;401previos causa no confirmada
+registrados, no estabilidad universal inferida. Reviewer151DBinternolock no
+dictamen;152/153sí revisión real. CUs globales/puntos sin cambiar.
+
+Siguiente tarea abierta T59.2/T15: contrato y reporte financiero CU26 con
+claims string-centavos, jobs/autorización actual diferenciados, tipo/filtros/
+indicadores/UI/exportación y narrativa verificada. No convertir el documento
+operativo/cu28weekly en financiero ni dejar que sameoperationIddevuelva otro
+tipo. Diseñar antes de implementar; persistencia sin tokens, docs old13
+conservados. T58/T58.1siguen bloqueadas sólo por UX visual/física.
+
 Última publicación: Finanzas/arranque/documentos `fb27230` y UX operativa
 PWA/Flutter `aed5dd9`, revisiones147/149; FF main y push normal main/work/marcelo
 con SHA remotos comprobados. Auditorías97/13rutas sin hallazgos. Sólo parcial:

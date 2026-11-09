@@ -1,5 +1,53 @@
 # Estado comprobado
 
+## Publicado — CU25 primera lectura financiera (2026-11-08)
+
+`de03fa11ada8a143279390e4188157cfa13c11ff`: FF main y push normal de main/
+work/marcelo, ambas referencias remotas confirmadas. Auditoría19rutas sin
+hallazgos. Revisión152detectó2P2y1P3, reproducidos/corregidos y cerrados por
+re-revisión153sin nuevos defectos concretos. Node22.22.3: build0,15focales,
+136suite completa,7checks reales en Shell y6con cero propietario auténtico.
+
+Una fuente del ledger Finance, bearer humano sin roles MCP obligatorios,
+empleado activo y ambos permisos financieros frescos; respuesta determinista
+con versión propia, no un nuevo reporte financiero generativo. Neto no es
+rentabilidad/caja, ausente no es cero. Trece reportes previos conservaron bytes
+y las8tablas monetarias no cambiaron durante las consultas. No nuevos modelos.
+
+T14acotado terminado; CU25 global parcial y CU26 financiero/T15 pendientes.
+Siguiente: contrato/documento/claims string-centavos y jobs autorizados de
+tipo financiero sin debilitar operaciones/weekly, interfaz/filtros/exportación
+y generación financiera con evidencia propia. No sumar puntos:57verificados.
+UX visual y APKnuevo físico continúan sin aceptar, con sus bloqueos declarados.
+
+## En curso — CU25, resumen financiero real acotado (2026-11-08)
+
+Sobre3a5dc0c, una herramienta GET/financial-summary de Finance, bearer humano
+sin sustitución, empleado activo y ambos permisos financieros actuales en
+declaración/ejecución/propietario. Respuesta calculada sin LLM, importes BOB
+string-centavos/BigInt y fuente Finance; no cotizaciones como ingreso ni neto
+como rentabilidad/caja. Versión financiera propia, no marca de modelo generativo.
+
+Node22.22.3: build0,15regresiones focalizadas y136/136suite completa. Revisión152
+encontró2P2de routing y1P3de leyenda; reproducidos y corregidos, re-revisión153
+cerrólos3sin nuevos defectos concretos en su alcance; cumplimiento/corrección/
+consistencia conformes. SQLite interno impidió iniciar151: no dictamen de código.
+
+Imagen agente7a6ee6c64ee3 desplegada sola,13archivos de reportes con bytes
+idénticos,0jobs activos, mismo volumen/configuración salvo FinanceURL, sin
+puerto host ni modelos nuevos. RealFinance→agente→BFF→Shell1440/390:7checks
+incluyen resumen y consulta sólo de neto, período ausente, escritura rechazada,
+403real al mecánico y negativa del asistente. Caller financiero sin roles MCP.
+Tres cobros/10gastos,50850/8302/42548centavos según propietario; cero real en
+otro período verificado con6checks. Ocho tablas monetarias intactas,0mutaciones
+GraphQL; UIfuncional, no conformidad visual. Fallos previos401sin causa
+confirmada conservados: no se declara authglobal corregida ni se relajó validación.
+
+Delta aún sin publicar. CU25 global parcial y CU26 financiero todavía sin
+contrato/documento/job/interfaz propios (T15). No puntos nuevos. Continúan
+abiertos UX visual y recorrido del APKnuevo del incremento anterior; sin
+repetir aceptación/modelo/licencia CU22 ni matriz empresarial CU28.
+
 ## Publicación incremental — Finanzas y UX operativa parcial (2026-11-08)
 
 Integrados por FF y publicados por push normal, con ls-remote de ambas ramas:

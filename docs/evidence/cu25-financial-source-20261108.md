@@ -1,5 +1,11 @@
 # CU25 — primera fuente financiera real, alcance parcial
 
+Publicado `de03fa11ada8a143279390e4188157cfa13c11ff`, FF main y push normal
+main/work/marcelo, ls-remote de ambas refs confirmado;19rutas/19blobs sin
+hallazgos. Revisión152+re-revisión153conformes tras cerrar hallazgos. T14
+aceptado acotadamente; no CU25/CU26 globales, generación financiera ni puntos.
+Esta constancia supera los pendientes de Git históricos inferiores.
+
 Base `3a5dc0c`, work/marcelo. S2.14/T14 de assistant-reports-events, contrato
 REST assistant y decisión032. Datos del taller **sintéticos**, propietarios/
 transporte reales; no recepción bancaria real ni calidad general de IA.
