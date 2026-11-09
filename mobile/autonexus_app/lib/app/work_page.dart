@@ -289,6 +289,8 @@ class _WorkPageState extends State<WorkPage> {
                 focusNode: _descriptionFocus,
                 decoration: InputDecoration(
                   errorText: _descriptionError,
+                  // Dos líneas: con el contador de maxLength el mensaje se cortaba en «carac…».
+                  errorMaxLines: 2,
                   labelText: 'Descripción del avance',
                   border: OutlineInputBorder(),
                 ),
@@ -302,6 +304,7 @@ class _WorkPageState extends State<WorkPage> {
                 focusNode: _minutesFocus,
                 decoration: InputDecoration(
                   errorText: _minutesError,
+                  errorMaxLines: 2,
                   labelText: 'Minutos trabajados',
                   border: OutlineInputBorder(),
                 ),

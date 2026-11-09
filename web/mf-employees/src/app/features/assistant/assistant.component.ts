@@ -9,6 +9,7 @@ import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzPageHeaderModule } from 'ng-zorro-antd/page-header';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { AssistantApi } from './assistant-api';
+import { AssistantFinancialComponent } from './assistant-financial.component';
 import {
   assistantError,
   currentMonth,
@@ -46,7 +47,7 @@ interface StoredJob {
 @Component({
   selector: 'anx-assistant',
   standalone: true,
-  imports: [CommonModule, FormsModule, NzAlertModule, NzButtonModule, NzCardModule, NzEmptyModule, NzInputModule, NzPageHeaderModule, NzTagModule],
+  imports: [CommonModule, FormsModule, NzAlertModule, NzButtonModule, NzCardModule, NzEmptyModule, NzInputModule, NzPageHeaderModule, NzTagModule, AssistantFinancialComponent],
   templateUrl: './assistant.component.html',
   styles: [
     `

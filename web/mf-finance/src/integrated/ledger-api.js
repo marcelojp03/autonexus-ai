@@ -32,6 +32,23 @@ export function decimalAmount(minor) {
 export const ledgerMoney = (minor, currency = 'BOB') => `${currency} ${decimalAmount(minor)}`;
 export const METHODS = [{ value: 'cash', label: 'Efectivo' }, { value: 'bank_transfer', label: 'Transferencia bancaria' }, { value: 'qr', label: 'QR' }];
 export const methodName = value => METHODS.find(item => item.value === value)?.label ?? value;
+/** Código de política del propietario en palabras del taller, sin inventar condiciones. */
+export const policyName = code => ({ FULL_AFTER_COMPLETION_V1: 'Cobro íntegro al finalizar el servicio' }[code] ?? 'Política informada por Finanzas');
+const WORKSHOP_ZONE = 'America/La_Paz';
+const stampFormat = new Intl.DateTimeFormat('es-BO', { timeZone: WORKSHOP_ZONE, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const dateFormat = new Intl.DateTimeFormat('es-BO', { timeZone: WORKSHOP_ZONE, day: '2-digit', month: '2-digit', year: 'numeric' });
+/** Instante ISO del propietario en la zona del taller; un valor no reconocible se muestra tal cual. */
+export function ledgerStamp(value) {
+  const time = typeof value === 'string' ? Date.parse(value) : NaN;
+  return Number.isFinite(time) ? stampFormat.format(time) : String(value ?? '—');
+}
+/** Fecha civil del taller (AAAA-MM-DD) como DD/MM/AAAA, sin desplazar el día. */
+export function ledgerCivilDate(value) {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? ''));
+  if (parts) return `${parts[3]}/${parts[2]}/${parts[1]}`;
+  const time = typeof value === 'string' ? Date.parse(value) : NaN;
+  return Number.isFinite(time) ? dateFormat.format(time) : String(value ?? '—');
+}
 export const errorCode = error => error?.extensions?.code ?? error?.code;
 export const ledgerError = error => {
   const code = errorCode(error);

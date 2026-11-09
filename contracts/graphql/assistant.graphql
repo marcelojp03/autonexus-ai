@@ -238,3 +238,135 @@ extend type Mutation {
   """
   startOperationsReport(from: Date!, to: Date!, operationId: UUID!): OperationsReportJob!
 }
+
+# ---------------------------------------------------------------------------------------------------
+# CU26 — reporte financiero (tipo propio, S2.15)
+#
+# Este bloque NO amplía `OperationsReport`, ni sus `claims` enteros, ni sus trabajos históricos: es un
+# tipo separado con documento, contrato, autorización, trabajo y superficie propios.
+#
+# Autorización: empleado vigente con `payments:read` y `expenses:read` verificados sin caché en Empleados
+# con el token del usuario. No se publica ninguno de los campos de abajo con `executions:read:team` ni con
+# los roles `mcp_read_*` del JWT: esos no conceden finanzas. Un permiso revocado responde 403 sin cifras.
+#
+# Dinero: cada importe es un string canónico de centavos BOB (`"12345"`, `"-900"`), nunca `Int` ni float.
+# El servicio comprueba `recibido − gasto = neto` con aritmética entera exacta antes de publicar, y el BFF
+# repite la comprobación al proyectar. Un dato ausente del propietario falla cerrado: no se publica un 0.
+
+"""
+Cifras del resumen propietario de Finance para el período civil solicitado. `receivedMinor`,
+`expenseMinor` y `netMinor` son centavos BOB como texto; `netMinor` puede ser negativo.
+"""
+type FinancialFigures {
+  "Cobros registrados en el período, en centavos BOB (string canónico, nunca float)."
+  receivedMinor: String!
+  "Gastos registrados en el período, en centavos BOB (string canónico, nunca float)."
+  expenseMinor: String!
+  "Movimiento neto registrado: `receivedMinor − expenseMinor`, puede ser negativo."
+  netMinor: String!
+  "Moneda publicada por el propietario; en este incremento, `BOB`."
+  currency: String!
+  "Cantidad de cobros registrados del período."
+  paymentCount: Int!
+  "Cantidad de gastos registrados del período."
+  expenseCount: Int!
+  "Verdadero solo si el propietario respondió por el período pedido y la aritmética cierra."
+  complete: Boolean!
+}
+
+"""
+Afirmación monetaria o de conteo del reporte financiero, ligada al indicador calculado que la produjo.
+`value` es texto canónico porque un importe no es un `Int` de GraphQL; `unit` distingue centavos de conteo.
+"""
+type FinancialClaim {
+  "Indicador estable: `finance.receivedAmountMinor`, `finance.expenseAmountMinor`, `finance.netMovementMinor`, `finance.paymentCount`, `finance.expenseCount`."
+  indicator: String!
+  "El indicador tal como se lee en la narración."
+  label: String!
+  "Valor exacto: centavos BOB para importes, entero decimal para conteos. Siempre texto."
+  value: String!
+  "Unidad publicada: `centavos BOB`, `cobros` o `gastos`."
+  unit: String!
+  period: ReportPeriod!
+  "Servicio propietario que produjo la cifra. En este tipo siempre es `finance`."
+  source: String!
+  "Herramienta del catálogo cerrado que obtuvo el dato."
+  tool: String!
+  "Registros citados: el resumen financiero agrega, así que hoy no publica identificadores."
+  recordRefs: [AssistantRecordReference!]!
+}
+
+"""
+Reporte financiero del período. Es un documento propio: no reinterpreta `OperationsReport` y sus textos
+nunca afirman rentabilidad, utilidad, flujo de caja ni saldo bancario; esa limitación viaja en el documento.
+"""
+type FinancialReport {
+  period: ReportPeriod!
+  "Instante en que el propietario calculó las cifras (frescura del dato, no del documento)."
+  generatedAt: DateTime!
+  "Ruta de redacción: `llm` (modelo local) o `deterministic` (plantilla sobre las cifras calculadas)."
+  narrativePath: String!
+  "Modelo que redactó el texto; `null` cuando lo escribió la plantilla determinista."
+  model: String
+  "Verdadero solo si cada importe y conteo del texto se ligó a su indicador calculado."
+  narrativeVerified: Boolean!
+  "Versión del contrato y de la plantilla de este tipo de reporte."
+  promptVersion: String!
+  "Narración del período; no sustituye las cifras ni agrega importes."
+  narrative: String!
+  figures: FinancialFigures!
+  "Afirmaciones del texto publicado, con el valor exacto de cada indicador citado."
+  claims: [FinancialClaim!]!
+  references: [AssistantRecordReference!]!
+  "Procedencia: siempre el resumen propietario de Finance, nunca Operaciones."
+  provenance: [AssistantProvenance!]!
+  "Límites declarados: alcance del resumen, ausencia de filtros y de rentabilidad/saldo."
+  limitations: [String!]!
+}
+
+"""
+Estado de un trabajo financiero. `INTERRUPTED` es terminal: el servicio no guarda el token del usuario,
+así que un trabajo abierto al reiniciar no se reanuda.
+"""
+enum FinancialReportJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  INTERRUPTED
+}
+
+"""
+Trabajo de generación del reporte financiero. Usa rutas y almacén propios, de modo que un `operationId`
+financiero nunca resuelve a un trabajo operativo ni al revés.
+"""
+type FinancialReportJob {
+  jobId: ID!
+  status: FinancialReportJobStatus!
+  period: ReportPeriod!
+  requestedAt: DateTime!
+  startedAt: DateTime
+  finishedAt: DateTime
+  "Documento completo; `null` hasta que el estado es `SUCCEEDED`."
+  report: FinancialReport
+  "Código de término cuando el trabajo no produjo documento."
+  failureCode: String
+  "Mensaje saneado del código anterior, redactado por el BFF."
+  failureMessage: String
+}
+
+extend type Query {
+  """
+  Estado o resultado del trabajo financiero. Solo la cuenta que lo creó puede consultarlo, y cada lectura
+  vuelve a exigir los dos permisos financieros vigentes.
+  """
+  financialReportJob(jobId: ID!): FinancialReportJob!
+}
+
+extend type Mutation {
+  """
+  Inicia el reporte financiero del período. Rutas, almacén y autorización propios del tipo financiero;
+  `operationId` lo genera el cliente y repetirlo con el mismo cuerpo devuelve el mismo trabajo.
+  """
+  startFinancialReport(from: Date!, to: Date!, operationId: UUID!): FinancialReportJob!
+}

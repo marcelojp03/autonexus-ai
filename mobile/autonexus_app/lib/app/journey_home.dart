@@ -37,7 +37,8 @@ class JourneyHome extends StatelessWidget {
             ],
           ),
           body: ListView(
-            padding: const EdgeInsets.all(16),
+            // El último control quedaba bajo la barra de navegación del sistema.
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
             children: [
               _SessionCard(controller: controller),
               const SizedBox(height: 12),
@@ -113,9 +114,8 @@ class _SessionCard extends StatelessWidget {
                     key: const Key('sign-in'),
                     onPressed: controller.busy ? null : controller.signIn,
                     icon: const Icon(Icons.login),
-                    label: Text(
-                      hasLocalCopy ? 'Restablecer sesión' : 'Iniciar sesión',
-                    ),
+                    // El botón inicia sesión aunque ya exista una copia local: "Restablecer" sonaba a borrado.
+                    label: const Text('Iniciar sesión'),
                   ),
                 if (snapshot.authenticated)
                   OutlinedButton.icon(

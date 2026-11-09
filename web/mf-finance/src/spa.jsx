@@ -22,7 +22,7 @@ export async function mount(props) {
   shadow.replaceChildren();
   const style = document.createElement('style');
   // The template reset is isolated from the Shell and both Angular apps.
-  style.textContent = templateCss.replaceAll(':root', ':host') + ' :host { display:block; font-family:Inter,system-ui,sans-serif; color:#1f1f1f; } :host .ant-btn:focus-visible, :host input:focus-visible, :host textarea:focus-visible, :host .ant-select:focus-within .ant-select-selector { outline:3px solid #005bbb; outline-offset:3px; } .ant-table-cell { font-variant-numeric:tabular-nums; }';
+  style.textContent = templateCss.replaceAll(':root', ':host') + ' :host { display:block; font-family:Inter,system-ui,sans-serif; color:#1f1f1f; } :host .ant-btn:focus-visible, :host input:focus-visible, :host textarea:focus-visible, :host .ant-select:focus-within .ant-select-selector { outline:3px solid #005bbb; outline-offset:3px; } .ant-table-cell { font-variant-numeric:tabular-nums; } :host .ledger-card .ant-card-head { flex-wrap:wrap; row-gap:8px; } :host .ledger-card .ant-card-head-title { white-space:normal; overflow:visible; } :host .ant-empty-description { color:rgba(0,0,0,0.65); }';
   const surface = document.createElement('div');
   const portals = document.createElement('div');
   portals.dataset.financePortals = '';

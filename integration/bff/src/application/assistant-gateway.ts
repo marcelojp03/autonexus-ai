@@ -42,6 +42,8 @@ export interface AssistantGateway {
   report(from: string, to: string, token: string): Promise<unknown>;
   startReport(from: string, to: string, operationId: string, token: string): Promise<unknown>;
   reportJob(jobId: string, token: string): Promise<unknown>;
+  startFinancialReport(from: string, to: string, operationId: string, token: string): Promise<unknown>;
+  financialReportJob(jobId: string, token: string): Promise<unknown>;
 }
 
 /**
@@ -85,6 +87,25 @@ export class HttpAssistantGateway implements AssistantGateway {
   async reportJob(jobId: string, token: string): Promise<unknown> {
     if (typeof jobId !== 'string' || !UUID.test(jobId)) throw new BusinessError(400, 'VALIDATION_ERROR');
     return projectJob(await this.request('/report/jobs/' + jobId, null, token, this.jobTimeoutMs));
+  }
+
+  /**
+   * CU26 financial report: own route and own store in the service, so this identifier space is separate
+   * from the operational one. The projection below re-checks the money itself.
+   */
+  async startFinancialReport(from: string, to: string, operationId: string, token: string): Promise<unknown> {
+    if (typeof from !== 'string' || typeof to !== 'string' || !from.trim() || !to.trim()) {
+      throw new BusinessError(400, 'VALIDATION_ERROR');
+    }
+    if (typeof operationId !== 'string' || !UUID.test(operationId)) {
+      throw new BusinessError(400, 'VALIDATION_ERROR');
+    }
+    return projectFinancialJob(await this.request('/report/financial/jobs', { from, to, operationId }, token, this.jobTimeoutMs));
+  }
+
+  async financialReportJob(jobId: string, token: string): Promise<unknown> {
+    if (typeof jobId !== 'string' || !UUID.test(jobId)) throw new BusinessError(400, 'VALIDATION_ERROR');
+    return projectFinancialJob(await this.request('/report/financial/jobs/' + jobId, null, token, this.jobTimeoutMs));
   }
 
   private async request(path: string, body: Readonly<Record<string, string>> | null, token: string,
@@ -296,6 +317,141 @@ function claims(
 function financialDeclaration(value: unknown): { included: boolean; note: string } {
   const declaration = record(value);
   return { included: flag(declaration.included), note: text(declaration.note) };
+}
+
+/** Codes the financial job may publish, each with the message this BFF writes for it. */
+export const FINANCIAL_FAILURE_MESSAGES: Readonly<Record<string, string>> = Object.freeze({
+  ...REPORT_FAILURE_MESSAGES,
+  FINANCIAL_ACCESS_DENIED: 'La cuenta no conserva los dos permisos financieros (cobros y gastos) que exige este reporte.',
+  FINANCIAL_AUTHORIZATION_UNAVAILABLE: 'No se pudo comprobar la autorización financiera de la sesión.',
+  FINANCIAL_SOURCE_UNAVAILABLE: 'El resumen financiero del propietario no está disponible en el servicio.',
+  FINANCIAL_SUMMARY_UNAVAILABLE: 'El resumen financiero del propietario no respondió; no se publican cifras.',
+  FINANCIAL_SUMMARY_INVALID: 'El resumen del propietario no cumplió su contrato; no se publican cifras.',
+  FINANCIAL_PERIOD_MISMATCH: 'El propietario respondió por otro período; no se publican cifras ajenas a la solicitud.',
+  INCOHERENT_FINANCIAL_FIGURES: 'Las cifras financieras no cierran entre sí; no se publica un documento que se contradiga.',
+  INVALID_FINANCIAL_CONTRACT: 'El documento financiero no cumple su contrato y no se publica.',
+  OPERATION_CONFLICT: 'Ese identificador de operación ya generó un reporte financiero de otro período.',
+});
+
+const MONEY = /^(0|[1-9]\d*)$/;
+const SIGNED_MONEY = /^(0|-?[1-9]\d*)$/;
+
+/** A monetary figure is a canonical string of integer centavos: never a float, never a JSON number. */
+function minor(value: unknown, signed = false): string {
+  if (typeof value !== 'string' || !(signed ? SIGNED_MONEY : MONEY).test(value)) throw invalid();
+  return value;
+}
+
+const FINANCIAL_INDICATORS = new Set([
+  'finance.receivedAmountMinor', 'finance.expenseAmountMinor', 'finance.netMovementMinor',
+  'finance.paymentCount', 'finance.expenseCount',
+]);
+
+/**
+ * The financial document, projected field by field. Money stays a string end to end and the BFF repeats
+ * the owner's arithmetic with BigInt: a document whose amounts do not close is not published.
+ */
+function projectFinancialReport(value: unknown, from: string, to: string): Record<string, unknown> {
+  const body = record(value);
+  const period = record(body.period);
+  if (period.from !== from || period.to !== to) throw invalid();
+  if (text(body.reportVersion).length === 0) throw invalid();
+  const figures = record(body.figures);
+  const receivedMinor = minor(figures.receivedMinor);
+  const expenseMinor = minor(figures.expenseMinor);
+  const netMinor = minor(figures.netMinor, true);
+  if (BigInt(receivedMinor) - BigInt(expenseMinor) !== BigInt(netMinor)) throw invalid();
+  if (text(figures.currency) !== 'BOB') throw invalid();
+  const paymentCount = whole(figures.paymentCount);
+  const expenseCount = whole(figures.expenseCount);
+  if (flag(figures.complete) !== true) throw invalid();
+  const narrative = record(body.narrative);
+  const path = narrativePathOf(narrative.path);
+  const expected = new Map<string, string>([
+    ['finance.receivedAmountMinor', receivedMinor], ['finance.expenseAmountMinor', expenseMinor],
+    ['finance.netMovementMinor', netMinor], ['finance.paymentCount', String(paymentCount)],
+    ['finance.expenseCount', String(expenseCount)],
+  ]);
+  if (!Array.isArray(body.claims)) throw invalid();
+  const claims = body.claims.map(entry => {
+    const claim = record(entry);
+    const claimPeriod = record(claim.period);
+    if (claimPeriod.from !== from || claimPeriod.to !== to) throw invalid();
+    if (text(claim.source) !== 'finance') throw invalid();
+    const indicator = text(claim.indicator);
+    // An indicator this BFF cannot check against the figures is not published at all.
+    if (!FINANCIAL_INDICATORS.has(indicator)) throw invalid();
+    const claimValue = minor(claim.value, true);
+    if (expected.get(indicator) !== claimValue) throw invalid();
+    return {
+      indicator,
+      label: text(claim.label),
+      value: claimValue,
+      unit: text(claim.unit),
+      period: { from, to },
+      source: 'finance',
+      tool: text(claim.tool),
+      recordRefs: references(claim.recordRefs),
+    };
+  });
+  return {
+    period: { from, to, timeZone: text(period.timeZone) },
+    generatedAt: text(body.generatedAt),
+    narrativePath: path,
+    model: modelOf(narrative.model, path),
+    narrativeVerified: flag(narrative.verified),
+    promptVersion: text(body.promptVersion),
+    narrative: text(narrative.text),
+    figures: {
+      receivedMinor, expenseMinor, netMinor, currency: 'BOB', paymentCount, expenseCount, complete: true,
+    },
+    claims,
+    references: references(body.references),
+    provenance: provenance(body.provenance),
+    limitations: texts(body.limitations),
+  };
+}
+
+/**
+ * A financial job, published as a state machine like the operational one. Its identifiers are its own:
+ * an operational job id is never found here, because the routes and the store are separate.
+ */
+function projectFinancialJob(value: unknown): Record<string, unknown> {
+  const body = record(value);
+  const jobId = text(body.jobId);
+  if (!UUID.test(jobId)) throw invalid();
+  const status = JOB_STATUS[text(body.status)];
+  if (status === undefined) throw invalid();
+  const period = record(body.period);
+  const from = text(period.from);
+  const to = text(period.to);
+  const job: Record<string, unknown> = {
+    jobId,
+    status,
+    period: { from, to, timeZone: text(period.timeZone) },
+    requestedAt: text(body.requestedAt),
+    startedAt: optionalText(body.startedAt),
+    finishedAt: optionalText(body.finishedAt),
+    report: null,
+    failureCode: null,
+    failureMessage: null,
+  };
+  if (status === 'SUCCEEDED') {
+    job.report = projectFinancialReport(body.report, from, to);
+    return job;
+  }
+  if (status === 'FAILED' || status === 'INTERRUPTED') {
+    if (body.report !== undefined && body.report !== null) throw invalid();
+    const failure = record(body.failure);
+    const published = text(failure.code);
+    const code = Object.hasOwn(FINANCIAL_FAILURE_MESSAGES, published) ? published : 'INTERNAL_ERROR';
+    job.failureCode = code;
+    job.failureMessage = FINANCIAL_FAILURE_MESSAGES[code];
+    return job;
+  }
+  if (body.report !== undefined && body.report !== null) throw invalid();
+  if (body.failure !== undefined && body.failure !== null) throw invalid();
+  return job;
 }
 
 /**

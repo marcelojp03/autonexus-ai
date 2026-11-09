@@ -20,6 +20,11 @@ import {publicJob, QUEUE_FULL, ReportJobRunner} from "./report/job-runner.js";
 import {WeeklyDeliveryStore, WeeklyDeliveryStoreError} from "./report/weekly-deliveries.js";
 import {createReportAuthorizer, type AuthorizeReport} from "./report/authorization.js";
 import {checkReportContract} from "./report/contract.js";
+import {buildFinancialReport} from "./report/financial-report.js";
+import {createFinancialAuthorizer, type AuthorizeFinancialReport} from "./report/financial-authorization.js";
+import {
+  createFinancialJobStore, OPERATION_CONFLICT_CODE, publicFinancialJob,
+} from "./report/financial-jobs.js";
 import type {ToolSource} from "./sources/mcp.js";
 
 export const DEFAULT_PORT = 3099;
@@ -32,12 +37,17 @@ const WEEKLY_PATH = "/report/weekly/deliveries";
 const WEEKLY_ACK = new RegExp("^/report/weekly/deliveries/([0-9a-f-]{36})/ack$", "i");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const JOB_PATH = /^\/report\/jobs\/([0-9a-f-]{36})$/i;
+/** CU26 financial report: own paths, own store, own authorization (S2.15). */
+const FINANCIAL_JOBS_PATH = "/report/financial/jobs";
+const FINANCIAL_JOB_PATH = /^\/report\/financial\/jobs\/([0-9a-f-]{36})$/i;
 
 export interface ServerDeps {
   /** null disables the model: every request then answers through the deterministic planner. */
   readonly llm?: LlmClient | null;
   readonly sourceFactory?: (token: string) => ToolSource;
   readonly authorizeReport?: AuthorizeReport;
+  /** Financial authorization is a separate check: employee grants, never the operational permission. */
+  readonly authorizeFinancialReport?: AuthorizeFinancialReport;
   readonly now?: () => Date;
   readonly logger?: (entry: Readonly<Record<string, unknown>>) => void;
   readonly maxBodyBytes?: number;
@@ -162,6 +172,19 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
   const interrupted = jobs.recover();
   if (interrupted > 0) logger({at: now().toISOString(), outcome: "jobs-interrupted-on-start", count: interrupted});
 
+  const authorizeFinancial = deps.authorizeFinancialReport ?? createFinancialAuthorizer();
+  // A separate store and a separate runner: a financial identifier cannot reach an operational job.
+  const financialJobs = deps.jobRetention === undefined
+    ? createFinancialJobStore(jobDirectory)
+    : createFinancialJobStore(jobDirectory, deps.jobRetention);
+  const financialRunner = new ReportJobRunner({store: financialJobs.store, sourceFactory,
+    build: buildFinancialReport, llm, now, logger: entry => logger(entry),
+    ...(deps.jobCapacity === undefined ? {} : {capacity: deps.jobCapacity})});
+  const interruptedFinancial = financialRunner.recover();
+  if (interruptedFinancial > 0) {
+    logger({at: now().toISOString(), outcome: "financial-jobs-interrupted-on-start", count: interruptedFinancial});
+  }
+
   const assist = async (query: string, source: ToolSource, declared?: readonly ToolInfo[]): Promise<AssistantAnswer> => {
     const tools = declared ?? await source.listTools();
     if (llm === null) return await answerDeterministically({query, tools, source, promptVersion: "cu25-planner-v1"});
@@ -187,9 +210,12 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
     };
     const challenge = {"www-authenticate": "Bearer realm=\"autonexus-agent\", error=\"invalid_token\""};
     const jobPath = JOB_PATH.exec(path);
+    const financialJobPath = FINANCIAL_JOB_PATH.exec(path);
     const weeklyAck = WEEKLY_ACK.exec(path);
+    // The financial type never shares a route with the operational one, in either direction.
+    const financialPath = path === FINANCIAL_JOBS_PATH || financialJobPath !== null;
     const known = path === "/assistant" || path === "/report" || path === "/report/jobs" || jobPath !== null
-      || path === WEEKLY_PATH || weeklyAck !== null;
+      || financialPath || path === WEEKLY_PATH || weeklyAck !== null;
 
     void (async () => {
       try {
@@ -200,7 +226,8 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           return;
         }
         if (!known) { fail(404, "NOT_FOUND", "Ruta no disponible."); return; }
-        const allowed = path === "/report/jobs" ? "POST" : jobPath !== null ? "GET" : "POST";
+        const allowed = path === "/report/jobs" || path === FINANCIAL_JOBS_PATH ? "POST"
+          : jobPath !== null || financialJobPath !== null ? "GET" : "POST";
         if (method !== allowed) {
           fail(405, "METHOD_NOT_ALLOWED", "Solo " + allowed + ".", {allow: allowed});
           return;
@@ -213,8 +240,28 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           return;
         }
         const operationalScope = claims.roles.some(role => READ_ROLES.includes(role));
-        if (!operationalScope && (path !== "/assistant" || !financialEnabled)) {
+        // Financial authority is never derived from `mcp_read_*` roles: the financial routes are gated
+        // by the employee-grant check below and by Finance itself.
+        if (!operationalScope && !financialPath && (path !== "/assistant" || !financialEnabled)) {
           fail(403, "NO_READ_SCOPE", "El token no tiene un rol de lectura de AutoNexus.");
+          return;
+        }
+        if (financialPath && !financialEnabled) {
+          fail(503, "FINANCIAL_SOURCE_UNAVAILABLE",
+            "El resumen financiero del propietario no está configurado en este servicio.");
+          return;
+        }
+
+        // Reading a financial job re-runs the financial authorization and re-checks the stored document.
+        if (financialJobPath !== null) {
+          const job = financialJobs.store.load(financialJobPath[1] ?? "");
+          if (job === null || claims.sub === null || job.subject !== claims.sub) {
+            fail(404, "JOB_NOT_FOUND", "No hay un trabajo financiero con ese identificador para esta cuenta.");
+            return;
+          }
+          await authorizeFinancial(token, {from: job.from, to: job.to}, job.document);
+          complete(200, {outcome: "financial-job-status", jobId: job.jobId, jobStatus: job.status});
+          sendJson(response, 200, publicFinancialJob(job));
           return;
         }
 
@@ -279,6 +326,53 @@ export function createHandler(deps: ServerDeps = {}): (request: IncomingMessage,
           await authorizeReport(token, entry.period, entry.report);
           const {subject: ignored, ...view} = entry;
           sendJson(response, 200, view); complete(200, {outcome: "weekly-delivery", eventId: entry.eventId}); return;
+        }
+
+        // CU26 financial report: own identifier space, own authorization, own persisted job.
+        if (path === FINANCIAL_JOBS_PATH) {
+          if (Object.keys(input).some(key => !["from", "to", "operationId"].includes(key))) {
+            fail(400, "INVALID_BODY", "Sólo se aceptan el período y el operationId del cliente.");
+            return;
+          }
+          const operationId = typeof input["operationId"] === "string" ? input["operationId"].trim() : "";
+          if (!UUID.test(operationId)) {
+            fail(400, "INVALID_OPERATION_ID", "Se espera un operationId UUID del cliente para no duplicar la generación.");
+            return;
+          }
+          if (claims.sub === null) { fail(401, "INVALID_TOKEN", "El token no identifica a una cuenta.", challenge); return; }
+          const period = validatePeriod(String(input["from"] ?? ""), String(input["to"] ?? ""));
+          const prior = financialJobs.store.findByOperation(claims.sub, operationId);
+          // The same identifier with another period is a conflict, not a second financial report.
+          if (prior !== null && (prior.from !== period.from || prior.to !== period.to)) {
+            fail(409, OPERATION_CONFLICT_CODE,
+              "Ese operationId ya generó un reporte financiero de otro período; use uno nuevo para otro período.");
+            return;
+          }
+          await authorizeFinancial(token, period, prior?.document);
+          // Authorization yields: another request may have created the same operation meanwhile.
+          const existing = financialJobs.store.findByOperation(claims.sub, operationId);
+          if (existing !== null) {
+            await authorizeFinancial(token, {from: existing.from, to: existing.to}, existing.document);
+            complete(200, {outcome: "financial-job-reused", jobId: existing.jobId, jobStatus: existing.status});
+            sendJson(response, 200, {...publicFinancialJob(existing), reused: true});
+            return;
+          }
+          const requestedAt = now().toISOString();
+          const job: ReportJob = {jobId: randomUUID(), operationId, subject: claims.sub,
+            from: period.from, to: period.to,
+            tokenExpiresAt: claims.exp === undefined ? null : claims.exp * 1_000,
+            requestedAt, startedAt: null, finishedAt: null, status: "queued",
+            document: null, failure: null};
+          financialJobs.store.save(job);
+          if (!financialRunner.submit(job, token)) {
+            financialJobs.store.save({...job, status: "failed", finishedAt: now().toISOString(),
+              failure: {code: QUEUE_FULL, message: "Hay trabajos pendientes; vuelva a intentarlo en unos minutos."}});
+            fail(503, QUEUE_FULL, "Hay trabajos pendientes; vuelva a intentarlo en unos minutos.");
+            return;
+          }
+          complete(202, {outcome: "financial-job-created", jobId: job.jobId});
+          sendJson(response, 202, {...publicFinancialJob(job), reused: false});
+          return;
         }
 
         if (path === "/report/jobs") {

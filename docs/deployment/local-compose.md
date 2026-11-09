@@ -4,16 +4,78 @@ Guía del conjunto implementado. Docker compila los fuentes: los contenedores no
 
 Comprobado con Docker29.9.2, Compose5.6.0 y contenedores Linux x86-64. No se estableció una versión mínima de Docker ni un mínimo de hardware. El primer build necesita red para imágenes y paquetes.
 
-## Entrada oficial de la instalación existente
+Hay **dos caminos distintos** y no son intercambiables:
 
-Requiere Node.js 22 y Docker Compose. Forma de uso desde la raíz:
+- **Ruta A — instalación nueva** desde un clon limpio: `docker compose` crea contenedores y datos.
+- **Ruta B — reanudar una instalación existente**: `infra/local/run.mjs` sólo arranca o detiene
+  contenedores de un proyecto ya creado. **No es un instalador**: aborta si la instalación no existe.
+
+## Ruta A — instalación nueva desde un clon limpio
+
+Dependencias reales: Docker Desktop 29.x con Compose 5.x, red para el primer build (imágenes base y
+paquetes) y espacio en disco. Los contenedores compilan los fuentes, así que **no** hacen falta Java,
+Node, pnpm ni PHP en el host.
 
 ~~~sh
-node infra/local/run.mjs check --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
-node infra/local/run.mjs status --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+git clone https://github.com/marcelojp03/autonexus-ai.git
+cd autonexus-ai
+
+# 1) Construir y arrancar el stack completo con datos de demostración.
+docker compose --env-file .env.example --profile demo up --build -d
+
+# 2) Comprobar el resultado real: que 'up' devuelva 0 no significa que el seed terminó bien.
+docker compose --env-file .env.example --profile demo ps -a
+docker compose --env-file .env.example --profile demo logs --no-log-prefix config-init
+docker compose --env-file .env.example --profile demo logs --no-log-prefix demo
+
+# 3) Exportar las cuentas sintéticas a un archivo privado (ignorado por Git).
+docker compose --env-file .env.example --profile demo cp demo:/demo-state/accounts.json ./demo-accounts.private.json
+
+# 4) Parar sin borrar datos (nunca 'down -v').
+docker compose --env-file .env.example stop
 ~~~
 
-Usar los archivos privados autorizados de la instalación; el ejemplo actual conserva los valores existentes de n8n en output/stack/n8n.private.env, sin regenerarlos. No se crean ni imprimen secretos al arrancar. Ambas opciones de env son obligatorias y repetibles para conservar capas. Reemplazar check por up o stop sólo con autorización operativa.
+Abrir **http://127.0.0.1:4280**. Criterio de éxito: las aplicaciones quedan `healthy` y los one-shot
+`config-init`, `provision`, `employees-migrate` y `finance-migrate` terminan con `Exited (0)`; `demo`
+también termina con `0` cuando publica sus datos. `finance-publisher` permanece ejecutándose y no
+tiene healthcheck HTTP. `.env.example` sólo contiene valores públicos (`COMPOSE_PROJECT_NAME`,
+`WEB_PORT`) y es el único archivo de entorno que necesita esta ruta.
+
+El perfil `demo` es explícito: sin él no se crean clientes, vehículos, empleados ni trabajos de
+muestra, y sólo corren migraciones y bootstrap. Con el perfil, `up` arranca Operaciones, Empleados,
+Finanzas, BFF, web, Inteligencia, Sincronización, el agente de CU25/CU26, PostgreSQL de negocio e IdP,
+MongoDB, DynamoDB Local y RabbitMQ, más `config-init`, `provision` y las migraciones. Quedan fuera
+`finance-automation-publisher` (perfil `automations`), la imagen de aceptación (perfil `acceptance`)
+y **n8n**, que vive en `infra/n8n/compose.yaml` con su propia red y su propio archivo privado.
+
+Capacidades que necesitan configuración aparte y, sin ella, responden de forma explícita —nunca
+simulada—:
+
+| Capacidad | Sin configuración |
+| --- | --- |
+| Evidencias CU16 en S3 | `503 EVIDENCE_STORAGE_UNAVAILABLE`; el resto de CU16 funciona |
+| Análisis visual CU23 | `503 MODEL_NOT_READY` hasta montar el modelo autorizado (`INTELLIGENCE_MODEL_PATH`) |
+| Documentos de respaldo de Finanzas | `503 DOCUMENT_STORAGE_UNAVAILABLE` hasta preparar el perfil propio de Finanzas |
+| Redacción con modelo del asistente | responde con la plantilla determinista rotulada; `OLLAMA_URL` es configurable |
+
+**Alcance de esta ruta:** no se re-verificó de punta a punta en esta sesión. La aceptación de
+instalación limpia registrada corresponde a una base anterior, y desde entonces se añadieron
+Inteligencia, Sincronización, el agente y el almacenamiento documental de Finanzas. Tratarla como guía
+reproducible a validar, no como evidencia de aceptación.
+
+## Ruta B — reanudar esta instalación existente
+
+Requiere Node.js 22, Docker Compose, el proyecto ya creado (por defecto `cu16-proof`) y sus dos
+archivos privados. Sustituir `check` por `up` o `stop` sólo con autorización operativa:
+
+~~~sh
+node infra/local/run.mjs check  --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+node infra/local/run.mjs status --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+node infra/local/run.mjs up     --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+node infra/local/run.mjs stop   --env-file output/stack/cu16-s3.private.env --n8n-env-file output/stack/n8n.private.env
+~~~
+
+Ambas opciones de entorno son obligatorias y repetibles para conservar capas; los archivos privados no se regeneran ni se imprimen. Si falta alguno, el coordinador aborta con `EXPLICIT_PRIVATE_ENV_REQUIRED`; si no existe la instalación, con `EXISTING_INSTALLATION_REQUIRED` o `PERMANENT_DOCUMENT_PROVIDER_REQUIRED`. Esas negativas son el comportamiento esperado, no un fallo a esquivar.
 
 - Default temporal centralizado: cu16-proof. --project NOMBRE selecciona sólo una instalación existente. Se conserva la unión ordenada de archivos Compose registrada en las etiquetas de sus contenedores; --file RUTA añade overrides existentes. Se añade el overlay permanente infra/local/finance-documents.compose.yaml sin modificar archivos Compose.
 - check y status son read-only: presencia, ownership de contenedores/volúmenes/red, perfil activo MinIO y config --quiet. No imprimen configuración expandida, credenciales ni errores crudos de Docker. pass significa preflight válido, no salud global: leer state y health por servicio. Los montajes anónimos heredados sólo se admiten si Docker los identifica como anónimos y están declarados por el contenedor; se conservan sus IDs, no se sustituyen.
@@ -24,20 +86,6 @@ Usar los archivos privados autorizados de la instalación; el ejemplo actual con
 - El mínimo no agrega perfil offline: conserva cualquier override registrado. Antes de añadir uno, ejecutar explícitamente la guarda existente scripts/cu22/verify-offline-overlay.mjs con la imagen web local y recursos autorizados ya preparados. Nunca descarga pesos ni prepara modelos.
 
 Verificación del coordinador:15/15 pruebas unitarias con ejecutor falso, dentro de31/31 controles frescos de coordinador/preparación/traslado; check real exit0 tras el despliegue del arreglo financiero. Reanudación previa conservó17contenedores, imágenes, montajes y configuración. No acredita instalación limpia ni parada/arranque frío. Los primeros intentos con Compose up/start no cuentan como éxito. Mongo había estado unhealthy por el presupuesto de su probe; la observación actual muestra los servicios con healthcheck healthy, sin ocultar el histórico config-init Exited1. No se repite traslado, firma ni CU28 para validar esta entrada. Si falta archivo, ownership o perfil correcto, detenerse y revisar; no reparar automáticamente.
-
-## Inicio rápido histórico para una copia nueva
-
-Desde la raíz de una copia nueva:
-
-~~~sh
-docker compose --env-file .env.example --profile demo up --build -d
-docker compose --env-file .env.example --profile demo ps -a
-docker compose --env-file .env.example --profile demo logs --no-log-prefix demo
-~~~
-
-Abrir **http://127.0.0.1:4280**. Esperar aplicaciones healthy y demo con Exited(0); que up -d devuelva0 solo indica el resultado del arranque, no que un seed siga o haya terminado bien. Los one-shots config-init, provision y las migraciones también deben terminar con0. El publisher financiero permanece ejecutándose; su falta de healthcheck HTTP no equivale a un fallo ni acredita entrega de eventos por sí sola.
-
-El perfil demo es explícito. Sin activarlo no se crean clientes, vehículos, empleados ni trabajos de muestra: bootstrap/migraciones se mantienen separados de los datos demo. El conjunto incluye solo Operaciones, Empleados, Finanzas, BFF, web, PostgreSQL/IdP y RabbitMQ reales, más preparación y verificadores opcionales. No contiene simulaciones de Inteligencia, Sincronización o MCP.
 
 ## Cuentas privadas
 

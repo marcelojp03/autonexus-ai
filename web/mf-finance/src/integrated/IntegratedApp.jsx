@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Card, Descriptions, Empty, Input, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Descriptions, Empty, Grid, Input, Pagination, Space, Table, Tag, Typography } from 'antd';
 import QuoteEditor from './QuoteEditor';
-import LedgerWorkspace from './LedgerWorkspace';
+import LedgerWorkspace, { CompactCard, InternalReference } from './LedgerWorkspace';
 import { PERMISSIONS, ORDERS, QUOTES, CREATE, REVISE, DECIDE, explain, money, workshopDate } from './quote-api';
+import { ledgerCivilDate } from './ledger-api';
 
 const PAGE_SIZE = 20;
+/** Estados del propietario en palabras del taller; el código original queda como referencia secundaria. */
+const QUOTE_STATUS = { pending: 'Pendiente de decisión', approved: 'Aprobada', rejected: 'Rechazada', superseded: 'Reemplazada' };
+const quoteStatus = value => QUOTE_STATUS[value] ?? 'Estado informado por Finanzas';
+const DECISION = { approved: 'Aprobada', rejected: 'Rechazada' };
+const muted = { color: 'rgba(0, 0, 0, 0.65)' };
 export default function IntegratedApp({ session, basePath }) {
   const [identity, setIdentity] = useState({ session, key: 0 });
   if (identity.session !== session) setIdentity({ session, key: identity.key + 1 });
@@ -216,10 +222,17 @@ function FinanceWorkspace({ session, basePath }) {
   };
 
   const disabled = busy || loadingQuotes;
+  const screens = Grid.useBreakpoint();
+  const compact = screens.md === false;
+  const orderActionDisabled = !canRead || !canWrite || busy || stale || loadingOrders || loadingQuotes || !!uncertain;
+  const orderPager = <Pagination simple size="small" current={orderPage} pageSize={PAGE_SIZE} total={orders.total}
+    disabled={busy || !!uncertain} onChange={page => { orderRequest.current.value++; setOrderPage(page); setEditor(null); }} style={{ textAlign: 'center', marginTop: 12 }} />;
+  const quotePager = <Pagination simple size="small" current={quotePage} pageSize={PAGE_SIZE} total={quotes.total}
+    disabled={busy || !!uncertain} onChange={page => { quoteRequest.current.value++; setQuotePage(page); setSelectedId(null); setEditor(null); setEvidence(''); setReason(''); }} style={{ textAlign: 'center', marginTop: 12 }} />;
   return (
-    <div data-mf="finance" style={{ padding: 16, minWidth: 0, overflowWrap: 'anywhere' }}>
+    <div data-mf="finance" data-base-path={basePath} style={{ padding: 16, minWidth: 0, overflowWrap: 'anywhere' }}>
       <Typography.Title level={3} style={{ marginTop: 0 }}>Cotizaciones</Typography.Title>
-      <Alert type="info" showIcon style={{ marginBottom: 16 }} title="Aprobar una cotización no confirma el servicio ni asigna mecánico. La confirmación corresponde a CU15." id="quote-scope-notice" />
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} title="Aprobar una cotización no confirma el servicio ni asigna mecánico: la confirmación del servicio se registra aparte." id="quote-scope-notice" />
       {error && <Alert type="error" showIcon title={error} id="quote-error" style={{ marginBottom: 16 }} />}
       {mutationError && <Alert type="error" showIcon title={mutationError} id="quote-mutation-error" style={{ marginBottom: 16 }} />}
       {uncertain && <Alert type="warning" title="Resultado incierto: no se asume rechazo. Reintentá el mismo envío de forma idempotente." action={<Button id="quote-retry" disabled={busy || loadingQuotes || !canRead} onClick={() => mutate(uncertain.query, uncertain.variables, uncertain.field)}>Reintentar el mismo envío</Button>} />}
@@ -234,13 +247,24 @@ function FinanceWorkspace({ session, basePath }) {
             <Button id="quote-order-search-submit" disabled={busy || loadingOrders || !!uncertain} onClick={() => { if (orderSearchDraft.trim() === orderSearch && orderPage === 1) reloadOrders(); else { orderRequest.current.value++; setOrderSearch(orderSearchDraft.trim()); setOrderPage(1); } setEditor(null); }}>Buscar órdenes</Button>
           </Space>
           {ordersError && !loadingOrders && <Alert type="error" title={ordersError} />}
-          <Table rowKey="id" size="small" loading={loadingOrders} dataSource={orders.items} scroll={{ x: 650 }}
+          {compact ? <>
+            <div role="list" aria-label="Órdenes disponibles">
+              {orders.items.map(order => <div role="listitem" key={order.id}>
+                <CompactCard title={order.number} meta={`${order.vehiclePlate} · ${order.customerName}`}
+                  note={order.items.map(item => item.serviceName + ' ×' + item.quantity).join(', ')}
+                  actions={[<Button key="quote" type="primary" style={{ flex: 1 }} data-testid={'quote-order-' + order.id} disabled={orderActionDisabled}
+                    onClick={() => { setEditor({ order }); setSelectedId(null); setEvidence(''); setReason(''); }}>Cotizar {order.number}</Button>]} />
+              </div>)}
+            </div>
+            {!loadingOrders && !orders.items.length && <Typography.Paragraph style={muted}>Sin órdenes pendientes de cotización</Typography.Paragraph>}
+            {orders.total > PAGE_SIZE && orderPager}
+          </> : <Table rowKey="id" size="small" loading={loadingOrders} dataSource={orders.items} scroll={{ x: 650 }}
             pagination={{ current: orderPage, pageSize: PAGE_SIZE, total: orders.total, showSizeChanger: false, disabled: busy || !!uncertain, onChange: page => { orderRequest.current.value++; setOrderPage(page); setEditor(null); } }}
             locale={{ emptyText: <Empty description="Sin órdenes pendientes de cotización" /> }} columns={[
               { title: 'Orden', dataIndex: 'number' }, { title: 'Vehículo', dataIndex: 'vehiclePlate' }, { title: 'Cliente', dataIndex: 'customerName' },
               { title: 'Servicios', render: (_, order) => order.items.map(item => item.serviceName + ' ×' + item.quantity).join(', ') },
-              { title: 'Acción', render: (_, order) => <Button data-testid={'quote-order-' + order.id} disabled={!canRead || !canWrite || busy || stale || loadingOrders || loadingQuotes || !!uncertain} onClick={() => { setEditor({ order }); setSelectedId(null); setEvidence(''); setReason(''); }}>Cotizar {order.number}</Button> },
-            ]} />
+              { title: 'Acción', render: (_, order) => <Button data-testid={'quote-order-' + order.id} disabled={orderActionDisabled} onClick={() => { setEditor({ order }); setSelectedId(null); setEvidence(''); setReason(''); }}>Cotizar {order.number}</Button> },
+            ]} />}
           {!canWrite && <Typography.Text type="secondary">Sin permiso quotes:write: solo consulta.</Typography.Text>}
         </>}
       </Card>
@@ -249,30 +273,40 @@ function FinanceWorkspace({ session, basePath }) {
           <label htmlFor="quote-order-filter">ID de orden</label>
           <Input id="quote-order-filter" placeholder="Todas las órdenes" value={orderFilter} disabled={busy || !!uncertain} onChange={event => { quoteRequest.current.value++; setOrderFilter(event.target.value); setQuotePage(1); setSelectedId(null); setEditor(null); setEvidence(''); setReason(''); }} />
         </Space>
-        <Table rowKey="id" size="small" loading={loadingQuotes} dataSource={quotes.items} scroll={{ x: 750 }}
+        {compact ? <>
+          <div role="list" aria-label="Cotizaciones y versiones">
+            {quotes.items.map(quote => <div role="listitem" key={quote.id}>
+              <CompactCard title={quote.orderNumber} meta={`v${quote.version} · Vigencia ${ledgerCivilDate(quote.validUntil)}`}
+                amounts={[['Total calculado por Finanzas', money(quote.total, quote.currency)]]}
+                actions={[<Tag key="status" title={quote.status}>{quoteStatus(quote.status)}</Tag>,
+                  <Button key="open" style={{ flex: 1 }} data-testid={'quote-select-' + quote.id} aria-pressed={selectedId === quote.id}
+                    type={selectedId === quote.id ? 'primary' : 'default'} disabled={disabled || !!uncertain} onClick={() => selectQuote(quote)}>
+                    Ver {quote.orderNumber} v{quote.version}</Button>]} />
+            </div>)}
+          </div>
+          {!loadingQuotes && !quotes.items.length && <Typography.Paragraph style={muted}>Sin cotizaciones</Typography.Paragraph>}
+          {quotes.total > PAGE_SIZE && quotePager}
+        </> : <Table rowKey="id" size="small" loading={loadingQuotes} dataSource={quotes.items} scroll={{ x: 750 }}
           pagination={{ current: quotePage, pageSize: PAGE_SIZE, total: quotes.total, showSizeChanger: false, disabled: busy || !!uncertain, onChange: page => { quoteRequest.current.value++; setQuotePage(page); setSelectedId(null); setEditor(null); setEvidence(''); setReason(''); } }}
           locale={{ emptyText: <Empty description="Sin cotizaciones" /> }} columns={[
             { title: 'Orden', dataIndex: 'orderNumber' }, { title: 'Versión', dataIndex: 'version', render: value => 'v' + value },
-            { title: 'Estado', dataIndex: 'status', render: value => <Tag>{value}</Tag> },
+            { title: 'Estado', dataIndex: 'status', render: value => <Tag title={value}>{quoteStatus(value)}</Tag> },
             { title: 'Total servidor', render: (_, quote) => money(quote.total, quote.currency) },
-            { title: 'Vigencia', dataIndex: 'validUntil' },
+            { title: 'Vigencia', dataIndex: 'validUntil', render: value => ledgerCivilDate(value) },
             { title: 'Acción', render: (_, quote) => <Button data-testid={'quote-select-' + quote.id} aria-pressed={selectedId === quote.id} type={selectedId === quote.id ? 'primary' : 'default'} disabled={disabled || !!uncertain} onClick={() => selectQuote(quote)}>Ver {quote.orderNumber} v{quote.version}</Button> },
-          ]} />
+          ]} />}
         {selected && <section id="quote-detail" data-quote-id={selected.id} aria-label="Cotización seleccionada" style={{ marginTop: 24 }}>
-          <Typography.Title level={4}>{selected.orderNumber} · v{selected.version} · {selected.status}</Typography.Title>
+          <Typography.Title level={4}>{selected.orderNumber} · v{selected.version} · {quoteStatus(selected.status)} <Typography.Text style={muted}>({selected.status})</Typography.Text></Typography.Title>
           <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
-            <Descriptions.Item label="ID cotización">{selected.id}</Descriptions.Item>
-            <Descriptions.Item label="ID orden">{selected.orderReference}</Descriptions.Item>
-            <Descriptions.Item label="ID cliente">{selected.customerReference}</Descriptions.Item>
-            <Descriptions.Item label="ID vehículo">{selected.vehicleReference}</Descriptions.Item>
             <Descriptions.Item label="Subtotal">{money(selected.subtotal, selected.currency)}</Descriptions.Item>
             <Descriptions.Item label={'Descuento (' + selected.discountPercent + ' %)'}>{money(selected.discountAmount, selected.currency)}</Descriptions.Item>
             <Descriptions.Item label={'Impuesto (' + selected.taxPercent + ' %)'}>{money(selected.taxAmount, selected.currency)}</Descriptions.Item>
             <Descriptions.Item label="Total servidor">{money(selected.total, selected.currency)}</Descriptions.Item>
             <Descriptions.Item label="Válida hasta (America/La_Paz)">{selected.validUntil}</Descriptions.Item>
             <Descriptions.Item label="Notas">{selected.notes || '—'}</Descriptions.Item>
-            {selected.decision && <Descriptions.Item label="Decisión registrada">{selected.decision.decision} · {selected.decision.evidence} · {selected.decision.reason || 'Sin motivo'} · {selected.decision.decidedAt}</Descriptions.Item>}
+            {selected.decision && <Descriptions.Item label="Decisión registrada">{(DECISION[selected.decision.decision] ?? selected.decision.decision)} · {selected.decision.evidence} · {selected.decision.reason || 'Sin motivo'} · {selected.decision.decidedAt}</Descriptions.Item>}
           </Descriptions>
+          <InternalReference label="Referencias internas (cotización, orden, cliente, vehículo)" value={`Cotización ${selected.id} · Orden ${selected.orderReference} · Cliente ${selected.customerReference} · Vehículo ${selected.vehicleReference}`} />
           <Table size="small" rowKey="serviceReference" pagination={false} scroll={{ x: 500 }} dataSource={selected.items} columns={[
             { title: 'Servicio', dataIndex: 'description' }, { title: 'Cantidad', dataIndex: 'quantity' },
             { title: 'Tarifa', render: (_, item) => money(item.unitPrice, selected.currency) },
@@ -298,7 +332,7 @@ function FinanceWorkspace({ session, basePath }) {
         {!selected && <Typography.Paragraph type="secondary">Seleccioná explícitamente una cotización para consultar su desglose, revisar o registrar la decisión.</Typography.Paragraph>}
       </Card>}
       {editor && canRead && canWrite && <Card size="small" style={{ marginTop: 16 }}><QuoteEditor key={editor.quote?.id ?? editor.order.id} {...editor} busy={busy || stale || loadingQuotes || (!!editor.order && loadingOrders)} onSubmit={save} onCancel={() => setEditor(null)} /></Card>}
-      <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>Ruta del módulo: {basePath}. Operaciones definitivas online; importes y moneda proporcionados por Finanzas.</Typography.Paragraph>
+      <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>Las operaciones definitivas se validan en línea y los importes los calcula Finanzas.</Typography.Paragraph>
     </div>
   );
 }

@@ -249,10 +249,73 @@ escrituras financieras. No convierte el reporte operativo CU26/CU28 en financier
   real por APIs de Finance y pregunta desde el Shell con las mismas cifras.
   No cierre global CU25/CU26 ni cambio de puntuación por una sola herramienta.
 
+### [S2.15] Reporte financiero CU26 separado del operativo
+
+Tipo de reporte propio, con contrato, documento, autorización, trabajos y superficie
+de interfaz **separados** del reporte operativo. No se reinterpreta `OperationsReport`,
+no se añaden campos monetarios a sus `claims` enteros y no se toca la entrega semanal
+de CU28 ni los trabajos históricos ya persistidos.
+
+**Fuente y recorte.** La única fuente es el resumen propietario de Finance
+(`GET /financial-summary?from=&to=`, S2.14): cobros registrados y gastos registrados
+del período civil `America/La_Paz`, en centavos string, más sus conteos y
+`generatedAt`. No se suman páginas, cotizaciones aprobadas, presupuestos ni
+obligaciones no cobradas. El reporte publica exactamente lo que el propietario
+calculó; si el propietario no responde, el trabajo falla cerrado y no emite ceros.
+`movimiento neto = recibido − gasto registrado`; no se rotula rentabilidad, utilidad,
+flujo de caja, saldo bancario ni salud financiera, y la limitación viaja en el documento.
+
+**Autorización propia.** Nueva verificación para este tipo: empleado vigente con
+`employeeId` activo y **ambos** permisos `payments:read` y `expenses:read`, consultados
+sin caché en Empleados con el bearer del usuario. Finance reautoriza al leer. No se
+reutiliza el `executions:read:team` del reporte operativo, ni los roles `mcp_read_*`,
+ni una cuenta técnica. Se revalida al crear el trabajo, al ejecutarlo y en cada lectura
+o replay del documento guardado; un permiso revocado responde 403 sin publicar cifras.
+
+**Trabajo asíncrono aislado.** Rutas propias `POST /report/financial/jobs`,
+`GET /report/financial/jobs/{jobId}` (y su equivalente GraphQL), con almacén y
+directorio propios bajo `REPORT_JOBS_DIR` para que un `operationId` financiero nunca
+pueda devolver un trabajo operativo ni al revés. Idempotencia: mismo `subject` +
+`operationId` devuelve el mismo `jobId` y el mismo documento; otro cuerpo con el mismo
+identificador es conflicto. El documento terminado se persiste; el token del usuario
+nunca se escribe, así que un trabajo abierto al reiniciar se cierra como `INTERRUPTED`
+y no se reanuda.
+
+**Documento y afirmaciones.** Discriminador `financial-narrative`, versión propia. Cada
+cifra monetaria es un string canónico de centavos; ninguna pasa por `float` ni por
+`Int` de GraphQL. `claims` ligan indicador, etiqueta, valor exacto, unidad (centavos
+BOB o conteo), período, servicio `finance`, herramienta y referencias; una afirmación
+sin indicador calculado invalida el documento. El `complete` es verdadero sólo si el
+propietario devolvió el período solicitado y la aritmética cierra en `BigInt`.
+
+**Cálculo y redacción separados.** Las cifras se calculan en el servidor y no dependen
+del modelo. El LLM sólo redacta sobre ellas. La verificación exige que toda cifra del
+texto esté ligada a su indicador y que aparezcan los tres importes; si no cumple, se
+publica la plantilla `deterministic` con `model: null`, `generative: false` y el código
+en `limitations`, sin presentarla como generación. Un modelo caído nunca produce
+cifras ausentes ni sustituye la fuente.
+
+**Interfaz.** Pestaña/sección propia en el asistente existente con período explícito
+(`desde`/`hasta`), creación con `operationId` del cliente, estado del trabajo,
+documento con cifras separadas (recibido, gastos, diferencia registrada), tabla de
+afirmaciones, procedencia, limitaciones visibles y exportación JSON/CSV del documento.
+Recargar retoma el mismo trabajo. Los filtros se limitan a período y tipo financiero:
+no hay todavía filtro por categoría, empleado ni indicador porque el propietario no
+los publica en el resumen; la interfaz lo declara en lugar de simularlos.
+
+**Aceptación.** Un período con datos y otro vacío real contra el oráculo de Finance;
+denegación y revocación de permisos sin cifras publicadas; replay sin nueva generación;
+generación real observada con Ollama **y** respaldo determinista rotulado; exportación
+cotejada con el documento. No cierra CU26 global ni suma puntos por sí solo, y no
+acredita precisión general del modelo.
+
 ## [S3] Out of Scope
 
 CU30 (escrituras), CU31 (administración web de clientes), notificaciones externas, nuevos recursos
 cloud, autonomía indefinida de credenciales, calidad diagnóstica del modelo visual e ICONIX.
+Filtros financieros por categoría/empleado/indicador, gráficos comparativos entre períodos,
+conciliación de cotizado contra cobrado y cualquier cálculo de rentabilidad o caja: requieren
+que Finance publique esos agregados primero.
 
 ## Tasks
 

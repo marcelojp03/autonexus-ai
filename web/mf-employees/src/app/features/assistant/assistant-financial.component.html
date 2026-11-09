@@ -1,0 +1,109 @@
+<nz-card nzTitle="Reporte financiero del período">
+  <p class="note">Tipo de reporte propio y separado del operativo: publica únicamente lo que calculó el resumen del propietario financiero. Los importes son centavos exactos y no pasan por coma flotante. El reporte se genera en el servidor: podés recargar la página y el trabajo continúa con el mismo identificador.</p>
+  <div class="toolbar">
+    <label class="field" for="financial-from">Desde<input nz-input id="financial-from" type="date" [ngModel]="from()" (ngModelChange)="from.set($event)" /></label>
+    <label class="field" for="financial-to">Hasta<input nz-input id="financial-to" type="date" [ngModel]="to()" (ngModelChange)="to.set($event)" /></label>
+    <button nz-button nzType="primary" type="button" id="financial-generate" [disabled]="!canGenerate()" [nzLoading]="generating()" (click)="generate()">Generar reporte financiero</button>
+    @if (report() && !jobRunning()) {
+      <button nz-button type="button" id="financial-export-json" (click)="exportJson()">Exportar JSON</button>
+      <button nz-button type="button" id="financial-export-csv" (click)="exportCsv()">Exportar CSV</button>
+    }
+  </div>
+
+  <nz-alert id="financial-filters" nzType="info" nzShowIcon nzMessage="Alcance y filtros" [nzDescription]="filters + ' ' + scope"></nz-alert>
+
+  @if (resumed() && generating()) {
+    <nz-alert id="financial-resumed" nzType="info" nzShowIcon nzMessage="Se retomó el reporte financiero que ya estaba en curso" nzDescription="La recarga no inició una generación nueva: se consulta el mismo trabajo del servidor."></nz-alert>
+  }
+  @if (generating() && jobRunning()) {
+    <nz-alert id="financial-loading" nzType="info" nzShowIcon
+      [nzMessage]="statusLabel(jobStatus()) + '… ' + elapsed() + ' s'"
+      [nzDescription]="jobId() ? ('Trabajo ' + jobId()) : 'Creando el trabajo en el servidor.'"></nz-alert>
+  }
+  @if (pollWarning()) {
+    <nz-alert id="financial-poll-warning" nzType="warning" nzShowIcon [nzMessage]="pollWarning()!"></nz-alert>
+  }
+  @if (error()) {
+    <nz-alert id="financial-error" nzType="error" nzShowIcon [nzMessage]="error()!"
+      nzDescription="El reporte es de solo lectura: reintentar no modifica ningún cobro ni gasto.">
+      <button nz-button nzSize="small" type="button" id="financial-retry" (click)="retry()">Volver a intentar</button>
+    </nz-alert>
+  }
+
+  @if (report(); as view) {
+    <div class="row">
+      <nz-tag nzColor="purple">{{ view.period.from }} → {{ view.period.to }}</nz-tag>
+      @if (narrativeIsModel()) {
+        <nz-tag nzColor="blue" id="financial-path">Modelo {{ view.model }}</nz-tag>
+      } @else {
+        <nz-tag nzColor="default" id="financial-path">Plantilla determinista</nz-tag>
+      }
+      @if (view.narrativeVerified) { <nz-tag nzColor="green">importes verificados</nz-tag> }
+      <span class="when">cifras del propietario {{ time(view.generatedAt) }} · {{ view.figures.currency }} · {{ view.promptVersion }}</span>
+    </div>
+
+    <p class="answer" id="financial-narrative">{{ view.narrative }}</p>
+
+    <h4>Cifras del período</h4>
+    <div class="amounts" id="financial-figures">
+      <div class="amount">
+        <span class="when">Recibido ({{ view.figures.paymentCount }} cobros)</span>
+        <span class="value" id="financial-received">{{ money(view.figures.receivedMinor) }}</span>
+      </div>
+      <div class="amount">
+        <span class="when">Gastos registrados ({{ view.figures.expenseCount }})</span>
+        <span class="value" id="financial-expense">{{ money(view.figures.expenseMinor) }}</span>
+      </div>
+      <div class="amount">
+        <span class="when">Diferencia registrada</span>
+        <span class="value" id="financial-net">{{ money(view.figures.netMinor) }}</span>
+      </div>
+    </div>
+    @if (!figuresClose()) {
+      <nz-alert id="financial-incoherent" nzType="error" nzShowIcon nzMessage="Las cifras recibidas no cierran entre sí" nzDescription="No se presentan como un total válido: requiere revisión del propietario."></nz-alert>
+    }
+
+    <h4>Afirmaciones del documento</h4>
+    @if (!view.claims.length) {
+      <nz-empty nzNotFoundImage="simple" nzNotFoundContent="El documento no publicó afirmaciones."></nz-empty>
+    } @else {
+      <table id="financial-claims">
+        <thead>
+          <tr>
+            <th scope="col">Indicador</th>
+            <th scope="col">Valor</th>
+            <th scope="col">Unidad</th>
+            <th scope="col">Fuente</th>
+            <th scope="col">Herramienta</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (claim of view.claims; track claim.indicator) {
+            <tr>
+              <td>{{ claim.label }}</td>
+              <td>{{ claim.unit === 'centavos BOB' ? money(claim.value) : claim.value }}</td>
+              <td>{{ claim.unit }}</td>
+              <td>{{ claim.source }}</td>
+              <td>{{ claim.tool }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <h4>Procedencia</h4>
+    @for (entry of view.provenance; track $index) {
+      <div class="row">
+        <nz-tag nzColor="geekblue">{{ entry.service }}</nz-tag>
+        <span>{{ entry.resource }}</span>
+        @if (entry.tool) { <span class="when">{{ entry.tool }}</span> }
+        @if (entry.observedAt) { <span class="when">calculado {{ time(entry.observedAt) }}</span> }
+      </div>
+    }
+
+    @if (view.limitations.length) {
+      <nz-alert id="financial-limitations" nzType="info" nzShowIcon nzMessage="Límites declarados"
+        [nzDescription]="view.limitations.join(' · ')"></nz-alert>
+    }
+  }
+</nz-card>

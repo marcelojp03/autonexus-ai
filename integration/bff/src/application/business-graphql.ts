@@ -81,6 +81,11 @@ const FIELD_PERMISSION: Readonly<Record<string, Permission | readonly Permission
   operationsReport: 'executions:read:team',
   operationsReportJob: 'executions:read:team',
   startOperationsReport: 'executions:read:team',
+  // CU26 financiero: sin permiso de módulo a propósito. La autoridad financiera son los dos permisos
+  // del empleado (payments:read + expenses:read) comprobados por el servicio en cada lectura; el
+  // `executions:read:team` del reporte operativo no concede finanzas y no se reutiliza aquí.
+  financialReportJob: null,
+  startFinancialReport: null,
   myAgendaHistory: 'agenda:read:self',
   teamAgendaHistory: 'agenda:read:team',
   confirmationSaga: 'confirmations:read',
@@ -340,6 +345,9 @@ export class BusinessGraphql {
       operationsReportJob: (args: { jobId: string }) => this.assistantGateway().reportJob(args.jobId, token),
       startOperationsReport: (args: { from: string; to: string; operationId: string }) =>
         this.assistantGateway().startReport(args.from, args.to, args.operationId, token),
+      financialReportJob: (args: { jobId: string }) => this.assistantGateway().financialReportJob(args.jobId, token),
+      startFinancialReport: (args: { from: string; to: string; operationId: string }) =>
+        this.assistantGateway().startFinancialReport(args.from, args.to, args.operationId, token),
       myAgendaHistory: (args: AgendaQuery) => this.agenda.history('self', args, token),
       teamAgendaHistory: (args: AgendaQuery) => this.agenda.history('team', args, token),
       retryEvidence: (args: { assignmentId: string; evidenceId: string; input: OperationsCommand }) =>

@@ -20,7 +20,7 @@
       <a href="/offline.html" id="offline-link" data-shell-link>Trabajo sin conexión</a>
     </nav>
   </header>
-  <aside class="demo-banner"><strong>Páginas de ejemplo del template</strong> · La sesión es real; los gráficos no representan operaciones del taller.</aside>
+  <aside class="demo-banner" id="template-demo-banner" hidden><strong>Páginas de ejemplo del template</strong> · La sesión es real; los gráficos no representan operaciones del taller.</aside>
   <section class="session-panel" aria-label="Sesión del taller">
     <p id="session-status" role="status" aria-live="polite">Comprobando sesión…</p>
     <p id="session-identity"></p>
@@ -38,11 +38,11 @@
       <p id="technical-result" role="status" aria-live="polite"></p>
     </details>
   </section>
-  <nav class="demo-nav" aria-label="Páginas del módulo">
+  <nav class="demo-nav" id="demo-nav" aria-label="Páginas del módulo">
     <a href="/employees/agenda" data-employee-link data-permission="agenda:read:self" data-shell-link>Mi agenda</a>
     <a href="/employees/execution" data-employee-link data-permission="executions:read:self" data-shell-link>Ejecución</a>
     <a href="/employees/agenda/team" data-employee-link data-permission="agenda:read:team" data-shell-link>Agenda del equipo</a>
-    <a href="/employees/list" data-employee-link data-permission="employees:read" data-shell-link>Empleados (CU03)</a>
+    <a href="/employees/list" data-employee-link data-permission="employees:read" data-shell-link>Listado de empleados</a>
     <a href="/employees/new" data-employee-link data-permission="employees:write" data-shell-link>Registrar empleado</a>
     <a href="/employees/schedules" data-employee-link data-permission="schedules:read" data-shell-link>Horarios</a>
     <a href="/employees/security" data-employee-link data-permission="security:read" data-shell-link>Seguridad</a>
@@ -57,7 +57,6 @@
     <a href="/operations/receptions" data-operations-link data-shell-link>Recepción</a>
     <a href="/operations/orders" data-operations-link data-shell-link>Órdenes</a>
     <a href="/operations/confirmations" data-operations-link data-shell-link id="shell-confirm-service">Confirmar servicio</a>
-    <a href="/finance" data-finance-link data-shell-link>Cotizaciones</a>
     <a href="/intelligence" data-intelligence-link data-permission="intelligence:read" data-shell-link>Análisis visual</a>
     <a href="/employees/widgets" data-page="widgets" data-shell-link>Widgets</a>
     <a href="/employees/dashboard/v1" data-page="dashboard/v1" data-shell-link>Panel demo</a>

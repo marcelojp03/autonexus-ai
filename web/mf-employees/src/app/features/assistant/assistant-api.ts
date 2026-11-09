@@ -9,6 +9,7 @@ import {
   type OperationsReport,
   type ReportJob,
 } from './assistant.contract';
+import { FINANCIAL_JOB_FIELDS, type FinancialJob } from './financial.contract';
 
 /**
  * CU25/CU26 transport. Both roots travel through the BFF with the Shell session; the component never
@@ -65,6 +66,27 @@ export class AssistantApi {
     return this.run<ReportJob>(
       'operationsReportJob',
       'query($jobId:ID!){operationsReportJob(jobId:$jobId){' + REPORT_JOB_FIELDS + '}}',
+      { jobId },
+    );
+  }
+
+  /**
+   * CU26 financial report: own GraphQL fields, own job. The service keeps financial authority with the
+   * employee grants, so this transport only forwards the session and the period.
+   */
+  startFinancialReport(from: string, to: string, operationId: string): Promise<FinancialJob> {
+    return this.run<FinancialJob>(
+      'startFinancialReport',
+      'mutation($from:Date!,$to:Date!,$operationId:UUID!){startFinancialReport(from:$from,to:$to,operationId:$operationId){' +
+        FINANCIAL_JOB_FIELDS + '}}',
+      { from, to, operationId },
+    );
+  }
+
+  financialReportJob(jobId: string): Promise<FinancialJob> {
+    return this.run<FinancialJob>(
+      'financialReportJob',
+      'query($jobId:ID!){financialReportJob(jobId:$jobId){' + FINANCIAL_JOB_FIELDS + '}}',
       { jobId },
     );
   }

@@ -105,6 +105,13 @@ function renderNavigation(): void {
   status.textContent = !module || !canAccess(module) ? '' : message ?? (getAppStatus(name) === MOUNTED ? '' : 'Cargando módulo…');
   status.hidden = !status.textContent;
   if (module) hosts[module].setAttribute('aria-busy', String(!message && getAppStatus(name) !== MOUNTED));
+  // El aviso de plantilla y las páginas de demostración describen el template, no el trabajo del
+  // taller: sólo se muestran en sus propias rutas. Una pantalla empresarial no los repite.
+  const templateDemo = /^\/employees\/(?:widgets|dashboard(?:\/|$))/.test(location.pathname);
+  const banner = document.getElementById('template-demo-banner');
+  if (banner) banner.hidden = !templateDemo;
+  const demoNav = document.getElementById('demo-nav');
+  if (demoNav) demoNav.hidden = !Array.from(demoNav.children).some(child => !(child as HTMLElement).hidden);
 }
 
 function instrument(app: string, remote: Remote): LifeCycles<IntegrationProps> {
