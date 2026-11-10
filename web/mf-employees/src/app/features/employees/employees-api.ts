@@ -3,6 +3,7 @@ import type { BusinessFailure } from '../../../../../../contracts/auth/session';
 import { SESSION_PORT } from '../../auth/session';
 import {
   CREATE_EMPLOYEE,
+  CONFIGURE_LOGIN,
   DEACTIVATE_EMPLOYEE,
   EMPLOYEE_HISTORY_QUERY,
   EMPLOYEE_QUERY,
@@ -36,6 +37,9 @@ export interface EmployeesQuery {
 @Injectable({ providedIn: 'root' })
 export class EmployeesApi {
   private readonly session = inject(SESSION_PORT);
+  configureLogin(id: string, input: {operationId: string; username: string; password: string}): Promise<{username: string; ready: boolean; replayed: boolean}> {
+    return this.run<{configureEmployeeLogin: {username: string; ready: boolean; replayed: boolean}}>(CONFIGURE_LOGIN, {id, input}).then(data => data.configureEmployeeLogin);
+  }
 
   list(query: EmployeesQuery): Promise<EmployeePage> {
     return this.run<{ employees: EmployeePage }>(EMPLOYEES_QUERY, {

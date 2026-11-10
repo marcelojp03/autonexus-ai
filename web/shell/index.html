@@ -11,7 +11,7 @@
 <body>
   <a class="skip-link" href="#main">Saltar al contenido</a>
   <header class="shell-header">
-    <span class="brand">AutoNexus <span>Gestión del taller</span></span>
+    <span class="brand"><span class="brand-mark" aria-hidden="true">A</span><span class="brand-name">AutoNexus <span>Gestión del taller</span></span></span>
     <nav aria-label="Módulos">
       <a href="/employees" data-module="employees" data-shell-link>Empleados</a>
       <a href="/operations" data-module="operations" data-shell-link>Operaciones</a>
@@ -22,8 +22,7 @@
   </header>
   <aside class="demo-banner" id="template-demo-banner" hidden><strong>Páginas de ejemplo del template</strong> · La sesión es real; los gráficos no representan operaciones del taller.</aside>
   <section class="session-panel" aria-label="Sesión del taller">
-    <p id="session-status" role="status" aria-live="polite">Comprobando sesión…</p>
-    <p id="session-identity"></p>
+    <div class="session-context"><p id="session-status" role="status" aria-live="polite">Comprobando sesión…</p><p id="session-identity"></p></div>
     <button id="session-login" type="button" hidden>Ingresar</button>
     <button id="session-logout" type="button" hidden>Cerrar sesión</button>
     <details id="technical-controls" hidden>
@@ -39,14 +38,14 @@
     </details>
   </section>
   <nav class="demo-nav" id="demo-nav" aria-label="Páginas del módulo">
+    <a href="/employees/agenda/team" data-employee-link data-permission="agenda:read:team" data-shell-link>Agenda del equipo</a>
+    <a href="/employees/verification" data-employee-link data-permission="executions:verify" data-shell-link>Verificación</a>
     <a href="/employees/agenda" data-employee-link data-permission="agenda:read:self" data-shell-link>Mi agenda</a>
     <a href="/employees/execution" data-employee-link data-permission="executions:read:self" data-shell-link>Ejecución</a>
-    <a href="/employees/agenda/team" data-employee-link data-permission="agenda:read:team" data-shell-link>Agenda del equipo</a>
     <a href="/employees/list" data-employee-link data-permission="employees:read" data-shell-link>Listado de empleados</a>
     <a href="/employees/new" data-employee-link data-permission="employees:write" data-shell-link>Registrar empleado</a>
     <a href="/employees/schedules" data-employee-link data-permission="schedules:read" data-shell-link>Horarios</a>
     <a href="/employees/security" data-employee-link data-permission="security:read" data-shell-link>Seguridad</a>
-    <a href="/employees/verification" data-employee-link data-permission="executions:verify" data-shell-link>Verificación</a>
     <!-- CU25/CU26: visible to any workshop role. The question needs no module permission; the report
          pane fails closed for accounts without executions:read:team. -->
     <a href="/employees/assistant" data-employee-link data-shell-link>Asistente y reporte</a>
@@ -58,16 +57,20 @@
     <a href="/operations/orders" data-operations-link data-shell-link>Órdenes</a>
     <a href="/operations/confirmations" data-operations-link data-shell-link id="shell-confirm-service">Confirmar servicio</a>
     <a href="/intelligence" data-intelligence-link data-permission="intelligence:read" data-shell-link>Análisis visual</a>
-    <a href="/employees/widgets" data-page="widgets" data-shell-link>Widgets</a>
-    <a href="/employees/dashboard/v1" data-page="dashboard/v1" data-shell-link>Panel demo</a>
   </nav>
   <main id="main" tabindex="-1">
+    <section id="welcome-panel" class="welcome-panel" hidden>
+      <p class="eyebrow">BIENVENIDO AL TALLER</p>
+      <h1>El trabajo de tu equipo,<br />en un solo lugar.</h1>
+      <p>Organizá la agenda, acompañá cada reparación y consultá la información que necesitás para tu jornada.</p>
+      <div class="welcome-features"><span>Agenda y asignaciones</span><span>Seguimiento de trabajos</span><span>Gestión del taller</span></div>
+    </section>
     <section id="offline-workspace" hidden aria-label="Trabajo sin conexión"></section>
     <p id="load-status" role="status" aria-live="polite"></p>
     <section id="route-error" hidden><h1>Ruta no encontrada</h1><p>Selecciona Empleados, Operaciones, Finanzas o Inteligencia para continuar.</p></section>
     <p id="module-access" role="status" hidden></p>
     <section id="mf-employees" aria-label="Empleados" hidden></section>
-    <section id="mf-operations" aria-label="Demostración de Operaciones" hidden></section>
+    <section id="mf-operations" aria-label="Operaciones" hidden></section>
     <section id="mf-finance" aria-label="Finanzas" hidden></section>
     <section id="mf-intelligence" aria-label="Inteligencia" hidden></section>
   </main>

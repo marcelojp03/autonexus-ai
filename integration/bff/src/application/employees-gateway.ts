@@ -2,6 +2,7 @@ import { BusinessError } from './business-error.js';
 
 /** Only codes published by the CU03/CU04/CU02 contracts may leave this BFF. */
 const PUBLIC_CODES = new Set([
+  'USERNAME_TAKEN', 'LOGIN_POLICY_REJECTED', 'LOGIN_IDENTITY_CONFLICT', 'LOGIN_PROFILE_NOT_READY', 'LOGIN_PROVIDER_UNAVAILABLE',
   'AFFECTS_PENDING_CONFIRMATION', 'AFFECTS_PENDING_ASSIGNMENT',
   'VALIDATION_ERROR',
   'EMPLOYEE_NOT_FOUND',
@@ -58,6 +59,7 @@ export interface StaffingCommand {
 
 /** Port to the Employees owner REST API. Never crosses into its database. */
 export interface EmployeesGateway {
+  configureLogin(id: string, input: CommandInput, token: string): Promise<unknown>;
   confirmationMechanics(query: EmployeePageQuery, token: string): Promise<unknown>;
   confirmationAvailability(employeeId: string, date: string, token: string): Promise<unknown>;
   list(query: EmployeePageQuery, token: string): Promise<unknown>;
@@ -89,6 +91,9 @@ export interface EmployeesGateway {
 }
 
 export class HttpEmployeesGateway implements EmployeesGateway {
+  configureLogin(id: string, input: CommandInput, token: string): Promise<unknown> {
+    return this.request('/employees/' + encodeURIComponent(id) + '/access/login', token, {method: 'POST', body: JSON.stringify(input)});
+  }
   confirmationMechanics(query: EmployeePageQuery, token: string): Promise<unknown> {
     const parameters = new URLSearchParams();
     for (const key of ['limit', 'offset', 'search'] as const) {
@@ -113,7 +118,7 @@ export class HttpEmployeesGateway implements EmployeesGateway {
         ...init,
         headers: { Authorization: `Bearer ${token}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
         redirect: 'error',
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(path.endsWith('/access/login') ? 35000 : 10000),
       });
     } catch {
       throw new BusinessError(503, 'SERVICE_UNAVAILABLE');

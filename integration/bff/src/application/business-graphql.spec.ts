@@ -90,6 +90,7 @@ function build(rejected?: Error) {
     update: vi.fn(),
     deactivate: vi.fn(),
     retryAccess: vi.fn(),
+    configureLogin: vi.fn(async () => ({username: 'test.mechanic', ready: true, replayed: false})),
     reachable: vi.fn(async () => true),
     staffingEmployees: vi.fn(async () => []),
     schedule: vi.fn(),
@@ -199,11 +200,24 @@ describe('CU15 explicit fake upstream contract', () => {
 });
 
 describe('EmployeesGraphql allowlist and error mapping', () => {
-  it('publishes exactly the seven CU03 root operations', () => {
+  it('requires both personnel and security permissions for permanent credential setup', async () => {
+    const {graphql,gateway} = build();
+    const request = {query:'mutation($id:UUID!,$input:EmployeeLoginInput!){configureEmployeeLogin(id:$id,input:$input){username ready replayed}}',
+      variables:{id:EMPLOYEE_ID,input:{operationId:EMPLOYEE_ID,username:'test.mechanic',password:'Fixture-only-123'}}};
+    const forbidden = await graphql.run(request,HEAD,'head-token');
+    expect(forbidden.errors?.[0]?.extensions.code).toBe('FORBIDDEN');
+    expect(gateway.configureLogin).not.toHaveBeenCalled();
+    const allowed = await graphql.run(request,ADMIN,'admin-token');
+    expect(allowed.errors).toBeUndefined();
+    expect(allowed.data).toEqual({configureEmployeeLogin:{username:'test.mechanic',ready:true,replayed:false}});
+    expect(gateway.configureLogin).toHaveBeenCalledWith(EMPLOYEE_ID,request.variables.input,'admin-token');
+    expect(JSON.stringify(allowed)).not.toContain(request.variables.input.password);
+  });
+  it('publishes exactly the eight CU03 root operations', () => {
     const source = readFileSync(schemaPath, 'utf8');
     const roots = [...source.matchAll(/^ {2}([a-zA-Z]+)\(/gm)].map((match) => match[1]);
     expect(roots.sort()).toEqual(
-      ['createEmployee', 'deactivateEmployee', 'employee', 'employeeHistory', 'employees', 'retryEmployeeAccess', 'updateEmployee'].sort(),
+      ['configureEmployeeLogin', 'createEmployee', 'deactivateEmployee', 'employee', 'employeeHistory', 'employees', 'retryEmployeeAccess', 'updateEmployee'].sort(),
     );
   });
 

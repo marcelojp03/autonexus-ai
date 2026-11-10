@@ -1,5 +1,27 @@
 # Cierre y continuidad de sesión
 
+## Entrega personal de Gabriel — 2026-11-10
+
+El usuario solicita guardar y subir los cambios locales a `work/gabriel`, creada
+desde `9315c9a`. Alcance: acceso permanente desde Empleados (CU03/CU02/CU01), contratos,
+BFF/Keycloak, navegación/UI, manual, Word de pruebas y documentación de ML/S3.
+Decisiones034–039 y STATUS detallan evidencia y límites. No integrar a main por esta
+solicitud ni eliminar el stash de respaldo previo.
+
+Publicación excluye CSV, cuentas privadas, claves y `output/`. El override S3 local
+monta las credenciales readonly únicamente en Operaciones. No copiar claves a EC2:
+usar rol de instancia; preparar CORS HTTPS. El bucket propio pasó 9 checks directos
+y Operaciones quedó healthy; falta recorrido desde interfaz con evidencia autorizada.
+Modelo servidor cargado e inferencia sintética PASS; calidad experimental, sin
+exportaciones offline preparadas ni nuevo cierre CU22/CU23.
+
+Verificación previa a subir: Shell focal 30/30 PASS; suite completa 109 PASS/11 FAIL
+por Playwright ausente en el host. Escaneo de publicación sin credenciales conocidas,
+incluidos XML del Word; diff --check PASS. Pruebas y builds de funcionalidades previas
+documentados en STATUS. No atribuir a esta publicación aceptación integral de todos los CU.
+
+---
+
 Publicado **`edbceaa`** sobre `98d6f58`: T8 de Finanzas, CU26 financiero, correcciones nativas del APK y arranque local en dos caminos. Revisión independiente hecha; `CU19` y `CU20` cerrados con **62 puntos verificados**; `CU26` sigue parcial.
 
 **Finanzas (T8).** Revisión visual hecha sobre el build servido, con capturas inspeccionadas como

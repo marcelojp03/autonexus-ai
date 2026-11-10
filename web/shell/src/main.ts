@@ -7,8 +7,10 @@ import type { AppProps, LifeCycles } from 'single-spa';
 import { matchesModule, moduleForPath, moduleProps, modules, moduleEntryPermissions } from './routes';
 import type { ModuleId } from './routes';
 import { OfflineWorkspace } from './offline/workspace';
+import { employeeEntryPath, sessionLabel } from './navigation';
 
 type IntegrationProps = IntegratedProps;
+declare const __MF_BUILD_VERSION__: string;
 type Props = AppProps & IntegrationProps;
 type Lifecycle = (props: Props) => Promise<unknown>;
 type Remote = Record<'bootstrap' | 'mount' | 'unmount', Lifecycle | Lifecycle[]>;
@@ -72,16 +74,19 @@ function renderNavigation(): void {
   const denied = gated === 'finance' ? 'los módulos de Finanzas.' : 'análisis de Inteligencia.';
   accessNotice.hidden = !allowed || !gated || access === 'allowed';
   accessNotice.textContent = access === 'forbidden' ? 'Acceso insuficiente: no tenés permiso para consultar ' + denied : access === 'unavailable' ? 'No se pudieron verificar los permisos de ' + label + '. Recargá para reintentar.' : 'Comprobando permisos de ' + label + '…';
-  document.querySelector<HTMLElement>('#session-identity')!.textContent = snapshot.identity ? snapshot.identity.username + ' · ' + snapshot.identity.roles.join(', ') : '';
-  document.querySelector<HTMLElement>('#session-status')!.textContent = snapshot.notice ?? (snapshot.phase === 'initializing' ? 'Comprobando sesión…' : snapshot.authenticated ? allowed ? 'Sesión iniciada.' : 'Acceso insuficiente: la cuenta no tiene un rol del taller. Cierra sesión para cambiar de cuenta.' : 'Ingresa para acceder a los módulos del taller.');
+  document.querySelector<HTMLElement>('#session-identity')!.textContent = snapshot.identity ? sessionLabel(snapshot.identity.roles) : '';
+  document.querySelector<HTMLElement>('#session-status')!.textContent = snapshot.notice ?? (snapshot.phase === 'initializing' ? 'Comprobando sesión…' : snapshot.authenticated ? allowed ? 'Tu espacio de trabajo' : 'Esta cuenta no tiene acceso al taller. Cerrá sesión para cambiar de cuenta.' : 'Ingresá con tu cuenta para organizar el trabajo del taller.');
+  document.querySelector<HTMLElement>('#welcome-panel')!.hidden = snapshot.authenticated || snapshot.phase === 'initializing' || isOfflineRoute();
   loginButton.hidden = snapshot.authenticated || snapshot.phase === 'initializing';
   if (isOfflineRoute() && !navigator.onLine && !snapshot.authenticated) {
     document.querySelector<HTMLElement>('#session-status')!.textContent = 'Sin red: copia local disponible. Restablecé sesión con conexión para sincronizar.';
     loginButton.hidden = false;
   }
   logoutButton.hidden = !snapshot.authenticated;
-  document.querySelector<HTMLElement>('#technical-controls')!.hidden = !allowed;
+  document.querySelector<HTMLElement>('#technical-controls')!.hidden = !allowed || !navigationPermissions.includes('security:read') || new URLSearchParams(location.search).get('diagnostics') !== '1';
   document.querySelectorAll<HTMLAnchorElement>('[data-module]').forEach((link) => {
+    link.hidden = !allowed || moduleAccess[link.dataset.module ?? ''] === 'forbidden';
+    if (link.dataset.module === 'employees') link.href = employeeEntryPath(navigationPermissions);
     if (link.dataset.module === module) link.setAttribute('aria-current', 'true');
     else link.removeAttribute('aria-current');
   });
@@ -93,6 +98,10 @@ function renderNavigation(): void {
   });
   document.querySelectorAll<HTMLElement>('[data-finance-link]').forEach((link) => { link.hidden = !allowed || module !== 'finance'; });
   document.querySelectorAll<HTMLElement>('[data-intelligence-link]').forEach((link) => { link.hidden = !allowed || module !== 'intelligence'; });
+  document.querySelectorAll<HTMLAnchorElement>('#demo-nav a').forEach(link => {
+    if (location.pathname.replace(/\/$/, '') === new URL(link.href).pathname.replace(/\/$/, '')) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
   document.querySelectorAll<HTMLAnchorElement>('[data-page]').forEach((link) => {
     link.hidden = !module || !allowed || module === 'finance';
     if (!module) return;
@@ -107,7 +116,7 @@ function renderNavigation(): void {
   if (module) hosts[module].setAttribute('aria-busy', String(!message && getAppStatus(name) !== MOUNTED));
   // El aviso de plantilla y las páginas de demostración describen el template, no el trabajo del
   // taller: sólo se muestran en sus propias rutas. Una pantalla empresarial no los repite.
-  const templateDemo = /^\/employees\/(?:widgets|dashboard(?:\/|$))/.test(location.pathname);
+  const templateDemo = /^\/(?:employees|operations)\/(?:widgets|dashboard(?:\/|$))/.test(location.pathname);
   const banner = document.getElementById('template-demo-banner');
   if (banner) banner.hidden = !templateDemo;
   const demoNav = document.getElementById('demo-nav');
@@ -147,7 +156,7 @@ for (const module of modules) {
     app: async () => {
       errors.delete(name);
       renderNavigation();
-      const source = '/mfs/' + module + '/main.js';
+      const source = '/mfs/' + module + '/main.js?v=' + __MF_BUILD_VERSION__;
       const remote: Remote = await import(/* @vite-ignore */ source);
       for (const phase of ['bootstrap', 'mount', 'unmount'] as const) {
         const steps = remote[phase];

@@ -1,5 +1,22 @@
 # MF01 Empleados
 
+## Registro con acceso permanente (CU03/CU02/CU01)
+
+El administrador con employees:write y security:write puede marcar **Configurar usuario, rol y
+contraseña permanente** al registrar o editar. Selecciona un rol que puede conceder y escribe
+usuario, contraseña y confirmación. Tras guardado, la web solicita/sincroniza la identidad,
+asigna el rol y configura credencial por GraphQL. **Acceso listo** confirma el resultado.
+Si falla un paso, conserva el empleado y ofrece **Habilitar acceso** sin duplicar el alta.
+Las contraseñas no se guardan en almacenamiento web y se limpian tras éxito. Solo configurar
+acceso no guarda cambios laborales pendientes; **Guardar cambios** encadena ambos pasos.
+
+## Presentación integrada (2026-11-10)
+
+El contenedor integrado muestra directamente las vistas empresariales; no repite SessionControls,
+UUID ni aviso NG-ALAIN. El Shell conserva sesión/cierre de sesión. La entrada prioriza gestión
+de personal si está autorizada, luego agenda de equipo y agenda propia; fallback al asistente.
+Un jefe con ambos permisos de agenda abre equipo. Standalone/demo no se modifican. Decisión036.
+
 ## CU25/CU26 — asistente y reporte narrativo (`/employees/assistant`)
 
 Ruta `assistant` montada por el Shell con `sessionGuard`. Dos paneles sobre `SessionPort.requestBusiness`,

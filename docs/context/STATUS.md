@@ -1,5 +1,58 @@
 # Estado comprobado
 
+## Entrega de Gabriel en rama personal (2026-11-10)
+
+Entrega solicitada para `work/gabriel`, creada desde `main`/`9315c9a`: contratos,
+alta/habilitación de acceso permanente en Empleados, BFF e identidad; navegación/UI,
+manual y documento de pruebas, más registro de instalación ML y conexión S3.
+No se integra esta entrega en main sin una solicitud de integración; se conserva
+el trabajo y respaldo previos. Las credenciales, cuentas privadas y runtime S3
+permanecen exclusivamente locales e ignorados, fuera de la publicación.
+
+Comprobación previa: diff --check PASS, escaneo de 58 archivos incluidos los XML
+del Word sin credenciales conocidas ni patrones de claves privadas/AWS reales.
+Shell focal navegación/rutas/configuración/sesión: 30/30 PASS. Suite Shell completa:
+109 PASS y 11 FAIL, todos por módulos Playwright ausentes en este host
+(`@playwright/test` y ruta fijada de Playwright 1.64.1). No se presenta como suite
+completa aprobada. Builds, pruebas de Empleados/BFF e integración real previos se
+conservan en las secciones correspondientes; no se repiten despliegues por publicar.
+
+## Conexión local al bucket propio de evidencias (2026-11-10)
+
+Bucket privado creado por el usuario: `autonexus-evidencias-ai`, `us-east-1`.
+CORS para `http://127.0.0.1:4280`; usuario IAM propio con política sobre `evidence/*`.
+CSV importado sin imprimir claves a archivo privado ignorado en `output/local/`;
+montaje de solo lectura únicamente en Operaciones, con perfil dedicado y sin claves
+en variables de entorno. No se alteraron IAM/CORS desde herramientas ni datos del taller.
+
+Compose config --quiet PASS; Operaciones recreado sin build y healthy. Prueba real AWS:
+9 comprobaciones PASS de CORS, PUT condicional/checksum, HEAD/tamaño, GET/igualdad,
+CORS descarga, rechazo de GET anónimo y eliminación del objeto temporal propio.
+Objeto sintético de conexión eliminado al terminar; no se crearon filas empresariales.
+Verificador de alcance confirma único consumidor y montaje readonly. Evidencia privada
+ignorada `output/local/s3-connection-result.json`; decisión039.
+
+Esto resuelve la configuración S3 faltante de esta instalación. No equivale a aceptación
+del recorrido navegador→BFF→Operaciones→S3→Inteligencia, pendiente con foto autorizada.
+Modelo sigue experimental y exportaciones offline no preparadas. Para reanudar conservar
+el override local: `docker compose --env-file .env.example -f compose.yaml -f output/local/runtime.compose.yaml up -d`.
+
+## Instalación local del artefacto ML publicado (2026-11-10)
+
+`main` actualizado por fast-forward de `93129e1` a `9315c9a`. Se conservaron los cambios
+locales: respaldo en stash y patch ignorado `output/local/before-ml-update.patch`;
+53 archivos cotejados con el respaldo, `.gitignore` conserva `diagram/` y STATUS conserva
+ambos bloques tras resolver el único conflicto. Sin commit/push ni descarga del dataset.
+
+SHA256SUMS: 3/3 coincidencias (modelo, manifiesto y calidad). Se recreó únicamente
+Inteligencia, sin recompilar: contenedor healthy y `/health/ready` UP. Carga real de
+`automotive-damage-mobilenetv2-v1`, run `20261101T-with-negatives`; inferencia con PNG
+sintético devuelve cuatro puntuaciones finitas entre 0 y 1. Prueba de ejecución, no de
+precisión: calidad sigue experimental y CU22/CU23 no quedan aceptados por esta instalación.
+Evidencia reproducible ignorada en `output/local/verify-model.py` y
+`output/local/ml-update-verification.json`. S3 sigue pendiente para el recorrido de
+evidencias reales; exportaciones TensorFlow.js/LiteRT no preparadas aquí. Decisión038.
+
 ## Entrega de ML a un compañero: modelo versionado y dataset con revisión fijada (2026-11-08)
 
 El artefacto del modelo deja de estar ignorado: `ml/artifacts/automotive-damage-mobilenetv2-v1/
@@ -20,6 +73,97 @@ CarDD/VehiDE/HITL; MobileNetV2 Apache-2.0 con hash de pesos base), umbrales y pr
 exactos, y el estado real de calidad: `experimental`, 6/10 y 5/10 falsos positivos en la muestra,
 macro F1 0.6855 en test propio, `crack` con F1 0.4303, sin partición disjunta por vehículo. No se
 acredita precisión ni licencia de distribución de pesos derivados.
+
+## Alta y habilitación de acceso desde Empleados (2026-11-10)
+
+Incremento local solicitado por el usuario, sin commit/push: CU03 permite configurar usuario,
+rol y contraseña permanente al registrar o desde Editar → Habilitar acceso. Encadena identidad,
+rol CU02 y credencial Keycloak; conserva el empleado y permite reintentar ante fallos parciales.
+No se fuerza cambio al primer ingreso. Contraseña fuera del registro laboral, historial,
+respuestas y recibos; auditoría/idempotencia conserva solo metadatos. Exige employees:write
+y security:write en BFF y propietario; verifica pertenencia, estado, duplicados y no escalamiento.
+Detalle en decisión037 y manual actualizado. No nuevos CU/puntos de aceptación académica.
+
+Migración aditiva `CreateLoginCommands1794312000000` aplicada (exit0). Empleados `ea6757a7e3aa`,
+BFF `38b0d10d308f` y web final `ff28559f1319` aplicados localmente. Provision actualizado exit0:
+Keycloak permite editar usuario; la sincronización conserva el username actual al editar perfil.
+La última recompilación web agrega protección contra guardado simultáneo y firma de reintento;
+build completo exit0 y despliegue final solo de web exit0. No se publicaron cambios Git.
+En la comprobación final el motor Docker estaba detenido: se inició Docker Desktop y los
+contenedores se recuperaron. Empleados/BFF/web/PostgreSQL/Keycloak healthy; web HTTP200.
+Preview del formulario final a 1440/390 repetido con éxito, sin nuevas mutaciones.
+
+Verificación: 50 pruebas focales de dominio/aplicación/adaptadores/recibo PASS; 11 HTTP sintéticas
+PASS; 27 BFF de Empleados/CU02/CU15 PASS (13 fuera del filtro). Suite BFF completa: 39/40;
+falla la expectativa heredada CU25/CU26 que enumera cuatro roots y aún excluye dos roots de
+reporte financiero ya presentes; no se cambió esa funcionalidad ni se ocultó el fallo.
+Infraestructura: 20 PASS y 3 SKIP (plataforma/configuración privada), sin fallos.
+
+Chrome aislado real: alta completa y alta sin acceso seguida de habilitación en Editar;
+ambas inician sesión como Mecánico sin cambio obligatorio de contraseña. Prueba real adicional:
+replay no reemplaza la primera contraseña, usuario ocupado rechazado, editar datos laborales
+conserva subject y login elegido, mecánico recibe FORBIDDEN al intentar configurar credenciales.
+Cero excepciones de página observadas. Capturas 1440/390 inspeccionadas; controles accesibles
+sin overflow general. Persisten detalles visuales heredados (título móvil truncado y foco en
+Saltar al contenido); no se declara rediseño global. Cuatro empleados sintéticos TEST-ACCESS
+creados durante aceptación quedaron desactivados; cuentas de José/Cristian/admin/demo intactas.
+Primeros intentos del verificador no confirmaron la fecha; luego la integración real detectó
+username read-only y username obligatorio al actualizar perfil: corregidos y comprobados.
+Artefactos y credenciales sintéticas ignorados en `output/ui-review/`.
+
+## UI local — entrada y navegación del taller (2026-11-10)
+
+Incremento sin publicar: Shell con cabecera/sesión compactas y etiquetas de rol legibles;
+sin Widgets/Panel demo en navegación habitual; diagnósticos solo por entrada técnica explícita
+con permiso de presentación. Empleados/Operaciones integrados dejan de repetir el panel OIDC
+y el aviso del template. Jefe con permisos self+team entra a agenda de equipo; mecánico a propia,
+sin cambiar autoridad de APIs. Detalle y límites en decisión036.
+
+Node:36/36 de sesión/configuración/rutas/paridad, exit0; imagen web completa compilada, exit0,
+`e2570e6e05f2`, y contenedor web actualizado solo, conservando el resto del entorno.
+Login real en Chrome de jefe y mecánico, agenda demo17/11 con datos, capturas1440/390
+inspeccionadas como imágenes; sin overflow general, panel técnico duplicado, enlaces demo ni
+excepciones de página observadas;0mutaciones GraphQL. La tabla mantiene scroll horizontal
+interno móvil. No se recorrieron todas las pantallas ni se ejecutó el runner Angular de specs.
+Artefactos privados/temporales ignorados en `output/ui-review/`. No nuevos CU cerrados ni puntos.
+
+Corrección posterior: la captura del usuario combinaba Shell nuevo y Empleados antiguo.
+Se versiona la URL de entradas remotas con digest del build y se exige revalidación de `/mfs/`
+en Nginx/desarrollo; no se elimina almacenamiento local. Build exit0, imagen `87c9b92da571`
+aplicada solo a web; HTTP200 con `Cache-Control: no-cache` y entrada versionada comprobados.
+36/36 pruebas Node siguen pasando; verificador Chrome exige ahora entrada versionada y
+ausencia del aviso antiguo. No se inspeccionó la caché del perfil personal del usuario.
+
+## Documentación — Word de caja negra y blanca para 31 CU (2026-11-10)
+
+Sobre `93129e1`, se creó `docs/testing/AutoNexus_AI_Pruebas_Caja_Negra_y_Blanca_31_CU.docx`
+con generador y README: 124 escenarios de caja negra, 146 caminos de caja blanca y
+31 diagramas, sin campos de captura inicial/final en las fichas de caja negra.
+Incluye 25 extractos de código real seleccionado y seis diseños propuestos explícitos
+para CU08, CU18, CU21, CU24, CU30 y CU31, sin implementación completa identificada.
+
+`python docs/testing/build_test_document.py`: exit 0; validados los 31 CU en ambos
+bloques, identificadores, conteos, XML, relaciones de imágenes y CRC del archivo Word.
+Diagrama CU15 inspeccionado como imagen; Word completo no renderizado: paginación y
+acabado visual de todas las páginas no verificados. No se ejecutaron pruebas empresariales;
+resultados obtenidos quedan no ejecutados. No cambia aceptación ni total 62/102.
+Criterio editorial: `docs/decisions/035-diseno-pruebas-word-31-cu.md`.
+
+## Documentación — manual de usuario y contraste de requisitos (2026-11-10)
+
+Sobre la copia `93129e1`, se agregaron `docs/manual/usuario-e2e.md` y
+`docs/manual/checklist-cumplimiento.md`: recorrido por roles, 31 CU, requisitos técnicos,
+actores, ICONIX y diferencias entre el adjunto preliminar del usuario y el alcance aceptado.
+Se distinguen aceptación histórica, comparación literal y disponibilidad de esta instalación.
+No se ejecutaron nuevas operaciones empresariales, pruebas E2E ni cobros al redactarlos;
+no hay nuevos CU cerrados ni puntos adicionales. La consolidación funcional sigue en 62/102.
+
+El manual conserva como antecedentes de esta sesión el arranque online/demo y sus límites:
+override local ignorado para quitar `CU28_WEBHOOK_URL` vacío, Sync sin iniciar por fallos de
+imagen/descarga de LocalStack, S3/modelos/proveedor documental no preparados para la nueva copia.
+Explica que la revisión técnica exige evidencia disponible y que, sin S3, no se completa un
+recorrido nuevo hasta cobro. No acredita salud actual ni traslada aceptación de otro entorno.
+El criterio documental se registra en `docs/decisions/034-manual-y-checklist-trazabilidad.md`.
 
 ## Publicado — T8 Finanzas cerrado y CU26 financiero implementado (2026-11-08)
 

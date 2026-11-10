@@ -7,6 +7,47 @@ security:
   -
     bearer: []
 paths:
+  "/employees/{id}/access/login":
+    post:
+      operationId: configureEmployeeLogin
+      summary: "Configure username and permanent password on the linked active identity"
+      x-required-permissions: ["employees:write", "security:write"]
+      description: "Requires active employee and synced owned identity. Refuses targets with permissions above caller. Keycloak temporary=false. Does not assign roles; use CU02. Stores metadata-only audit/receipt, never the password or its digest. Successful operationId replay does not reset credentials again, even if a different password is supplied. Failure/timeouts require explicit retry with the same intent; a new credential change uses a new operationId. Renaming preserves subject and employeeId."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [operationId, username, password]
+              properties:
+                operationId: {type: string, format: uuid}
+                username: {type: string, pattern: "^[a-z0-9][a-z0-9._-]{2,63}$"}
+                password: {type: string, format: password, writeOnly: true, minLength: 8, maxLength: 128, description: "No control characters. Keycloak policy may impose further requirements."}
+      responses:
+        "200":
+          description: "Credential configured; workshop role authorization remains independent."
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [username, ready, replayed]
+                properties:
+                  username: {type: string}
+                  ready: {type: boolean}
+                  replayed: {type: boolean}
+        "400": {description: "VALIDATION_ERROR or LOGIN_POLICY_REJECTED"}
+        "401": {description: "Unauthenticated"}
+        "403": {description: "Missing personnel/security permission"}
+        "404": {description: "EMPLOYEE_NOT_FOUND"}
+        "409": {description: "USERNAME_TAKEN, LOGIN_PROFILE_NOT_READY, LOGIN_IDENTITY_CONFLICT, PERMISSION_ESCALATION or IDEMPOTENCY_CONFLICT"}
+        "503": {description: "Provider/persistence unavailable; no confirmed login result"}
   "/employees":
     get:
       operationId: "listEmployees"

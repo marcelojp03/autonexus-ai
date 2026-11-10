@@ -12,17 +12,17 @@ entrenamiento (que siguen fuera) y los intermedios.
 | --- | ---: | --- |
 | `ml/artifacts/automotive-damage-mobilenetv2-v1/20261101T-with-negatives/model.keras` | 9 642 245 B | `bac84606346eca0043bfb3d7c2b162a97764c6bf2fa217d81f821a6d7c9bffe9` |
 | `…/manifest.json` | — | `ce44d2174117de364aeb094662010008455a869cdd61284781ddaefeba571765` |
-| `…/quality.json` | — | `3b5b44917d0aff313578e16336349bcb3874b1b293349ee6c4f6a6defb7b0b2a` |
+| `…/quality.json` | — | `fdd835cde40960f7a970ab6104cde0e285e4e9b4c31571557690e4bc723e5052` |
 
 `SHA256SUMS` en la misma carpeta permite comprobar la descarga:
 
 ```sh
 cd ml/artifacts/automotive-damage-mobilenetv2-v1/20261101T-with-negatives
 sha256sum -c SHA256SUMS
-`
+```
 
-.gitattributes marca la carpeta con -text: Git no convierte sus fines de línea al hacer checkout,
-así que estos hashes valen igual en Linux, macOS y Windows. Una conversión de EOL los invalidaría.``
+`.gitattributes` marca la carpeta con `-text`: Git no convierte sus fines de línea al hacer checkout,
+así que estos hashes valen igual en Linux, macOS y Windows. Una conversión de EOL los invalidaría.
 
 **No hay Git LFS**: son ~9,6 MB, entran en un clon normal. El dataset **no** se versiona.
 
@@ -78,7 +78,7 @@ Etiquetas y umbrales de esta versión (**cuatro**, no seis):
 | `scratch` | 0.50 |
 
 MS04 Inteligencia lo consume desde `INTELLIGENCE_MODEL_PATH` (por omisión
-`./ml/artifacts/automotive-damage-mobilenetv2-v1`); sin artefacto responde `503 MODEL_NOT_READY` y no
+`./ml/artifacts/automotive-damage-mobilenetv2-v1/20261101T-with-negatives`); sin artefacto responde `503 MODEL_NOT_READY` y no
 inventa puntajes. Los pesos base MobileNetV2 son de ImageNet, **Apache-2.0**, con hash declarado en
 `manifest.json` (`f8aff695…`).
 

@@ -70,11 +70,11 @@ export function validRange(from: string, to: string): boolean {
 export function employeeLanding(effective: readonly string[]): string {
   return effective.includes('employees:read')
     ? 'list'
-    : effective.includes('agenda:read:self')
-      ? 'agenda'
-      : effective.includes('agenda:read:team')
-        ? 'agenda/team'
-        : 'list';
+    : effective.includes('agenda:read:team')
+      ? 'agenda/team'
+      : effective.includes('agenda:read:self')
+        ? 'agenda'
+        : 'assistant';
 }
 export function agendaError(error: { code: string; statusCode: number }): string {
   if (error.statusCode === 401) return 'La sesión terminó. Ingresá nuevamente.';

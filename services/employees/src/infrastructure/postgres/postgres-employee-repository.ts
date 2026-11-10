@@ -16,6 +16,7 @@ import type {
   Page,
 } from '../../application/employee-repository.js';
 import type { IdentityDesired } from '../../application/identity-gateway.js';
+import type { LoginResult } from '../../application/configure-employee-login.js';
 import { dataSourceOptions } from './data-source-options.js';
 type RecordRow = { record: Employee };
 export class PostgresEmployeeRepository
@@ -110,6 +111,35 @@ export class PostgresEmployeeRepository
       const employee = await this.find(r, id);
       if (!employee) throw new EmployeeError(404, 'EMPLOYEE_NOT_FOUND');
       return employee;
+    });
+  }
+  configureLogin(id: string, operationId: string, username: string, actor: string,
+    apply: (employee: Employee) => Promise<void>): Promise<LoginResult> {
+    return this.locked(['login-operation:' + operationId, 'employee:' + id, 'security:administrators', 'security:employee:' + id], async r => {
+      const employee = await this.find(r, id);
+      if (!employee) throw new EmployeeError(404, 'EMPLOYEE_NOT_FOUND');
+      if (employee.status !== 'active' || employee.access.status !== 'synced' || !employee.access.subject)
+        throw new EmployeeError(409, 'LOGIN_PROFILE_NOT_READY');
+      const previous = await this.rows<Array<{employee_id: string; actor_subject: string; username: string; status: string}>>(
+        r, 'SELECT employee_id,actor_subject,username,status FROM employees.login_commands WHERE operation_id=$1', [operationId]);
+      if (previous[0]) {
+        if (previous[0].employee_id !== id || previous[0].actor_subject !== actor || previous[0].username !== username)
+          throw new EmployeeError(409, 'IDEMPOTENCY_CONFLICT');
+        // Never apply another password on a completed operation replay.
+        if (previous[0].status === 'ready') return {username, ready: true, replayed: true};
+      }
+      await r.query(`INSERT INTO employees.login_commands(operation_id,employee_id,actor_subject,username,status)
+        VALUES($1,$2,$3,$4,'pending') ON CONFLICT(operation_id) DO UPDATE SET status='pending',error_code=NULL,updated_at=now()`,
+        [operationId, id, actor, username]);
+      try {
+        await apply(employee);
+        await r.query("UPDATE employees.login_commands SET status='ready',error_code=NULL,updated_at=now() WHERE operation_id=$1", [operationId]);
+      } catch (error) {
+        const code = error instanceof EmployeeError ? error.code : 'LOGIN_PROVIDER_UNAVAILABLE';
+        await r.query("UPDATE employees.login_commands SET status='failed',error_code=$2,updated_at=now() WHERE operation_id=$1", [operationId, code]);
+        throw error;
+      }
+      return {username, ready: true, replayed: false};
     });
   }
   list(q: PageQuery): Promise<Page<Employee>> {

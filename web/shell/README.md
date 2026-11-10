@@ -1,5 +1,13 @@
 # Shell y PWA — primera integración local
 
+## Entrada web local (2026-11-10)
+
+Cabecera y sesión compactas, rol legible, sección activa y enlaces demo fuera de la navegación
+normal. El enlace Empleados prioriza personal/agenda de equipo/propia según permisos efectivos,
+en paridad con la entrada Angular. Los diagnósticos se presentan solo con `?diagnostics=1` y
+`security:read`; sus APIs conservan su autorización. Decisión036 y STATUS registran build,
+36 pruebas y revisión real de jefe/mecánico a1440/390. No es rediseño de todas las pantallas.
+
 ## CU22 — revisión manual independiente y fallos locales
 
 La preparación del trabajo y los recursos básicos no exige modelo. La revisión humana
