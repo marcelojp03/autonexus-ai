@@ -1,5 +1,26 @@
 # Estado comprobado
 
+## Entrega de ML a un compañero: modelo versionado y dataset con revisión fijada (2026-11-08)
+
+El artefacto del modelo deja de estar ignorado: `ml/artifacts/automotive-damage-mobilenetv2-v1/
+20261101T-with-negatives/` viaja en el repositorio con `model.keras` (9 642 245 B,
+`bac84606…`), `manifest.json`, `quality.json` y `SHA256SUMS`; los datos de entrenamiento y los
+intermedios siguen fuera. La descarga del dataset se **fijó a la revisión** con la que se entrenó
+(`b5abbf54bdf7c8817a4e20b6ab39c8f1fe98a0e5`) en `ml/training/download_dataset.py`, que antes tomaba
+lo último publicado; se compiló y su `--help` expone `--revision`.
+
+Se corrigieron dos afirmaciones desactualizadas del `README` de `ml`: ya no dice que el manifiesto se
+versiona mientras todo el artefacto se ignora, y aclara que el dataset declara seis clases pero el
+artefacto publicado tiene **cuatro** (`crack`, `dent`, `glass_shatter`, `scratch`); las demás se
+descartaron por falta de positivos en evaluación.
+
+La entrega documentada (`docs/handoffs/2026-11-08-ml-datasets-modelo.md`) separa lo que existe de lo
+que no: hashes verificados, licencias (dataset **CC BY 4.0** con atribución a `tugberkkalay` sobre
+CarDD/VehiDE/HITL; MobileNetV2 Apache-2.0 con hash de pesos base), umbrales y preprocesamiento
+exactos, y el estado real de calidad: `experimental`, 6/10 y 5/10 falsos positivos en la muestra,
+macro F1 0.6855 en test propio, `crack` con F1 0.4303, sin partición disjunta por vehículo. No se
+acredita precisión ni licencia de distribución de pesos derivados.
+
 ## Publicado — T8 Finanzas cerrado y CU26 financiero implementado (2026-11-08)
 
 Publicado **`edbceaa`** sobre `98d6f58` (FF de `main` y push normal de `main`/`work/marcelo`, ambas refs remotas confirmadas). Auditoría de las 30 rutas del delta sin hallazgos; revisión independiente hecha y sus hallazgos corregidos antes de publicar. Revisión visual **real** de cotizaciones, cobros y
