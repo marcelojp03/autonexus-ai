@@ -1,2 +1,4 @@
 infra/local/*.sh text eol=lf
 infra/local/docker/*.Dockerfile text eol=lf
+# El artefacto entregado se verifica por SHA-256: Git no debe convertir sus bytes al hacer checkout.
+ml/artifacts/** -text
