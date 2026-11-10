@@ -9,6 +9,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -17,9 +18,11 @@ import '../api/owner_api.dart';
 import '../config.dart';
 import '../offline/offline_models.dart';
 import '../offline/offline_store.dart';
+import '../offline/vehicle_history.dart';
 import '../offline/sync_service.dart';
 import '../session/keycloak_session.dart';
 import '../evidence/photo_capture.dart';
+import '../push/push_registration.dart';
 
 class JourneyController extends ChangeNotifier {
   JourneyController({
@@ -28,6 +31,7 @@ class JourneyController extends ChangeNotifier {
     required this.api,
     required this.sync,
     PhotoCapturePort? photoCapture,
+    this.pushRegistration,
   }) : photoCapture = photoCapture ?? MobilePhotoCapture();
 
   final KeycloakSession session;
@@ -35,6 +39,7 @@ class JourneyController extends ChangeNotifier {
   final OwnerApi api;
   final SyncService sync;
   final PhotoCapturePort photoCapture;
+  final PushRegistrationPort? pushRegistration;
 
   SessionSnapshot get snapshot => session.snapshot;
 
@@ -45,6 +50,10 @@ class JourneyController extends ChangeNotifier {
   String? notice;
   String? lastError;
   bool busy = false;
+  List<VehicleHistoryVehicle> historyVehicles = const [];
+  VehicleHistorySnapshot? openHistory;
+  bool historyOffline = false;
+  String? historyError;
 
   /// Count of operations that were interrupted while `sending` and went back to `pending`.
   int recovered = 0;
@@ -52,6 +61,29 @@ class JourneyController extends ChangeNotifier {
   /// Subject that owns the local copy. With no session this is what lets the operator consult the
   /// prepared work offline; it is a scope, never a credential.
   String? localSubject;
+
+  final Map<String, ({String description, String minutes})> _advanceDrafts = {};
+  String? _previousAccountPushToken;
+
+  String _draftKey(PreparedWork work) =>
+      '${work.subject.length}:${work.subject}${work.assignmentId}';
+
+  ({String description, String minutes})? advanceDraft(PreparedWork work) =>
+      _advanceDrafts[_draftKey(work)];
+
+  void saveAdvanceDraft(
+    PreparedWork work, {
+    required String description,
+    required String minutes,
+  }) {
+    _advanceDrafts[_draftKey(work)] = (
+      description: description,
+      minutes: minutes,
+    );
+  }
+
+  void clearAdvanceDraft(PreparedWork work) =>
+      _advanceDrafts.remove(_draftKey(work));
 
   Future<void> load() async {
     localSubject = await store.localSubject();
@@ -70,8 +102,11 @@ class JourneyController extends ChangeNotifier {
 
   Future<void> signIn() async {
     await _run(() async {
+      final existingToken = await session.accessToken();
+      _previousAccountPushToken = existingToken;
       final result = await session.signIn();
       if (result.error != null) {
+        _previousAccountPushToken = null;
         lastError = result.error;
         return;
       }
@@ -87,6 +122,7 @@ class JourneyController extends ChangeNotifier {
     await _run(() async {
       final result = await session.completeAuthorization(callback);
       if (!result.authenticated) {
+        _previousAccountPushToken = null;
         lastError = result.error ?? 'No se pudo completar el inicio de sesión.';
         return;
       }
@@ -103,23 +139,231 @@ class JourneyController extends ChangeNotifier {
     }
     final previous = await store.localSubject();
     if (previous != null && previous != subject) {
+      final previousToken = _previousAccountPushToken;
+      if (previousToken != null) {
+        await pushRegistration?.deactivate(previousToken);
+      }
       // Another account signed in on this device: its prepared works and queue are wiped, as the
       // offline design requires, so nobody reads or sends work that is not theirs.
       await store.forget(previous);
     }
     await store.setLocalSubject(subject);
+    _previousAccountPushToken = null;
+    final accessToken = await session.accessToken();
+    if (accessToken != null) await pushRegistration?.activate(accessToken);
     notice = 'Sesión iniciada como ${result.name ?? subject}.';
   }
 
   Future<void> signOut() async {
     await _run(() async {
       final subject = snapshot.subject ?? localSubject;
+      final token = await session.accessToken();
+      if (token != null) await pushRegistration?.deactivate(token);
       await session.signOut();
       if (subject != null) await store.forget(subject);
       available = null;
       notice = 'Sesión cerrada; la copia local se descartó.';
     });
     await load();
+  }
+
+  Future<void> findHistoryVehicles(String search) async {
+    final boundedSearch = search.trim();
+    if (boundedSearch.length < 2 || boundedSearch.length > 100) {
+      historyError = 'Ingresá entre dos y cien caracteres para buscar.';
+      notifyListeners();
+      return;
+    }
+    historyError = null;
+    await _run(() async {
+      final subject = snapshot.subject ?? localSubject;
+      if (subject == null) {
+        historyVehicles = const [];
+        historyError = 'Iniciá sesión para buscar vehículos.';
+        return;
+      }
+      if (!snapshot.authenticated) {
+        final cached = await store.vehicleHistoryVehicles(subject);
+        final term = boundedSearch.toLowerCase();
+        historyVehicles = cached
+            .where(
+              (vehicle) =>
+                  vehicle.plate.toLowerCase().contains(term) ||
+                  vehicle.make.toLowerCase().contains(term) ||
+                  vehicle.model.toLowerCase().contains(term),
+            )
+            .toList();
+        historyError = historyVehicles.isEmpty
+            ? 'Sin conexión: no hay coincidencias descargadas previamente.'
+            : null;
+        notifyListeners();
+        return;
+      }
+      final token = await _token();
+      if (token == null) return;
+      late final List<VehicleHistoryVehicle> found;
+      try {
+        found = await api.findHistoryVehicles(token, boundedSearch);
+      } on OwnerFailure catch (error) {
+        if (error.status != 0 && error.status != 503) rethrow;
+        final cached = await store.vehicleHistoryVehicles(subject);
+        final term = boundedSearch.toLowerCase();
+        found = cached
+            .where(
+              (vehicle) =>
+                  vehicle.plate.toLowerCase().contains(term) ||
+                  vehicle.make.toLowerCase().contains(term) ||
+                  vehicle.model.toLowerCase().contains(term),
+            )
+            .toList();
+        historyOffline = true;
+        historyError = found.isEmpty
+            ? 'Sin conexión: no hay coincidencias descargadas previamente.'
+            : null;
+        historyVehicles = found;
+        notifyListeners();
+        return;
+      }
+      if (!snapshot.authenticated || snapshot.subject != subject)
+        throw const OwnerFailure(
+          401,
+          'UNAUTHENTICATED',
+          'La cuenta cambió durante la búsqueda.',
+        );
+      historyVehicles = found;
+      historyOffline = false;
+      historyError = found.isEmpty
+          ? 'No se encontraron vehículos activos con ese texto.'
+          : null;
+      notifyListeners();
+    });
+    if (historyError == null && lastError != null) historyError = lastError;
+    notifyListeners();
+  }
+
+  Future<VehicleHistorySnapshot?> loadVehicleHistory(
+    VehicleHistoryVehicle vehicle,
+  ) async {
+    VehicleHistorySnapshot? result;
+    historyError = null;
+    await _run(() async {
+      final subject = snapshot.subject ?? localSubject;
+      if (subject == null)
+        throw const OwnerFailure(
+          401,
+          'UNAUTHENTICATED',
+          'La sesión no identifica la copia local.',
+        );
+      if (!snapshot.authenticated) {
+        result = await store.vehicleHistory(subject, vehicle.id);
+        if (result == null)
+          throw const OwnerFailure(
+            404,
+            'SERVICE_HISTORY_NOT_DOWNLOADED',
+            'Este historial no se descargó para usar offline.',
+          );
+        historyOffline = true;
+      } else {
+        final token = await _token();
+        if (token == null) return;
+        try {
+          final page = await api.vehicleServiceHistory(token, vehicle.id);
+          if (!snapshot.authenticated || snapshot.subject != subject)
+            throw const OwnerFailure(
+              401,
+              'UNAUTHENTICATED',
+              'La cuenta cambió durante la consulta.',
+            );
+          result = VehicleHistorySnapshot(
+            subject: subject,
+            vehicle: vehicle,
+            fetchedAt: DateTime.now().toUtc(),
+            truncated: page.truncated,
+            entries: page.entries,
+          );
+          historyOffline = false;
+        } on OwnerFailure catch (error) {
+          if (error.status != 0 && error.status != 503) rethrow;
+          result = await store.vehicleHistory(subject, vehicle.id);
+          if (result == null) rethrow;
+          historyOffline = true;
+        }
+      }
+      openHistory = result;
+      historyError = null;
+      notifyListeners();
+    });
+    if (result == null && lastError != null) historyError = lastError;
+    notifyListeners();
+    return result;
+  }
+
+  Future<bool> downloadHistoryForOffline(VehicleHistoryVehicle vehicle) async {
+    var saved = false;
+    await _run(() async {
+      final subject = snapshot.subject;
+      if (!snapshot.authenticated || subject == null)
+        throw const OwnerFailure(
+          401,
+          'UNAUTHENTICATED',
+          'Iniciá sesión para descargar el historial.',
+        );
+      final token = await _token();
+      if (token == null) return;
+      final page = await api.vehicleServiceHistory(token, vehicle.id);
+      final files = <String, DownloadedHistoryEvidence>{};
+      var downloadedBytes = 0;
+      for (final entry in page.entries) {
+        for (final evidence in entry.evidences) {
+          downloadedBytes += evidence.sizeBytes;
+          if (downloadedBytes > OfflineStore.maxHistoryBytes)
+            throw const FileSystemException('La copia offline supera 50 MiB.');
+          final file = await api.downloadHistoryEvidence(
+            token,
+            vehicle.id,
+            entry.orderId,
+            evidence,
+          );
+          if (!snapshot.authenticated || snapshot.subject != subject)
+            throw const OwnerFailure(
+              401,
+              'UNAUTHENTICATED',
+              'La cuenta cambió durante la descarga.',
+            );
+          files[evidence.id] = file;
+        }
+      }
+      if (!snapshot.authenticated || snapshot.subject != subject)
+        throw const OwnerFailure(
+          401,
+          'UNAUTHENTICATED',
+          'La cuenta cambió antes de guardar la copia.',
+        );
+      final complete = VehicleHistorySnapshot(
+        subject: subject,
+        vehicle: vehicle,
+        fetchedAt: DateTime.now().toUtc(),
+        truncated: page.truncated,
+        entries: page.entries,
+      );
+      await store.replaceVehicleHistory(complete, files);
+      if (!snapshot.authenticated || snapshot.subject != subject) {
+        await store.forget(subject);
+        throw const OwnerFailure(
+          401,
+          'UNAUTHENTICATED',
+          'La cuenta cambió mientras se guardaba la copia.',
+        );
+      }
+      openHistory = await store.vehicleHistory(subject, vehicle.id);
+      historyOffline = false;
+      historyError = null;
+      saved = true;
+      notifyListeners();
+    });
+    if (!saved && lastError != null) historyError = lastError;
+    notifyListeners();
+    return saved;
   }
 
   /// Downloads the authorised work of the signed-in employee and prepares the one chosen.
@@ -134,6 +378,28 @@ class JourneyController extends ChangeNotifier {
     });
   }
 
+  Future<void> enableNotifications() async {
+    final token = await _token();
+    if (token == null) return;
+    await pushRegistration?.activate(token, requestPermission: true);
+    notice = 'Los avisos de trabajos asignados quedaron habilitados en este dispositivo.';
+    notifyListeners();
+  }
+
+  /// A push only selects a candidate; the agenda API reauthorizes ownership before the UI opens it.
+  Future<void> handleAssignmentNotification(Map<String, dynamic> data) async {
+    if (data['eventKind'] != 'cu15.assignment.confirmed' ||
+        data['assignmentId'] is! String ||
+        !snapshot.authenticated)
+      return;
+    await fetchAvailable();
+    if (available?.any((item) => item.assignmentId == data['assignmentId']) !=
+        true) {
+      notice = 'La asignación ya no está disponible en tu agenda.';
+      notifyListeners();
+    }
+  }
+
   Future<void> chooseAgendaDay(DateTime day) async {
     agendaDay = DateTime(day.year, day.month, day.day);
     available = null;
@@ -145,7 +411,8 @@ class JourneyController extends ChangeNotifier {
     if (busy) return;
     await _run(() async {
       if (!item.canReceiveAdvances) {
-        lastError = 'Este trabajo no está en ejecución y no admite nuevos avances.';
+        lastError =
+            'Este trabajo no está en ejecución y no admite nuevos avances.';
         return;
       }
       final token = await _token();
@@ -276,6 +543,7 @@ class JourneyController extends ChangeNotifier {
       );
       await store.enqueue(candidate);
       created = candidate;
+      clearAdvanceDraft(work);
       notice =
           'Avance guardado como pendiente. Todavía no está en el servidor.';
     });

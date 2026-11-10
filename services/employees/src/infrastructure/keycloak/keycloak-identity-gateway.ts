@@ -98,7 +98,7 @@ export class KeycloakIdentityGateway implements IdentityGateway {
       if (
         !user ||
         typeof user.id !== 'string' ||
-        user.username !== username ||
+        (desired.subject === null && user.username !== username) ||
         user.attributes?.employeeId?.length !== 1 ||
         user.attributes.employeeId[0] !== desired.employeeId ||
         (desired.subject !== null && user.id !== desired.subject)
@@ -148,6 +148,7 @@ export class KeycloakIdentityGateway implements IdentityGateway {
       method: 'PUT',
       headers,
       body: JSON.stringify({
+        username: user.username,
         firstName: desired.firstName,
         lastName: desired.lastName,
         email: desired.email,

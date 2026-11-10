@@ -1,6 +1,7 @@
-"""CU02 security contract. Query/Mutation extend the employees schema; every root field
-has an explicit server permission policy resolved from the Employees catalog."""
-
+"""
+CU02 security contract. Query/Mutation extend the employees schema; every root field
+has an explicit server permission policy resolved from the Employees catalog.
+"""
 type SecurityPermission {
   id: String!
   module: String!
@@ -56,8 +57,34 @@ type SecurityHistoryPage {
   limit: Int!
   offset: Int!
 }
-type RoleResult { role: Role! replayed: Boolean! }
-type RoleAssignmentResult { assignment: RoleAssignment! replayed: Boolean! }
+type RoleResult {
+  role: Role!
+  replayed: Boolean!
+}
+type RoleAssignmentResult {
+  assignment: RoleAssignment!
+  replayed: Boolean!
+}
+type McpClientRegistration {
+  clientId: String!
+  displayName: String!
+  enabled: Boolean!
+  scopes: [String!]!
+}
+type McpPublicConfig {
+  endpoint: String
+  protectedResourceMetadataUrl: String
+  oauthIssuer: String!
+  oauthStatus: String!
+  endpointReachability: String!
+}
+
+input McpClientDraftInput {
+  clientId: String!
+  displayName: String!
+  enabled: Boolean!
+  scopes: [String!]!
+}
 
 input RoleCreateInput {
   operationId: UUID!
@@ -89,13 +116,34 @@ extend type Query {
   securityRoles: [Role!]!
   securityRole(name: String!): Role!
   employeeRoles(employeeId: UUID!): EmployeeRoles!
-  securityHistory(roleName: String, employeeId: UUID, limit: Int, offset: Int): SecurityHistoryPage!
+  securityHistory(
+    roleName: String
+    employeeId: UUID
+    limit: Int
+    offset: Int
+  ): SecurityHistoryPage!
+  mcpClientRegistrations: [McpClientRegistration!]!
+  mcpPublicConfig: McpPublicConfig!
 }
 
 extend type Mutation {
   createRole(input: RoleCreateInput!): RoleResult!
   updateRole(name: String!, input: RoleUpdateInput!): RoleResult!
   retryRoleSync(name: String!, input: RoleRetryInput!): RoleResult!
-  assignRole(employeeId: UUID!, input: RoleAssignmentInput!): RoleAssignmentResult!
-  revokeRole(employeeId: UUID!, roleName: String!, input: RoleRevocationInput!): RoleAssignmentResult!
+  assignRole(
+    employeeId: UUID!
+    input: RoleAssignmentInput!
+  ): RoleAssignmentResult!
+  revokeRole(
+    employeeId: UUID!
+    roleName: String!
+    input: RoleRevocationInput!
+  ): RoleAssignmentResult!
+  createMcpClient(input: McpClientDraftInput!): McpClientRegistration!
+  updateMcpClient(input: McpClientDraftInput!): McpClientRegistration!
+  setMcpClientEnabled(
+    clientId: String!
+    enabled: Boolean!
+  ): McpClientRegistration!
+  revokeMcpClient(clientId: String!): Boolean!
 }

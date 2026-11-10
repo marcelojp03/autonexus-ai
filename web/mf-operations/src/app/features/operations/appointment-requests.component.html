@@ -1,0 +1,50 @@
+<nz-page-header nzTitle="Solicitudes de cita" nzSubtitle="Las propuestas de MCP no reservan horarios hasta que el taller las aprueba.">
+  <nz-page-header-extra
+    ><button nz-button type="button" (click)="load()" [disabled]="loading()">Actualizar cola</button></nz-page-header-extra
+  >
+</nz-page-header>
+<nz-alert *ngIf="error()" nzType="error" [nzMessage]="error()!" nzShowIcon></nz-alert>
+<nz-alert *ngIf="notice()" nzType="success" [nzMessage]="notice()!" nzShowIcon></nz-alert>
+<p *ngIf="loading()" role="status">Cargando solicitudes pendientes…</p>
+<nz-empty *ngIf="!loading() && rows().length === 0" nzNotFoundContent="No hay solicitudes pendientes de revisión."></nz-empty>
+<section class="request-list" aria-label="Solicitudes pendientes" *ngIf="!loading() && rows().length">
+  <article class="request-row" *ngFor="let request of rows()">
+    <div>
+      <h2>Servicio solicitado</h2>
+      <p class="request-detail"
+        >Cliente <code>{{ request.customerId }}</code></p
+      >
+      <p class="request-detail"
+        >Vehículo <code>{{ request.vehicleId }}</code> · servicio <code>{{ request.serviceId }}</code></p
+      >
+      <p class="request-detail"
+        >Preferencia: {{ localDate(request.requestedStartsAt) }} a las {{ localTime(request.requestedStartsAt) }} ·
+        {{ request.timeZone }}</p
+      >
+      <p *ngIf="request.notes">Nota: {{ request.notes }}</p>
+      <p class="request-id">Cliente MCP: {{ request.clientId }} · operación {{ request.operationId }}</p>
+      <nz-tag nzColor="gold">Pendiente de revisión</nz-tag>
+    </div>
+    <div class="action-line">
+      <label
+        >Horario a confirmar
+        <input nz-input type="datetime-local" [name]="'startsAt-' + request.operationId" [(ngModel)]="startsAt[request.operationId]" />
+      </label>
+      <button nz-button nzType="primary" type="button" (click)="approve(request)" [disabled]="saving() !== null"
+        >Validar disponibilidad y aprobar</button
+      >
+    </div>
+    <div class="request-actions">
+      <label [for]="'reason-' + request.operationId">Motivo de rechazo</label>
+      <textarea
+        nz-input
+        [id]="'reason-' + request.operationId"
+        [name]="'reason-' + request.operationId"
+        maxlength="300"
+        rows="2"
+        [(ngModel)]="reasons[request.operationId]"
+      ></textarea>
+      <button nz-button nzDanger type="button" (click)="reject(request)" [disabled]="saving() !== null">Rechazar solicitud</button>
+    </div>
+  </article>
+</section>

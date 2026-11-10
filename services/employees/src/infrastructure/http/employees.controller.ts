@@ -15,6 +15,7 @@ import {
   type ArgumentsHost,
 } from '@nestjs/common';
 import { ManageEmployees } from '../../application/manage-employees.js';
+import { ConfigureEmployeeLogin } from '../../application/configure-employee-login.js';
 import { EmployeeError } from '../../domain/employee.js';
 import {
   RequirePermissions,
@@ -49,9 +50,16 @@ class EmployeeErrorFilter implements ExceptionFilter {
 export class EmployeesController {
   constructor(
     @Inject(ManageEmployees) private readonly employees: ManageEmployees,
+    @Inject(ConfigureEmployeeLogin) private readonly login: ConfigureEmployeeLogin,
   ) {}
   @Get() list(@Query() query: unknown) {
     return this.employees.list(query);
+  }
+  @Post(':id/access/login')
+  @HttpCode(200)
+  @RequirePermissions('employees:write', 'security:write')
+  configureLogin(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
+    return this.login.run(id, body, request.identity.subject, request.identity.permissions);
   }
   @Get(':id') get(@Param('id') id: string) {
     return this.employees.get(id);

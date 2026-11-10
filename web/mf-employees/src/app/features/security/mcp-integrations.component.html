@@ -1,0 +1,165 @@
+<nz-page-header nzTitle="Integraciones MCP" nzSubtitle="Controlá qué clientes externos pueden consultar o solicitar operaciones.">
+  <nz-page-header-extra
+    ><button nz-button type="button" (click)="load()" [disabled]="loading()">Actualizar estado</button></nz-page-header-extra
+  >
+</nz-page-header>
+
+@if (error()) {
+  <nz-alert nzType="error" nzShowIcon [nzMessage]="error()!" />
+}
+@if (notice()) {
+  <nz-alert nzType="success" nzShowIcon [nzMessage]="notice()!" />
+}
+@if (!allowed() && !loading()) {
+  <nz-alert
+    nzType="warning"
+    nzShowIcon
+    nzMessage="Acceso insuficiente"
+    nzDescription="La administración MCP requiere el permiso efectivo mcp-clients:manage."
+  />
+}
+
+@if (allowed()) {
+  <div class="integration-layout">
+    <section class="connection" aria-labelledby="mcp-endpoint-title">
+      <h2 id="mcp-endpoint-title">Endpoint para ChatGPT</h2>
+      @if (config(); as current) {
+        <nz-tag
+          [nzColor]="
+            current.endpointReachability === 'local_or_private'
+              ? 'orange'
+              : current.endpointReachability === 'https_configured_unverified'
+                ? 'blue'
+                : 'default'
+          "
+          >{{ statusLabel(current) }}</nz-tag
+        >
+        <p class="muted">Este valor proviene de la configuración del servidor. No se deduce desde la dirección del navegador.</p>
+        @if (current.endpoint) {
+          <code class="endpoint" aria-label="Endpoint MCP configurado">{{ current.endpoint }}</code>
+        } @else {
+          <p class="muted">Definí MCP_PUBLIC_URL con la URL completa terminada en <code>/mcp</code> para mostrar el endpoint real.</p>
+        }
+        @if (current.protectedResourceMetadataUrl) {
+          <p
+            >Metadata OAuth: <code class="endpoint">{{ current.protectedResourceMetadataUrl }}</code></p
+          >
+        }
+        <p
+          >Issuer configurado: <code>{{ current.oauthIssuer || 'No disponible' }}</code> ·
+          {{ current.oauthStatus === 'https_configured' ? 'HTTPS configurado' : 'desarrollo local' }}</p
+        >
+      } @else {
+        <p role="status">Consultando configuración del servidor…</p>
+      }
+    </section>
+
+    <aside class="tutorial" aria-labelledby="chatgpt-setup-title">
+      <h2 id="chatgpt-setup-title">Conectar una app MCP personalizada</h2>
+      <ol>
+        <li
+          >Publicá una URL estable con HTTPS o usá un túnel seguro aprobado. Un endpoint local o privado no es accesible desde ChatGPT
+          cloud.</li
+        >
+        <li
+          >En Keycloak, creá un cliente OAuth estático para ChatGPT y registrá exactamente la URI de redirección que ChatGPT te muestre. No
+          supongas una callback.</li
+        >
+        <li>Registrá aquí el mismo <code>clientId</code> y los alcances mínimos. El ID debe corresponder al cliente OAuth de Keycloak.</li>
+        <li>En la configuración de apps MCP de ChatGPT, pegá el endpoint mostrado (termina en <code>/mcp</code>) y elegí OAuth.</li>
+        <li
+          >Iniciá sesión y aceptá el consentimiento. Revisá la lista de herramientas permitidas y probá primero una consulta de solo
+          lectura.</li
+        >
+      </ol>
+      <p class="muted"
+        >La disponibilidad puede depender del plan, workspace y políticas de ChatGPT. Esta pantalla no verifica una sesión real de
+        ChatGPT.</p
+      >
+      <p
+        ><strong>Secretos:</strong> el client secret se configura en Keycloak/ChatGPT cuando corresponda. AutoNexus nunca lo solicita,
+        guarda ni vuelve a mostrar.</p
+      >
+    </aside>
+  </div>
+
+  <section class="registry" aria-labelledby="mcp-registry-title">
+    <div class="toolbar"
+      ><h2 id="mcp-registry-title">Clientes registrados</h2
+      ><button nz-button nzType="primary" type="button" (click)="beginCreate()">Registrar cliente</button></div
+    >
+    @if (loading()) {
+      <p role="status">Cargando el registro…</p>
+    }
+    @if (!loading() && clients().length === 0) {
+      <nz-empty nzNotFoundContent="Todavía no hay clientes MCP registrados."></nz-empty>
+    }
+    @for (client of clients(); track client.clientId) {
+      <article class="client-row">
+        <div>
+          <p class="client-name"
+            >{{ client.displayName }}
+            <nz-tag [nzColor]="client.enabled ? 'green' : 'default'">{{ client.enabled ? 'Habilitado' : 'Suspendido' }}</nz-tag></p
+          >
+          <code class="client-id">{{ client.clientId }}</code>
+          <div class="scope-list"
+            ><nz-tag *ngFor="let scope of client.scopes">{{ scope }}</nz-tag></div
+          >
+        </div>
+        <div class="row-actions">
+          <button nz-button type="button" (click)="beginEdit(client)" [disabled]="saving()">Editar alcances</button>
+          <button nz-button type="button" (click)="setEnabled(client, !client.enabled)" [disabled]="saving()">{{
+            client.enabled ? 'Suspender' : 'Habilitar'
+          }}</button>
+          <button
+            nz-button
+            nzDanger
+            type="button"
+            nz-popconfirm
+            nzPopconfirmTitle="Revocar este cliente MCP?"
+            nzOkText="Revocar"
+            nzCancelText="Cancelar"
+            (nzOnConfirm)="revoke(client)"
+            [disabled]="saving()"
+            >Revocar</button
+          >
+        </div>
+      </article>
+    }
+  </section>
+
+  <section class="editor" aria-labelledby="mcp-client-editor-title">
+    <h2 id="mcp-client-editor-title">{{ editing() ? 'Editar cliente OAuth' : 'Registrar cliente OAuth' }}</h2>
+    <div class="editor-fields">
+      <label class="field"
+        >Client ID
+        <input nz-input [(ngModel)]="clientId" [disabled]="!!editing()" maxlength="200" autocomplete="off" />
+      </label>
+      <label class="field"
+        >Nombre visible
+        <input nz-input [(ngModel)]="displayName" maxlength="120" autocomplete="off" />
+      </label>
+    </div>
+    <p class="muted">No ingreses secretos, access tokens ni refresh tokens. El client ID es el identificador público del cliente OAuth.</p>
+    <h3>Alcances autorizados</h3>
+    <div class="scope-list">
+      @for (option of scopeOptions; track option.id) {
+        <label
+          nz-checkbox
+          [nzChecked]="hasScope(option.id)"
+          [nzDisabled]="option.id === 'mcp' || saving()"
+          (nzCheckedChange)="toggleScope(option.id, $event)"
+          >{{ option.label }} <code>{{ option.id }}</code></label
+        >
+      }
+    </div>
+    <div class="toolbar">
+      <button nz-button nzType="primary" type="button" (click)="save()" [disabled]="saving() || !clientId.trim() || !displayName.trim()">{{
+        editing() ? 'Guardar cambios' : 'Registrar cliente'
+      }}</button>
+      @if (editing()) {
+        <button nz-button type="button" (click)="beginCreate()" [disabled]="saving()">Cancelar edición</button>
+      }
+    </div>
+  </section>
+}

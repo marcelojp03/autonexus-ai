@@ -23,6 +23,8 @@ try{
   const token=await (await request('/realms/master/protocol/openid-connect/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'password',client_id:'admin-cli',username:env.KC_BOOTSTRAP_ADMIN_USERNAME,password:env.KC_BOOTSTRAP_ADMIN_PASSWORD})})).json();
   const headers={Authorization:'Bearer '+token.access_token,'Content-Type':'application/json'};
   const api=async(path,method='GET',data)=>{const response=await request('/admin/realms/autonexus'+path,{method,headers,...(data===undefined?{}:{body:JSON.stringify(data)})});return response.status===200?response.json():null;};
+  const realm=await api('');
+  if(realm.editUsernameAllowed===false)await api('','PUT',{editUsernameAllowed:true});
   const clientId='autonexus-employees-admin';
   let clients=await api('/clients?clientId='+clientId);
   if(!clients.length){await api('/clients','POST',{clientId,enabled:true,publicClient:false,serviceAccountsEnabled:true,standardFlowEnabled:false,implicitFlowEnabled:false,directAccessGrantsEnabled:false,fullScopeAllowed:false,defaultClientScopes:['roles'],optionalClientScopes:[],attributes:{'autonexus.owner':'cu03-employees'}});clients=await api('/clients?clientId='+clientId);}

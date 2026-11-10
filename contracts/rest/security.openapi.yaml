@@ -244,6 +244,7 @@ components:
             - schedules:write
             - security:read
             - security:write
+            - mcp-clients:manage
             - customers:read
             - customers:write
             - vehicles:read

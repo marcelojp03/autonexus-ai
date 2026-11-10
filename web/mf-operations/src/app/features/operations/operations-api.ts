@@ -1,11 +1,40 @@
 import { inject, Injectable } from '@angular/core';
 import { SESSION_PORT } from '../../auth/session';
-import { CREATE_RECEPTION, CREATE_WORK_ORDER, RECEPTIONS, RECEPTION_DETAIL, ORDERS, type Reception, type WorkOrder } from './operations.contract';
 import {
-  APPOINTMENTS, CANCEL_APPOINTMENT, CREATE_APPOINTMENT, CREATE_CUSTOMER, CREATE_SERVICE, CREATE_VEHICLE,
-  CUSTOMERS, DEACTIVATE_CUSTOMER, DEACTIVATE_SERVICE, DEACTIVATE_VEHICLE, RESCHEDULE_APPOINTMENT, SERVICES,
-  UPDATE_CUSTOMER, UPDATE_SERVICE, UPDATE_VEHICLE, VEHICLES,
-  type Appointment, type Customer, type Page, type ServiceItem, type Vehicle,
+  APPROVE_APPOINTMENT_REQUEST,
+  APPOINTMENT_REQUESTS,
+  CREATE_RECEPTION,
+  CREATE_WORK_ORDER,
+  RECEPTIONS,
+  RECEPTION_DETAIL,
+  ORDERS,
+  REJECT_APPOINTMENT_REQUEST,
+  type AppointmentRequest,
+  type Reception,
+  type WorkOrder
+} from './operations.contract';
+import {
+  APPOINTMENTS,
+  CANCEL_APPOINTMENT,
+  CREATE_APPOINTMENT,
+  CREATE_CUSTOMER,
+  CREATE_SERVICE,
+  CREATE_VEHICLE,
+  CUSTOMERS,
+  DEACTIVATE_CUSTOMER,
+  DEACTIVATE_SERVICE,
+  DEACTIVATE_VEHICLE,
+  RESCHEDULE_APPOINTMENT,
+  SERVICES,
+  UPDATE_CUSTOMER,
+  UPDATE_SERVICE,
+  UPDATE_VEHICLE,
+  VEHICLES,
+  type Appointment,
+  type Customer,
+  type Page,
+  type ServiceItem,
+  type Vehicle
 } from './operations.contract';
 
 /** Failure with a stable code so screens can explain what happened. */
@@ -26,18 +55,23 @@ export class OperationsApi {
   }
 
   createCustomer(input: Record<string, unknown>): Promise<Customer> {
-    return this.run<{ createCustomer: { customer: Customer } }>(CREATE_CUSTOMER, { input: { operationId: operation(), ...input } })
-      .then(data => data.createCustomer.customer);
+    return this.run<{ createCustomer: { customer: Customer } }>(CREATE_CUSTOMER, { input: { operationId: operation(), ...input } }).then(
+      data => data.createCustomer.customer
+    );
   }
 
   updateCustomer(id: string, version: number, input: Record<string, unknown>): Promise<Customer> {
-    return this.run<{ updateCustomer: { customer: Customer } }>(UPDATE_CUSTOMER, { id, input: { operationId: operation(), expectedVersion: version, ...input } })
-      .then(data => data.updateCustomer.customer);
+    return this.run<{ updateCustomer: { customer: Customer } }>(UPDATE_CUSTOMER, {
+      id,
+      input: { operationId: operation(), expectedVersion: version, ...input }
+    }).then(data => data.updateCustomer.customer);
   }
 
   deactivateCustomer(id: string, version: number): Promise<Customer> {
-    return this.run<{ deactivateCustomer: { customer: Customer } }>(DEACTIVATE_CUSTOMER, { id, input: { operationId: operation(), expectedVersion: version } })
-      .then(data => data.deactivateCustomer.customer);
+    return this.run<{ deactivateCustomer: { customer: Customer } }>(DEACTIVATE_CUSTOMER, {
+      id,
+      input: { operationId: operation(), expectedVersion: version }
+    }).then(data => data.deactivateCustomer.customer);
   }
 
   vehicles(query: Record<string, unknown>): Promise<Page<Vehicle>> {
@@ -45,18 +79,23 @@ export class OperationsApi {
   }
 
   createVehicle(input: Record<string, unknown>): Promise<Vehicle> {
-    return this.run<{ createVehicle: { vehicle: Vehicle } }>(CREATE_VEHICLE, { input: { operationId: operation(), ...input } })
-      .then(data => data.createVehicle.vehicle);
+    return this.run<{ createVehicle: { vehicle: Vehicle } }>(CREATE_VEHICLE, { input: { operationId: operation(), ...input } }).then(
+      data => data.createVehicle.vehicle
+    );
   }
 
   updateVehicle(id: string, version: number, input: Record<string, unknown>): Promise<Vehicle> {
-    return this.run<{ updateVehicle: { vehicle: Vehicle } }>(UPDATE_VEHICLE, { id, input: { operationId: operation(), expectedVersion: version, ...input } })
-      .then(data => data.updateVehicle.vehicle);
+    return this.run<{ updateVehicle: { vehicle: Vehicle } }>(UPDATE_VEHICLE, {
+      id,
+      input: { operationId: operation(), expectedVersion: version, ...input }
+    }).then(data => data.updateVehicle.vehicle);
   }
 
   deactivateVehicle(id: string, version: number): Promise<Vehicle> {
-    return this.run<{ deactivateVehicle: { vehicle: Vehicle } }>(DEACTIVATE_VEHICLE, { id, input: { operationId: operation(), expectedVersion: version } })
-      .then(data => data.deactivateVehicle.vehicle);
+    return this.run<{ deactivateVehicle: { vehicle: Vehicle } }>(DEACTIVATE_VEHICLE, {
+      id,
+      input: { operationId: operation(), expectedVersion: version }
+    }).then(data => data.deactivateVehicle.vehicle);
   }
 
   services(query: Record<string, unknown>): Promise<Page<ServiceItem>> {
@@ -64,18 +103,23 @@ export class OperationsApi {
   }
 
   createService(input: Record<string, unknown>): Promise<ServiceItem> {
-    return this.run<{ createService: { service: ServiceItem } }>(CREATE_SERVICE, { input: { operationId: operation(), ...input } })
-      .then(data => data.createService.service);
+    return this.run<{ createService: { service: ServiceItem } }>(CREATE_SERVICE, { input: { operationId: operation(), ...input } }).then(
+      data => data.createService.service
+    );
   }
 
   updateService(id: string, version: number, input: Record<string, unknown>): Promise<ServiceItem> {
-    return this.run<{ updateService: { service: ServiceItem } }>(UPDATE_SERVICE, { id, input: { operationId: operation(), expectedVersion: version, ...input } })
-      .then(data => data.updateService.service);
+    return this.run<{ updateService: { service: ServiceItem } }>(UPDATE_SERVICE, {
+      id,
+      input: { operationId: operation(), expectedVersion: version, ...input }
+    }).then(data => data.updateService.service);
   }
 
   deactivateService(id: string, version: number): Promise<ServiceItem> {
-    return this.run<{ deactivateService: { service: ServiceItem } }>(DEACTIVATE_SERVICE, { id, input: { operationId: operation(), expectedVersion: version } })
-      .then(data => data.deactivateService.service);
+    return this.run<{ deactivateService: { service: ServiceItem } }>(DEACTIVATE_SERVICE, {
+      id,
+      input: { operationId: operation(), expectedVersion: version }
+    }).then(data => data.deactivateService.service);
   }
 
   appointments(query: Record<string, unknown>): Promise<Page<Appointment>> {
@@ -83,20 +127,43 @@ export class OperationsApi {
   }
 
   createAppointment(input: Record<string, unknown>): Promise<Appointment> {
-    return this.run<{ createAppointment: { appointment: Appointment } }>(CREATE_APPOINTMENT, { input: { operationId: operation(), ...input } })
-      .then(data => data.createAppointment.appointment);
+    return this.run<{ createAppointment: { appointment: Appointment } }>(CREATE_APPOINTMENT, {
+      input: { operationId: operation(), ...input }
+    }).then(data => data.createAppointment.appointment);
   }
 
   rescheduleAppointment(id: string, version: number, startsAt: string, notes?: string): Promise<Appointment> {
     return this.run<{ rescheduleAppointment: { appointment: Appointment } }>(RESCHEDULE_APPOINTMENT, {
-      id, input: { operationId: operation(), expectedVersion: version, startsAt, notes },
+      id,
+      input: { operationId: operation(), expectedVersion: version, startsAt, notes }
     }).then(data => data.rescheduleAppointment.appointment);
   }
 
   cancelAppointment(id: string, version: number, reason: string): Promise<Appointment> {
     return this.run<{ cancelAppointment: { appointment: Appointment } }>(CANCEL_APPOINTMENT, {
-      id, input: { operationId: operation(), expectedVersion: version, reason },
+      id,
+      input: { operationId: operation(), expectedVersion: version, reason }
     }).then(data => data.cancelAppointment.appointment);
+  }
+
+  appointmentRequests(): Promise<Page<AppointmentRequest>> {
+    return this.run<{ appointmentRequests: Page<AppointmentRequest> }>(APPOINTMENT_REQUESTS, { limit: 100, offset: 0 }).then(
+      data => data.appointmentRequests
+    );
+  }
+
+  approveAppointmentRequest(request: AppointmentRequest, startsAt: string): Promise<AppointmentRequest> {
+    return this.run<{ approveAppointmentRequest: { request: AppointmentRequest } }>(APPROVE_APPOINTMENT_REQUEST, {
+      operationId: request.operationId,
+      input: { startsAt }
+    }).then(data => data.approveAppointmentRequest.request);
+  }
+
+  rejectAppointmentRequest(request: AppointmentRequest, reason: string): Promise<AppointmentRequest> {
+    return this.run<{ rejectAppointmentRequest: { request: AppointmentRequest } }>(REJECT_APPOINTMENT_REQUEST, {
+      operationId: request.operationId,
+      input: { reason }
+    }).then(data => data.rejectAppointmentRequest.request);
   }
 
   receptions(query: Record<string, unknown>): Promise<Page<Reception>> {
@@ -109,17 +176,25 @@ export class OperationsApi {
     return this.run<{ orders: Page<WorkOrder> }>(ORDERS, query).then(data => data.orders);
   }
   createReception(input: Record<string, unknown>): Promise<Reception> {
-    return this.run<{ createReception: { reception: Reception } }>(CREATE_RECEPTION, { input }).then(data => data.createReception.reception);
+    return this.run<{ createReception: { reception: Reception } }>(CREATE_RECEPTION, { input }).then(
+      data => data.createReception.reception
+    );
   }
   createWorkOrder(input: Record<string, unknown>): Promise<WorkOrder> {
     return this.run<{ createWorkOrder: { order: WorkOrder } }>(CREATE_WORK_ORDER, { input }).then(data => data.createWorkOrder.order);
   }
 
   private async run<T>(query: string, variables?: Readonly<Record<string, unknown>>): Promise<T> {
-    if (!this.session) throw new OperationsFailure({ code: 'NO_SESSION_PORT', statusCode: 401, message: 'Esta vista requiere la sesión del Shell.' });
+    if (!this.session)
+      throw new OperationsFailure({ code: 'NO_SESSION_PORT', statusCode: 401, message: 'Esta vista requiere la sesión del Shell.' });
     const result = await this.session.requestBusiness(query, variables);
     if (result.errors?.length) throw new OperationsFailure(result.errors[0]);
-    if (!result.data) throw new OperationsFailure({ code: 'SERVICE_UNAVAILABLE', statusCode: 503, message: 'El servicio de operaciones no está disponible.' });
+    if (!result.data)
+      throw new OperationsFailure({
+        code: 'SERVICE_UNAVAILABLE',
+        statusCode: 503,
+        message: 'El servicio de operaciones no está disponible.'
+      });
     return result.data as T;
   }
 }
@@ -151,9 +226,10 @@ const FAILURES: Readonly<Record<string, string>> = Object.freeze({
   APPOINTMENT_NOT_SCHEDULED: 'La cita ya no está programada.',
   WORKSHOP_CAPACITY_EXCEEDED: 'El taller no tiene capacidad en esa franja.',
   VERSION_CONFLICT: 'Otra persona modificó el registro; recargá y reintentá.',
-  VEHICLE_HAS_SCHEDULED_APPOINTMENTS: 'El vehículo tiene citas programadas: cancelalas o reprogramalas antes de cambiar el propietario o desactivarlo.',
+  VEHICLE_HAS_SCHEDULED_APPOINTMENTS:
+    'El vehículo tiene citas programadas: cancelalas o reprogramalas antes de cambiar el propietario o desactivarlo.',
   CUSTOMER_HAS_SCHEDULED_APPOINTMENTS: 'El cliente tiene citas programadas: cancelalas antes de desactivarlo.',
-  SERVICE_UNAVAILABLE: 'El servicio no está disponible en este momento.',
+  SERVICE_UNAVAILABLE: 'El servicio no está disponible en este momento.'
 });
 
 export const explain = (error: unknown): string => {

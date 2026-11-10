@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api/owner_api.dart';
@@ -13,6 +16,7 @@ import 'evidence/photo_capture.dart';
 import 'offline/offline_store.dart';
 import 'offline/sync_service.dart';
 import 'session/keycloak_session.dart';
+import 'push/push_registration.dart';
 
 /// Mobile entry point.
 ///
@@ -21,6 +25,10 @@ import 'session/keycloak_session.dart';
 /// reachable from the app bar.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessageBackgroundHandler);
+  }
   // `.env` is a Flutter asset, not a process environment file. It contains only public endpoints
   // and client metadata; never put a client secret, bearer, refresh token or storage credential here.
   await dotenv.load(fileName: 'assets/config/.env', isOptional: true);
@@ -36,6 +44,9 @@ Future<void> main() async {
         launchUrl(url, mode: LaunchMode.externalApplication),
   );
   final ownerApi = OwnerApi(baseUrl: AppConfig.ownerUrl);
+  final pushRegistration = defaultTargetPlatform == TargetPlatform.android
+      ? PushRegistration(baseUrl: AppConfig.employeesUrl)
+      : null;
   final sync = SyncService(
     baseUrl: AppConfig.syncUrl,
     store: store,
@@ -47,6 +58,7 @@ Future<void> main() async {
     api: ownerApi,
     sync: sync,
     photoCapture: photoCapture,
+    pushRegistration: pushRegistration,
   );
   await controller.load();
   runApp(AutoNexusMobileApp(controller: controller));
@@ -97,6 +109,25 @@ class _AutoNexusMobileAppState extends State<AutoNexusMobileApp> {
       widget.controller.handleCallback,
       onError: (Object _) {},
     );
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        unawaited(widget.controller.handleAssignmentNotification(message.data));
+      });
+      FirebaseMessaging.instance
+          .getInitialMessage()
+          .then((message) {
+            if (message != null) {
+              unawaited(
+                widget.controller.handleAssignmentNotification(message.data),
+              );
+            }
+          })
+          .catchError((Object _) {});
+      FirebaseMessaging.onMessage.listen((_) {
+        // Foreground push stays unobtrusive; refresh the authorized agenda instead of showing stale payload data.
+        unawaited(widget.controller.fetchAvailable());
+      });
+    }
     _links
         .getInitialLink()
         .then((uri) {

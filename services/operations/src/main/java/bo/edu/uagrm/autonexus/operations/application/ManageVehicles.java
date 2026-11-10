@@ -3,6 +3,8 @@ package bo.edu.uagrm.autonexus.operations.application;
 import bo.edu.uagrm.autonexus.operations.domain.OperationsError;
 import bo.edu.uagrm.autonexus.operations.domain.Validation;
 import bo.edu.uagrm.autonexus.operations.domain.Vehicle;
+import bo.edu.uagrm.autonexus.operations.domain.VehicleServiceHistory;
+import bo.edu.uagrm.autonexus.operations.application.ExecutionPorts.EvidenceStorage;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -13,9 +15,41 @@ public class ManageVehicles {
     private static final int MAX_PAGE = 100;
 
     private final VehicleRepository repository;
+    private final VehicleServiceHistoryRepository history;
+    private final EvidenceStorage evidenceStorage;
 
-    public ManageVehicles(VehicleRepository repository) {
+    public ManageVehicles(VehicleRepository repository, VehicleServiceHistoryRepository history, EvidenceStorage evidenceStorage) {
         this.repository = repository;
+        this.history = history;
+        this.evidenceStorage = evidenceStorage;
+    }
+
+    public Page<VehicleServiceHistory.Entry> history(String id, String limit, String offset) {
+        UUID vehicleId = Validation.uuid(id);
+        int size = queryInt(limit, 20, 1, MAX_PAGE);
+        int from = queryInt(offset, 0, 0, Integer.MAX_VALUE);
+        return history.list(vehicleId, size, from);
+    }
+
+    public Page<VehicleServiceHistory.VehicleReference> historyVehicles(String search, String limit, String offset) {
+        String term = search == null ? "" : search.trim();
+        if (term.length() < 2 || term.length() > 100) throw OperationsError.invalid();
+        return history.findVehicles(term, queryInt(limit, 20, 1, MAX_PAGE),
+                queryInt(offset, 0, 0, Integer.MAX_VALUE));
+    }
+
+    public VehicleServiceHistory.Entry historyEntry(String id, String orderId) {
+        return history.get(Validation.uuid(id), Validation.uuid(orderId));
+    }
+
+    public VehicleServiceHistory.EvidenceContent historyEvidence(String vehicleId, String orderId, String evidenceId) {
+        var evidence = history.evidence(Validation.uuid(vehicleId), Validation.uuid(orderId), Validation.uuid(evidenceId))
+                .orElseThrow(() -> OperationsError.notFound("SERVICE_HISTORY_EVIDENCE_NOT_FOUND"));
+        if (!evidenceStorage.configured()) throw new OperationsError(503, "EVIDENCE_STORAGE_UNAVAILABLE");
+        byte[] bytes = evidenceStorage.read(evidence.objectKey(), evidence.versionId());
+        if (bytes.length != evidence.sizeBytes()) throw new OperationsError(503, "EVIDENCE_STORAGE_UNAVAILABLE");
+        return new VehicleServiceHistory.EvidenceContent(evidence.fileName(), evidence.contentType(),
+                bytes);
     }
 
     public Page<Vehicle> list(String limit, String offset, String status, String customerId, String search) {

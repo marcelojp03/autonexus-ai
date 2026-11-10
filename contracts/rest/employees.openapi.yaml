@@ -2,11 +2,112 @@ openapi: "3.1.0"
 info:
   title: "AutoNexus CU03 Employees REST contract"
   version: "1.0.0"
-  description: "Early public contract from approved cu03-employees spec S2.2-S2.5; not evidence of implementation. MS02 owns PostgreSQL. ALL operations require administrador. REST is for authorized internal/mobile integrations, never direct web business access; future web BFF uses GraphQL. Trim/collapse whitespace in text fields before length/uniqueness checks; email comparison is case-insensitive. Reject wrong types, null input fields and unknown properties at every level. Dates use UTC. See ../auth/employees.md for idempotency, version, history and identity semantics."
+  description: "Early public contract from approved cu03-employees spec S2.2-S2.5; not evidence of implementation. MS02 owns PostgreSQL. Employee administration requires administrador; push installation endpoints require a validated employee bearer and derive the owner from sub. REST is for authorized internal/mobile integrations, never direct web business access; future web BFF uses GraphQL. Trim/collapse whitespace in text fields before length/uniqueness checks; email comparison is case-insensitive. Reject wrong types, null input fields and unknown properties at every level. Dates use UTC. See ../auth/employees.md for idempotency, version, history and identity semantics."
 security:
   -
     bearer: []
 paths:
+  "/push/installations":
+    post:
+      operationId: registerPushInstallation
+      summary: "Register or rotate the authenticated mechanic's Android Firebase Installation ID"
+      description: "Derives subject from the validated bearer, resolves the active mechanic in Employees, and upserts by globally unique FID. A registration never accepts employeeId/subject from the caller and never returns the FID."
+      x-required-authentication: employee-bearer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [fid, platform, appId]
+              properties:
+                fid: {type: string, minLength: 20, maxLength: 256, pattern: "^[A-Za-z0-9_-]+$", writeOnly: true}
+                platform: {type: string, const: android}
+                appId: {type: string, const: bo.edu.uagrm.autonexus.autonexus_mobile}
+      responses:
+        "200":
+          description: "Registered; installation identifier is not echoed."
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [registered]
+                properties: {registered: {type: boolean, const: true}}
+        "400": {description: "VALIDATION_ERROR or INVALID_INSTALLATION"}
+        "401": {description: "Unauthenticated"}
+        "403": {description: "MECHANIC_ACCOUNT_REQUIRED"}
+        "503": {description: "Persistence unavailable"}
+    delete:
+      operationId: unregisterPushInstallation
+      summary: "Deactivate an installation belonging to the authenticated subject"
+      description: "A subject mismatch has no effect. Response never echoes the FID."
+      x-required-authentication: employee-bearer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [fid]
+              properties:
+                fid: {type: string, minLength: 20, maxLength: 256, pattern: "^[A-Za-z0-9_-]+$", writeOnly: true}
+      responses:
+        "200":
+          description: "Removed for the current subject; installation identifier is not echoed."
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [removed]
+                properties: {removed: {type: boolean, const: true}}
+        "400": {description: "VALIDATION_ERROR or INVALID_INSTALLATION"}
+        "401": {description: "Unauthenticated"}
+        "503": {description: "Persistence unavailable"}
+  "/employees/{id}/access/login":
+    post:
+      operationId: configureEmployeeLogin
+      summary: "Configure username and permanent password on the linked active identity"
+      x-required-permissions: ["employees:write", "security:write"]
+      description: "Requires active employee and synced owned identity. Refuses targets with permissions above caller. Keycloak temporary=false. Does not assign roles; use CU02. Stores metadata-only audit/receipt, never the password or its digest. Successful operationId replay does not reset credentials again, even if a different password is supplied. Failure/timeouts require explicit retry with the same intent; a new credential change uses a new operationId. Renaming preserves subject and employeeId."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [operationId, username, password]
+              properties:
+                operationId: {type: string, format: uuid}
+                username: {type: string, pattern: "^[a-z0-9][a-z0-9._-]{2,63}$"}
+                password: {type: string, format: password, writeOnly: true, minLength: 8, maxLength: 128, description: "No control characters. Keycloak policy may impose further requirements."}
+      responses:
+        "200":
+          description: "Credential configured; workshop role authorization remains independent."
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [username, ready, replayed]
+                properties:
+                  username: {type: string}
+                  ready: {type: boolean}
+                  replayed: {type: boolean}
+        "400": {description: "VALIDATION_ERROR or LOGIN_POLICY_REJECTED"}
+        "401": {description: "Unauthenticated"}
+        "403": {description: "Missing personnel/security permission"}
+        "404": {description: "EMPLOYEE_NOT_FOUND"}
+        "409": {description: "USERNAME_TAKEN, LOGIN_PROFILE_NOT_READY, LOGIN_IDENTITY_CONFLICT, PERMISSION_ESCALATION or IDEMPOTENCY_CONFLICT"}
+        "503": {description: "Provider/persistence unavailable; no confirmed login result"}
   "/employees":
     get:
       operationId: "listEmployees"

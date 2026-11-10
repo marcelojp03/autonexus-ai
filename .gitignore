@@ -1,4 +1,7 @@
 # Secretos y datos locales
+/firebase-adminsdk.json
+/google-services.json
+/mobile/autonexus_app/android/app/google-services.json
 .env
 .env.*
 !.env.example
@@ -87,3 +90,5 @@ services/sync/*.tsbuildinfo
 # CU27 self-hosted generated runtime/model; sources remain in the preparation script.
 /web/shell/public/offline-model/
 /integration/agent/output/
+
+diagram/

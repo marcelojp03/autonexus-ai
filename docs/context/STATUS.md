@@ -1,25 +1,101 @@
 # Estado comprobado
 
-## Entrega de ML a un compañero: modelo versionado y dataset con revisión fijada (2026-11-08)
+## CU15 — primer slice push Android de asignación (2026-11-10)
 
-El artefacto del modelo deja de estar ignorado: `ml/artifacts/automotive-damage-mobilenetv2-v1/
-20261101T-with-negatives/` viaja en el repositorio con `model.keras` (9 642 245 B,
-`bac84606…`), `manifest.json`, `quality.json` y `SHA256SUMS`; los datos de entrenamiento y los
-intermedios siguen fuera. La descarga del dataset se **fijó a la revisión** con la que se entrenó
-(`b5abbf54bdf7c8817a4e20b6ab39c8f1fe98a0e5`) en `ml/training/download_dataset.py`, que antes tomaba
-lo último publicado; se compiló y su `--help` expone `--revision`.
+En `work/nelson`, delta local sin stage/commit: Employees registra Firebase Installation IDs desde
+`POST/DELETE /push/installations`, deriva identidad del `sub` verificado y transfiere por upsert un
+FID único entre cuentas. La migración `1794486400000` crea el registro de instalaciones y estado de
+entrega sobre la notificación durable existente del Inbox `order.confirmed`. Un worker independiente
+reclama solo notificaciones ya confirmadas, envía por Firebase Admin/FID con copy genérico y payload
+limitado a `eventKind`/`assignmentId`, y reintenta con límite; instalación inválida se desactiva. Sin
+ADC/credencial explícita el envío se marca deshabilitado y el servicio sigue iniciando. Decision
+041 y `contracts/rest/push-installations.md` fijan el setup, privacidad y límites.
 
-Se corrigieron dos afirmaciones desactualizadas del `README` de `ml`: ya no dice que el manifiesto se
-versiona mientras todo el artefacto se ignora, y aclara que el dataset declara seis clases pero el
-artefacto publicado tiene **cuatro** (`crack`, `dent`, `glass_shatter`, `scratch`); las demás se
-descartaron por falta de positivos en evaluación.
+Flutter incorpora Firebase Core/Messaging, Google Services Android, permiso/racional mínimo,
+registro/rotación al iniciar sesión, baja best-effort antes de cerrar/cambiar cuenta y apertura que
+recarga agenda autenticada antes de aceptar la asignación. Se añadió una regla ignore para el destino
+local `android/app/google-services.json` y se copió allí el archivo cliente existente sin mostrarlo;
+el archivo Admin nunca se abrió ni se incorporó. Se resolvió `firebase-admin` **14.5.0**; su primera
+resolución indicó scripts ignorados por la política pnpm para `protobufjs` y `@firebase/util`, no se
+aprobaron ni ejecutaron esos scripts.
 
-La entrega documentada (`docs/handoffs/2026-11-08-ml-datasets-modelo.md`) separa lo que existe de lo
-que no: hashes verificados, licencias (dataset **CC BY 4.0** con atribución a `tugberkkalay` sobre
-CarDD/VehiDE/HITL; MobileNetV2 Apache-2.0 con hash de pesos base), umbrales y preprocesamiento
-exactos, y el estado real de calidad: `experimental`, 6/10 y 5/10 falsos positivos en la muestra,
-macro F1 0.6855 en test propio, `crack` con F1 0.4303, sin partición disjunta por vehículo. No se
-acredita precisión ni licencia de distribución de pesos derivados.
+Verificación final: Empleados push/Firebase adapter + Inbox **8/8** y `tsc --noEmit` PASS. Flutter SDK
+aislado **3.47.9 / Dart 3.13.7**; `pub get` PASS. `flutter analyze` no presentó errores de código;
+reportó 25 infos/warnings preexistentes, incluidos los assets locales ausentes
+(`assets/models/model.tflite`, `assets/samples/sample.jpg`) y dos imports no usados en tests. El test
+focal Flutter no pudo iniciar porque Flutter valida esos assets inexistentes al construir el bundle;
+no se fabricaron. Sin teléfono/configuración Firebase con los que acreditar entrega FCM real. `.atl/`
+y demás trabajo local ajeno siguen preservados; recibo/revisión nativa no se ejecutaron. CU15 global
+no se declara cerrado. Rollback: revertir este delta de archivos/código y no aplicar la migración; si
+la migración ya se aplica, su `down` elimina el registro push y columnas de entrega, no las
+notificaciones CU15 preexistentes.
+
+## CU30/CU31 — implementación local, aceptación pendiente (2026-11-10)
+
+CU31 agrega el permiso efectivo dedicado `mcp-clients:manage` (concedido solo al rol inicial
+administrador), operaciones GraphQL del BFF y `Employees → Security → Integraciones MCP` con
+registro/edición/suspensión/revocación de `clientId`, nombre y scopes allowlisted. El proceso MCP
+propietario guarda el registro JSON mediante escritura temporal sincronizada y rename atómico,
+serializa las mutaciones, limita el catálogo a 32 clientes y audita solo metadatos. El BFF vuelve a
+autorizar con el permiso efectivo y llama al API administrativo privado con token interno; si URL o
+token no están configurados, falla cerrado. `/public/config` publica solo `MCP_PUBLIC_URL` explícita,
+metadata/issuer OAuth y estados local/privado/HTTPS no verificado. La página explica HTTPS/túnel,
+redirect URI exacta de ChatGPT en Keycloak, registro del clientId/scopes, alta de app, OAuth y
+consentimiento; aclara que secretos los gestiona ChatGPT y que se requiere endpoint alcanzable y
+workspace compatible. No se afirma conexión real.
+
+CU30 agrega migración `V16`, solicitud idempotente `PENDING_REVIEW` en Operaciones con referencias
+existentes, actor/cliente MCP, horario con zona y notas limitadas; no reserva horario ni crea cita.
+MCP expone `autonexus_request_appointment` y reconciliación por `operationId`, con scope MCP y
+`appointments:write` del token delegado, firma interna MCP→Operaciones, y lectura restringida al
+mismo clientId y subject. La cola de Operaciones permite revisar y rechazar con motivo; aprobar
+revalida referencias y disponibilidad a través de `ManageAppointments`, usando operationId estable
+para evitar crear dos citas ante retries.
+
+Verificación local: MCP typecheck y **89/89** pruebas Node; BFF suite completa **291/291** y
+typecheck; MF Empleados y Operaciones `tsc -p tsconfig.app.json --noEmit` PASS. El detector
+Impeccable sobre las dos pantallas devolvió `[]`. La primera corrida BFF encontró
+tres expectativas SDL/permisos obsoletas; se actualizaron y la repetición pasó. Operaciones Java
+no pudo probarse: Maven no está disponible y el host no tiene Java 21. Docker no se inició.
+Prettier se ejecutó directamente desde dependencias locales en los archivos TypeScript/MCP editados;
+`git diff --check` PASS.
+
+No se cierran CU30/CU31: quedan pendientes ejecución de pruebas Java con Java 21, recorrido
+integrado con Keycloak/propietarios y aceptación ChatGPT real sobre HTTPS público accesible y
+workspace compatible. MCP sigue fuera de Compose; no se inventó endpoint público ni se configuró
+infraestructura cloud.
+
+## Integración local de `work/gabriel` (2026-11-10)
+
+En `work/nelson`, sin stage/commit: se reemplazaron los archivos web rastreados por sus versiones de `origin/work/gabriel` (commits `ae5e8b5`, `9315c9a`, `3f20bf1`, `e8306a6`), manteniendo el alta/habilitación de acceso permanente, contratos, documentos y artefacto/procedencia ML de esa rama. Se conservaron los cambios backend CU08 locales de Operaciones, BFF, Empleados, contratos y Flutter; las migraciones de permisos CU08 y de login permanente están ambas registradas en el DataSource de Empleados. Se mantuvo también el resto del trabajo local no web. Se reincorporó a la Shell el selector de espacios múltiples con gating por `securityCatalog.effective`, sin checks por nombres de rol.
+
+Respaldo del diff tracked anterior a la integración: `C:\Users\nelso\AppData\Local\Temp\opencode\autonexus-ai-worktree-before-gabriel.patch`. `.atl/` y demás archivos untracked no se alteraron.
+
+Verificación tras integrar: `git diff --check` PASS; Shell rutas/chooser **7/7** y typecheck PASS; Empleados acceso permanente **20/20** y typecheck PASS; BFF GraphQL/gateway **52/52** y typecheck PASS. El test GraphQL conserva cobertura CU08 (permiso dedicado para el selector). No se ejecutó Docker ni se instalaron paquetes. HEAD continúa `93129e1`; índice sin cambios.
+
+## En curso — entrada por espacios autorizados y guía de servicio (2026-11-10)
+
+En `work/nelson`, delta local sin stage/commit y sin revisión nativa: `/` inicia Keycloak si no hay sesión; retorno OIDC limitado a destinos internos y la Shell consulta `securityCatalog.effective` antes de mostrar espacios. Un destino autorizado abre directamente, varios llevan al selector de espacios y cero/permisos no disponibles muestran estados diferenciados con cierre ante error. La lectura se renueva durante la sesión; los enlaces son navegación, no autorización de negocio. Los deep-links a espacios no autorizados vuelven al selector; Empleados y Operaciones añaden guards de ruta por permisos efectivos, y sus entradas escogen destinos reales. Se retiraron las rutas de widgets/dashboard demo de sus aplicaciones integradas.
+
+Finanzas filtra y selecciona Cotizaciones/Cobros/Gastos según permisos actuales; Inteligencia presenta el flujo real de evidencias y análisis con lenguaje de inspección; el Shell usa wayfinding de espacios/tareas. Flutter hace explícita la ruta mecánica asignado → ejecutar → registrar avance/evidencia → pendiente offline → sincronizar; conserva el historial CU08 y no agrega cuenta de cliente.
+
+Verificación de este incremento: Shell `tsc` y pruebas focalizadas de rutas/sesión **27/27 PASS**; Finance integrado **19/19 PASS**; Intelligence **6/6 PASS**; Empleados agenda **5/5 PASS**, políticas de sesión Empleados/Operaciones **2/2 PASS cada una**. React Finance/Intelligence builds integrados terminaron correctamente con advertencia de chunk >700 kB. Suite completa Finance no quedó verde: pruebas legacy referencian datos demo ausentes y varias pruebas del ledger exceden el límite por defecto de 5 s; el target CU13/CU14 sí pasó con timeout de 15 s. TypeScript de Empleados y Operaciones pasó con `tsc --noEmit -p tsconfig.app.json`; Angular production CLI build se bloquea porque host Node **22.22.2** y CLI requiere **22.22.3+**. Shell completa reportó 116 PASS / 11 fallos/bloqueos por dependencias Playwright faltantes; no se hizo instalación masiva. No hubo recorrido real de Keycloak/BFF, capturas navegador ni verificación Flutter (Dart 3.11.5 frente a `^3.13.2`, véase §CU08). No se cierran CU por este cambio; `.atl/` se preservó y el recibo/revisión nativa queda sin resolver.
+
+La última corrida del detector Impeccable fue una vez, sobre los targets web cambiados: **5 warnings**, 3 `overused-font` (Inter en Shell/Finance/Intelligence) y 2 `side-tab` (marcador de ruta de 3px en Employees/Operations); no emitió errores. No se editaron artefactos del detector. No se capturaron screenshots desktop/móvil porque los MFEs Angular integrados no pudieron construirse con el Node disponible.
+
+## CU08 — extensión S3, selector mínimo y copias offline web/Flutter (2026-11-09)
+
+Delta local sin integrar/publicar y deliberadamente sin stage/commit: añade `vehicle-history:read` y migración de roles CU08; Operaciones comprueba vehículo/orden/ejecución/evidencia antes de leer la versión privada S3 y devolver bytes `private, no-store`; BFF revalida permiso y proxy de bytes acotados. DTO histórico excluye tarifas/personas. Nuevo selector `/vehicles/service-history/vehicles` devuelve solo referencias mínimas y requiere `vehicle-history:read`; BFF GraphQL/MF02 y Flutter lo usan sin ampliar `vehicles:read`. PWA IndexedDB persiste DTO y blobs allowlisted por subject/vehículo, con atomicidad y límites 100 intervenciones/50 MiB. Flutter agrega búsqueda, historial/detalle, descarga offline, SQLite schema 8 y archivos privados; permisos S3/propietario se revalidan en cada descarga. Offline muestra fecha y posible obsolescencia; no se fija vigencia local.
+
+Verificación previa: Empleados **26/26 PASS** + typecheck 0. BFF `business-graphql` permiso/picker CU08 **1/1 PASS**, `operations-gateway.spec.ts` **11/11 PASS**, typecheck 0. MF02 y Shell typechecks 0. Shell IndexedDB focused browser suite **13/13 PASS** tras disponer del Chromium compatible en la caché Playwright; la suite Shell completa tuvo **120 PASS / 10 FAIL**, limitadas a pruebas browser de `web/mf-employees` que no resuelven sus paquetes Playwright. Flutter `flutter test test/owner_api_test.dart test/offline_store_test.dart test/vehicle_history_test.dart` y `flutter analyze` siguen bloqueados antes de ejecutar: Dart instalado **3.11.5**, `pubspec.yaml` requiere `^3.13.2`. No hubo verificación en dispositivo Android. **Operaciones Java 21:** build de imagen y pruebas focalizadas pasaron (detalles abajo); el host Maven local continúa bloqueado por Java **17.0.12** (`release version 21 not supported`). No se hizo integración real con S3 porque no hay configuración local de bucket autorizada; no se solicitaron ni registraron credenciales.
+
+**CU08 sigue parcial, sin cierre ni revisión nativa:** falta Flutter verificado con el SDK requerido y dispositivo, integración PostgreSQL/HTTP y S3 real autorizada. El recibo nativo continúa bloqueado y no se reabrió el flujo de revisión. Se preservaron los cambios Flutter draft-fix de `work_page.dart` y archivos cercanos; `.atl/` permanece intacto en su respaldo. Sin stage/commit. Decisión 029 ampliada.
+
+### Recompilación de Operaciones en contenedor (2026-11-09)
+
+Se corrigió el import faltante de `VehicleServiceHistory` en `ManageVehicles.java`. El comando solicitado `docker compose -p autonexus-demo-20261109 --env-file .env.example --profile demo build operations` terminó **exit 0 / BUILD SUCCESS** con builder Eclipse Temurin Java 21; compile 97 archivos y creó la imagen local `autonexus-demo-20261109-operations:local`. El Dockerfile usa `-Dmaven.test.skip=true`: esto acredita compilación/paquetización, no pruebas Java ni aceptación runtime. El resto de CU08 permanece parcial según los bloqueos anteriores.
+
+En la corrección de paginación, el contrato OpenAPI define `limit` en 1–100 y `offset` ≥ 0, y `Validation.pageInt` rechaza valores fuera del rango; no los recorta. Se corrigió la expectativa del test para aceptar `limit=100,offset=0` y comprobar `VALIDATION_ERROR` en `limit=101` y `offset=-1`. En el contenedor Java 21 Temurin del Dockerfile, con `services/operations` de solo lectura y `target` escribible, `ManageExecutionsTest` pasó **18/18** y `ManageVehiclesTest` **10/10** (**28/28**, exit 0). El host Maven aún usa Java 17; no se modificó la implementación de paginación.
 
 ## Publicado — T8 Finanzas cerrado y CU26 financiero implementado (2026-11-08)
 

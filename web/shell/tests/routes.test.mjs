@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { matchesModule, moduleForPath, moduleProps, modules, moduleEntryPermissions } from '../src/routes.ts';
+import { authorizedModules, matchesModule, moduleForPath, moduleProps, modules, moduleEntryPermissions } from '../src/routes.ts';
 test('finance entry admits each financial module without requiring quote access', () => {
   assert.deepEqual(moduleEntryPermissions.finance, ['quotes:read', 'payments:read', 'payments:write', 'expenses:read', 'expenses:write']);
   for (const permission of ['payments:read', 'payments:write', 'expenses:read', 'expenses:write']) {
@@ -25,4 +25,10 @@ test('rejects unknown routes and similar prefixes', () => {
 test('all modules receive their own route and resource base', () => {
   assert.deepEqual(modules, ['employees', 'operations', 'finance', 'intelligence']);
   for (const module of modules) assert.deepEqual(moduleProps(module), { basePath: '/' + module, assetBase: '/mfs/' + module + '/' });
+});
+test('workspace destinations come only from effective permissions, not role labels', () => {
+  assert.deepEqual(authorizedModules([]), []);
+  assert.deepEqual(authorizedModules(['agenda:read:self']), ['employees']);
+  assert.deepEqual(authorizedModules(['agenda:read:self', 'orders:read', 'payments:read']), ['employees', 'operations', 'finance']);
+  assert.deepEqual(authorizedModules(['mecanico']), []);
 });

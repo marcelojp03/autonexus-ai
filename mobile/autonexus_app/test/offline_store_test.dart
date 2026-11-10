@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:autonexus_mobile/offline/offline_models.dart';
 import 'package:autonexus_mobile/offline/offline_store.dart';
+import 'package:autonexus_mobile/offline/vehicle_history.dart';
 
 /// Proves the store behaviour that the offline journey depends on: persistence across a reopen,
 /// isolation between users, queue states and the private photo directory.
@@ -47,6 +49,54 @@ void main() {
         createdAt: DateTime.utc(2026, 11, 3, 11),
         state: QueueState.pending,
       );
+
+  VehicleHistorySnapshot history(
+    String subject,
+    String vehicleId, {
+    String orderId = 'order-1',
+    String evidenceId = 'evidence-1',
+  }) => VehicleHistorySnapshot(
+    subject: subject,
+    vehicle: VehicleHistoryVehicle(
+      id: vehicleId,
+      plate: 'ABC-123',
+      make: 'Toyota',
+      model: 'Yaris',
+      year: 2022,
+    ),
+    fetchedAt: DateTime.utc(2026, 11, 9),
+    truncated: false,
+    entries: [
+      VehicleServiceHistoryEntry(
+        orderId: orderId,
+        orderNumber: 'WO-1',
+        servicedAt: DateTime.utc(2026, 11, 8),
+        type: 'mantenimiento',
+        status: 'completed',
+        description: 'Servicio',
+        observations: 'Filtro cambiado',
+        receptionReason: 'Mantenimiento',
+        symptoms: null,
+        services: const [
+          VehicleHistoryService(
+            id: 'service-1',
+            recordedName: 'Servicio registrado',
+            quantity: 1,
+            minutes: 30,
+          ),
+        ],
+        evidences: [
+          VehicleHistoryEvidence(
+            id: evidenceId,
+            fileName: 'photo.png',
+            contentType: 'image/png',
+            sizeBytes: 3,
+            createdAt: DateTime.utc(2026, 11, 8),
+          ),
+        ],
+      ),
+    ],
+  );
 
   test(
     'the prepared work and the queue survive closing and reopening the store',
@@ -112,6 +162,30 @@ void main() {
       expect(migrated.ownerAdvanceId, isNull);
       expect(migrated.evidenceAttempt, 0);
       expect(await upgraded.pendingCount('user-a'), 1);
+      await upgraded.close();
+    },
+  );
+
+  test(
+    'schema 7 migration adds isolated vehicle-history tables without losing prepared work',
+    () async {
+      final legacy = await openDatabase(
+        databasePath,
+        version: 7,
+        onCreate: (db, version) async {
+          await db.execute(
+            'CREATE TABLE works(subject TEXT NOT NULL, assignment_id TEXT NOT NULL, order_id TEXT NOT NULL, order_number TEXT NOT NULL, version INTEGER NOT NULL, prepared_at TEXT NOT NULL, expires_at TEXT NOT NULL, PRIMARY KEY(subject, assignment_id))',
+          );
+          await db.insert('works', work('user-a').toRow());
+        },
+      );
+      await legacy.close();
+      final upgraded = await OfflineStore.open(
+        path: databasePath,
+        photoDirectory: Directory('${temp.path}/evidence'),
+      );
+      expect((await upgraded.works('user-a')).single.orderNumber, 'WO-0001');
+      expect(await upgraded.vehicleHistoryVehicles('user-a'), isEmpty);
       await upgraded.close();
     },
   );
@@ -208,67 +282,261 @@ void main() {
     },
   );
 
-  test('staged photo and explicit human correction survive store recreation separately from model scores', () async {
-    var store = await OfflineStore.open(
-      path: databasePath,
-      photoDirectory: Directory('${temp.path}/evidence'),
-    );
-    final staged = await store.saveStagedPhoto(
-      subject: 'user-a',
-      assignmentId: 'assignment-1',
-      bytes: List<int>.filled(128, 9),
-      sha256: List.filled(64, 'a').join(),
-    );
-    await store.beginPhotoCapture('user-a', 'assignment-1');
-    final context = await store.pendingPhotoCapture();
-    expect(context?.subject, 'user-a');
-    expect(context?.assignmentId, 'assignment-1');
-    await store.close();
-
-    store = await OfflineStore.open(
-      path: databasePath,
-      photoDirectory: Directory('${temp.path}/evidence'),
-    );
-    final restored = await store.stagedPhoto('user-a', 'assignment-1');
-    expect(restored?.sha256, staged.sha256);
-    expect(await File(restored!.path).exists(), isTrue);
-    final photo = await store.promoteStagedPhoto(
-      'user-a',
-      'assignment-1',
-      'op-photo',
-    );
-    await store.enqueue(
-      QueuedAdvance(
-        operationId: 'op-photo',
+  test(
+    'staged photo and explicit human correction survive store recreation separately from model scores',
+    () async {
+      var store = await OfflineStore.open(
+        path: databasePath,
+        photoDirectory: Directory('${temp.path}/evidence'),
+      );
+      final staged = await store.saveStagedPhoto(
         subject: 'user-a',
         assignmentId: 'assignment-1',
-        baseVersion: 3,
-        description: 'Inspección manual',
-        minutesWorked: 12,
-        createdAt: DateTime.utc(2026, 11, 3, 11),
-        state: QueueState.pending,
-        photoPath: photo!.path,
-        photoSha256: staged.sha256,
-        labels: const {'dent': 0.81},
-        humanReviewLabels: const [],
-        humanReviewedAt: DateTime.utc(2026, 11, 3, 11, 1),
-        modelVersion: 'model-v1',
-      ),
-    );
-    await store.removeStagedPhoto('user-a', 'assignment-1', deleteFile: false);
-    await store.close();
+        bytes: List<int>.filled(128, 9),
+        sha256: List.filled(64, 'a').join(),
+      );
+      await store.beginPhotoCapture('user-a', 'assignment-1');
+      final context = await store.pendingPhotoCapture();
+      expect(context?.subject, 'user-a');
+      expect(context?.assignmentId, 'assignment-1');
+      await store.close();
 
-    store = await OfflineStore.open(
-      path: databasePath,
-      photoDirectory: Directory('${temp.path}/evidence'),
-    );
-    final queued = (await store.queue('user-a')).single;
-    expect(queued.photoSha256, staged.sha256);
-    expect(queued.labels['dent'], 0.81);
-    expect(queued.humanReviewLabels, isEmpty);
-    expect(queued.humanReviewedAt, DateTime.utc(2026, 11, 3, 11, 1));
-    expect(queued.modelVersion, 'model-v1');
-    expect(await File(queued.photoPath!).exists(), isTrue);
-    await store.close();
-  });
+      store = await OfflineStore.open(
+        path: databasePath,
+        photoDirectory: Directory('${temp.path}/evidence'),
+      );
+      final restored = await store.stagedPhoto('user-a', 'assignment-1');
+      expect(restored?.sha256, staged.sha256);
+      expect(await File(restored!.path).exists(), isTrue);
+      final photo = await store.promoteStagedPhoto(
+        'user-a',
+        'assignment-1',
+        'op-photo',
+      );
+      await store.enqueue(
+        QueuedAdvance(
+          operationId: 'op-photo',
+          subject: 'user-a',
+          assignmentId: 'assignment-1',
+          baseVersion: 3,
+          description: 'Inspección manual',
+          minutesWorked: 12,
+          createdAt: DateTime.utc(2026, 11, 3, 11),
+          state: QueueState.pending,
+          photoPath: photo!.path,
+          photoSha256: staged.sha256,
+          labels: const {'dent': 0.81},
+          humanReviewLabels: const [],
+          humanReviewedAt: DateTime.utc(2026, 11, 3, 11, 1),
+          modelVersion: 'model-v1',
+        ),
+      );
+      await store.removeStagedPhoto(
+        'user-a',
+        'assignment-1',
+        deleteFile: false,
+      );
+      await store.close();
+
+      store = await OfflineStore.open(
+        path: databasePath,
+        photoDirectory: Directory('${temp.path}/evidence'),
+      );
+      final queued = (await store.queue('user-a')).single;
+      expect(queued.photoSha256, staged.sha256);
+      expect(queued.labels['dent'], 0.81);
+      expect(queued.humanReviewLabels, isEmpty);
+      expect(queued.humanReviewedAt, DateTime.utc(2026, 11, 3, 11, 1));
+      expect(queued.modelVersion, 'model-v1');
+      expect(await File(queued.photoPath!).exists(), isTrue);
+      await store.close();
+    },
+  );
+
+  test(
+    'vehicle histories and private evidence are subject scoped and logout removes only that subject',
+    () async {
+      final store = await OfflineStore.open(
+        path: databasePath,
+        photoDirectory: Directory('${temp.path}/evidence'),
+      );
+      final alice = history('user-a', 'vehicle-1');
+      final bob = history(
+        'user-b',
+        'vehicle-1',
+        orderId: 'bob-order',
+        evidenceId: 'bob-evidence',
+      );
+      await store.replaceVehicleHistory(alice, {
+        'evidence-1': DownloadedHistoryEvidence(
+          fileName: 'photo.png',
+          contentType: 'image/png',
+          bytes: Uint8List.fromList([1, 2, 3]),
+        ),
+      });
+      await store.replaceVehicleHistory(bob, {
+        'bob-evidence': DownloadedHistoryEvidence(
+          fileName: 'photo.png',
+          contentType: 'image/png',
+          bytes: Uint8List.fromList([7, 8, 9]),
+        ),
+      });
+      final aliceCopy = (await store.vehicleHistory('user-a', 'vehicle-1'))!;
+      final bobCopy = (await store.vehicleHistory('user-b', 'vehicle-1'))!;
+      final aliceEvidence = File(
+        aliceCopy.entries.single.evidences.single.localPath!,
+      );
+      final bobEvidence = File(
+        bobCopy.entries.single.evidences.single.localPath!,
+      );
+      expect(await aliceEvidence.readAsBytes(), [1, 2, 3]);
+      expect(await bobEvidence.readAsBytes(), [7, 8, 9]);
+      expect(
+        (await store.vehicleHistoryVehicles('user-a')).single.plate,
+        'ABC-123',
+      );
+
+      await store.forget('user-a');
+      expect(await store.vehicleHistory('user-a', 'vehicle-1'), isNull);
+      expect(await aliceEvidence.exists(), isFalse);
+      expect(
+        (await store.vehicleHistory(
+          'user-b',
+          'vehicle-1',
+        ))!.entries.single.orderId,
+        'bob-order',
+      );
+      expect(await bobEvidence.exists(), isTrue);
+      await store.close();
+    },
+  );
+
+  test(
+    'failed private-file replacement preserves the previous complete history snapshot',
+    () async {
+      var failWrite = false;
+      final photos = Directory('${temp.path}/evidence');
+      final store = await OfflineStore.open(
+        path: databasePath,
+        photoDirectory: photos,
+        writePhoto: (file, bytes) async {
+          if (failWrite) {
+            await file.writeAsBytes(bytes.take(1).toList(), flush: true);
+            throw const FileSystemException(
+              'simulated private-file quota failure',
+            );
+          }
+          await file.writeAsBytes(bytes, flush: true);
+        },
+      );
+      final original = history('user-a', 'vehicle-1');
+      await store.replaceVehicleHistory(original, {
+        'evidence-1': DownloadedHistoryEvidence(
+          fileName: 'photo.png',
+          contentType: 'image/png',
+          bytes: Uint8List.fromList([1, 2, 3]),
+        ),
+      });
+      final previous = (await store.vehicleHistory('user-a', 'vehicle-1'))!;
+      final previousPath = previous.entries.single.evidences.single.localPath!;
+      failWrite = true;
+      final replacement = history(
+        'user-a',
+        'vehicle-1',
+        orderId: 'new-order',
+        evidenceId: 'new-evidence',
+      );
+      await expectLater(
+        store.replaceVehicleHistory(replacement, {
+          'new-evidence': DownloadedHistoryEvidence(
+            fileName: 'photo.png',
+            contentType: 'image/png',
+            bytes: Uint8List.fromList([4, 5, 6]),
+          ),
+        }),
+        throwsA(isA<FileSystemException>()),
+      );
+      final retained = (await store.vehicleHistory('user-a', 'vehicle-1'))!;
+      expect(retained.entries.single.orderId, 'order-1');
+      expect(retained.entries.single.evidences.single.localPath, previousPath);
+      expect(await File(previousPath).readAsBytes(), [1, 2, 3]);
+      expect(
+        (await photos.list().toList()).where(
+          (entity) => entity.path.contains('.part'),
+        ),
+        isEmpty,
+      );
+      await store.close();
+    },
+  );
+
+  test(
+    'offline snapshot byte ceiling rejects before writes and retains the previous snapshot',
+    () async {
+      final store = await OfflineStore.open(
+        path: databasePath,
+        photoDirectory: Directory('${temp.path}/evidence'),
+      );
+      await store.replaceVehicleHistory(history('user-a', 'vehicle-1'), {
+        'evidence-1': DownloadedHistoryEvidence(
+          fileName: 'photo.png',
+          contentType: 'image/png',
+          bytes: Uint8List.fromList([1, 2, 3]),
+        ),
+      });
+      final oversizedEntries = <VehicleServiceHistoryEntry>[];
+      final oversizedFiles = <String, DownloadedHistoryEvidence>{};
+      for (var i = 0; i < 3; i++) {
+        final id = 'large-$i';
+        const bytes = 17 * 1024 * 1024;
+        oversizedEntries.add(
+          VehicleServiceHistoryEntry(
+            orderId: 'order-$i',
+            orderNumber: 'WO-$i',
+            servicedAt: DateTime.utc(2026),
+            type: 'mantenimiento',
+            status: 'completed',
+            description: 'Servicio',
+            observations: '',
+            receptionReason: 'Rutina',
+            symptoms: null,
+            services: const [],
+            evidences: [
+              VehicleHistoryEvidence(
+                id: id,
+                fileName: '$id.png',
+                contentType: 'image/png',
+                sizeBytes: bytes,
+                createdAt: DateTime.utc(2026),
+              ),
+            ],
+          ),
+        );
+        oversizedFiles[id] = DownloadedHistoryEvidence(
+          fileName: '$id.png',
+          contentType: 'image/png',
+          bytes: Uint8List(bytes),
+        );
+      }
+      final oversized = VehicleHistorySnapshot(
+        subject: 'user-a',
+        vehicle: history('user-a', 'vehicle-1').vehicle,
+        fetchedAt: DateTime.utc(2026),
+        truncated: false,
+        entries: oversizedEntries,
+      );
+      await expectLater(
+        store.replaceVehicleHistory(oversized, oversizedFiles),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(
+        (await store.vehicleHistory(
+          'user-a',
+          'vehicle-1',
+        ))!.entries.single.orderId,
+        'order-1',
+      );
+      await store.close();
+    },
+  );
 }

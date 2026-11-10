@@ -10,6 +10,7 @@ import '../offline/offline_models.dart';
 import '../inference/inspection_page.dart';
 import 'journey_controller.dart';
 import 'work_page.dart';
+import 'vehicle_history_page.dart';
 
 class JourneyHome extends StatelessWidget {
   const JourneyHome({super.key, required this.controller});
@@ -25,8 +26,18 @@ class JourneyHome extends StatelessWidget {
         final subject = snapshot.subject ?? controller.localSubject;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('AutoNexus · Taller'),
+            title: const Text('Ruta de servicio'),
             actions: [
+              IconButton(
+                key: const Key('vehicle-history-entry'),
+                tooltip: 'Historial de servicios (CU08)',
+                icon: const Icon(Icons.history),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => VehicleHistoryPage(controller: controller),
+                  ),
+                ),
+              ),
               IconButton(
                 tooltip: 'Inteligencia visual (CU22)',
                 icon: const Icon(Icons.camera_alt_outlined),
@@ -38,8 +49,15 @@ class JourneyHome extends StatelessWidget {
           ),
           body: ListView(
             // El último control quedaba bajo la barra de navegación del sistema.
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewPaddingOf(context).bottom),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + MediaQuery.viewPaddingOf(context).bottom,
+            ),
             children: [
+              const _ServiceRouteIntro(),
+              const SizedBox(height: 12),
               _SessionCard(controller: controller),
               const SizedBox(height: 12),
               if (controller.notice != null)
@@ -77,6 +95,52 @@ class JourneyHome extends StatelessWidget {
   }
 }
 
+class _ServiceRouteIntro extends StatelessWidget {
+  const _ServiceRouteIntro();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final steps = [
+      (Icons.assignment_ind_outlined, 'Trabajo asignado'),
+      (Icons.build_outlined, 'Ejecutar'),
+      (Icons.note_alt_outlined, 'Registrar avance y evidencia'),
+      (Icons.cloud_sync_outlined, 'Pendiente hasta sincronizar'),
+    ];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Tu trabajo en el taller', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              'Abrí una asignación vigente, registrá lo realizado y sincronizá el resultado cuando vuelva la conexión. Un avance local todavía no está confirmado por el servidor.',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (index, step) in steps.indexed)
+                  Semantics(
+                    label: 'Paso ${index + 1}: ${step.$2}',
+                    child: Chip(
+                      avatar: Icon(step.$1, size: 18),
+                      label: Text(step.$2),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SessionCard extends StatelessWidget {
   const _SessionCard({required this.controller});
 
@@ -99,7 +163,7 @@ class _SessionCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               snapshot.authenticated
-                  ? '${snapshot.name ?? snapshot.subject} · roles: ${snapshot.roles.isEmpty ? 'ninguno' : snapshot.roles.join(', ')}'
+                  ? (snapshot.name ?? snapshot.subject ?? 'Sesión autenticada')
                   : hasLocalCopy
                   ? 'Copia local disponible. Podés consultar el trabajo y guardar avances; sincronizar exige sesión vigente.'
                   : 'La sesión es necesaria para descargar el trabajo autorizado.',
@@ -126,19 +190,58 @@ class _SessionCard extends StatelessWidget {
                   ),
                 if (snapshot.authenticated)
                   OutlinedButton.icon(
+                    key: const Key('enable-assignment-notifications'),
+                    onPressed: controller.busy
+                        ? null
+                        : () async {
+                            final accepted = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Avisos de asignación'),
+                                content: const Text(
+                                  'AutoNexus puede avisarte cuando un trabajo se confirme para tu cuenta. El aviso solo te lleva a la agenda; la app vuelve a consultar el trabajo con tu sesión vigente.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Ahora no'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('Continuar'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (accepted == true) {
+                              await controller.enableNotifications();
+                            }
+                          },
+                    icon: const Icon(Icons.notifications_active_outlined),
+                    label: const Text('Avisos de asignación'),
+                  ),
+                if (snapshot.authenticated)
+                  OutlinedButton.icon(
                     key: const Key('choose-agenda-day'),
-                    onPressed: controller.busy ? null : () async {
-                      final day = await showDatePicker(
-                        context: context,
-                        initialDate: controller.agendaDay,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2100),
-                        helpText: 'Elegir día del trabajo (taller)',
-                      );
-                      if (day != null) await controller.chooseAgendaDay(day);
-                    },
+                    onPressed: controller.busy
+                        ? null
+                        : () async {
+                            final day = await showDatePicker(
+                              context: context,
+                              initialDate: controller.agendaDay,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                              helpText: 'Elegir día del trabajo (taller)',
+                            );
+                            if (day != null)
+                              await controller.chooseAgendaDay(day);
+                          },
                     icon: const Icon(Icons.calendar_today_outlined),
-                    label: Text('Día ${controller.agendaDay.year}-${controller.agendaDay.month.toString().padLeft(2, '0')}-${controller.agendaDay.day.toString().padLeft(2, '0')}'),
+                    label: Text(
+                      'Día ${controller.agendaDay.year}-${controller.agendaDay.month.toString().padLeft(2, '0')}-${controller.agendaDay.day.toString().padLeft(2, '0')}',
+                    ),
                   ),
                 if (snapshot.authenticated)
                   FilledButton.tonalIcon(
@@ -163,7 +266,9 @@ class _SessionCard extends StatelessWidget {
                   ),
                   trailing: TextButton(
                     key: Key('prepare-${item.assignmentId}'),
-                    style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
                     onPressed: controller.busy || !item.canReceiveAdvances
                         ? null
                         : () => controller.prepare(item),
@@ -383,7 +488,8 @@ class _Banner extends StatelessWidget {
 
 String _executionReason(String status) => switch (status) {
   'in_progress' => 'En ejecución: admite nuevos avances',
-  'not_started' => 'Sin iniciar: el taller debe iniciar la ejecución antes de preparar',
+  'not_started' =>
+    'Sin iniciar: el taller debe iniciar la ejecución antes de preparar',
   'completed' => 'Ejecución finalizada: no admite nuevos avances',
   'cancelled' => 'Trabajo cancelado: no admite nuevos avances',
   _ => 'Estado no disponible: actualizá la agenda antes de preparar',

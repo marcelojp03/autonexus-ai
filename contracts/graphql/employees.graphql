@@ -115,6 +115,18 @@ input EmployeeCommandInput {
   expectedVersion: Int!
 }
 
+"Credentials are forwarded to Keycloak only. Never persisted, audited or returned."
+input EmployeeLoginInput {
+  operationId: UUID!
+  username: String!
+  password: String!
+}
+type EmployeeLoginResult {
+  username: String!
+  ready: Boolean!
+  replayed: Boolean!
+}
+
 type Query {
   employees(limit: Int = 20, offset: Int = 0, status: EmployeeStatus, search: String): EmployeePage!
   employee(id: UUID!): Employee!
@@ -122,6 +134,7 @@ type Query {
 }
 
 type Mutation {
+  configureEmployeeLogin(id: UUID!, input: EmployeeLoginInput!): EmployeeLoginResult!
   createEmployee(input: CreateEmployeeInput!): EmployeeMutationResult!
   updateEmployee(id: UUID!, input: UpdateEmployeeInput!): EmployeeMutationResult!
   deactivateEmployee(id: UUID!, input: EmployeeCommandInput!): EmployeeMutationResult!

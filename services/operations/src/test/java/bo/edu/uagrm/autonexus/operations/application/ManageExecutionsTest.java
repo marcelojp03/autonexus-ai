@@ -470,5 +470,7 @@ class ManageExecutionsTest {
         @Override public String download(String objectKey, String versionId, Duration ttl) {
             return "https://storage.test/signed/" + objectKey;
         }
+
+        @Override public byte[] read(String objectKey, String versionId) { return objects.get(objectKey); }
     }
 }

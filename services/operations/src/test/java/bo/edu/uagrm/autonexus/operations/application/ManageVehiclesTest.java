@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import bo.edu.uagrm.autonexus.operations.domain.OperationsError;
 import bo.edu.uagrm.autonexus.operations.domain.Vehicle;
+import bo.edu.uagrm.autonexus.operations.domain.VehicleServiceHistory;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +26,8 @@ class ManageVehiclesTest {
     @BeforeEach
     void setUp() {
         repository = new InMemoryVehicles();
-        vehicles = new ManageVehicles(repository);
+        vehicles = new ManageVehicles(repository, Mockito.mock(VehicleServiceHistoryRepository.class),
+                Mockito.mock(ExecutionPorts.EvidenceStorage.class));
     }
 
     private static Map<String, Object> body(String plate, UUID customerId) {
@@ -91,6 +94,102 @@ class ManageVehiclesTest {
                 .isEqualTo("VERSION_CONFLICT");
         assertThatThrownBy(() -> vehicles.create(body("AB1", CUSTOMER), "actor-1"))
                 .isInstanceOf(OperationsError.class);
+    }
+
+    @Test
+    void rejectsVehicleHistoryPaginationOutsideContractBoundsAtTheUseCaseBoundary() {
+        var history = Mockito.mock(VehicleServiceHistoryRepository.class);
+        var useCase = new ManageVehicles(repository, history, Mockito.mock(ExecutionPorts.EvidenceStorage.class));
+        UUID vehicleId = UUID.randomUUID();
+        var page = new Page<VehicleServiceHistory.Entry>(List.of(), 0, 100, 0);
+        Mockito.when(history.list(vehicleId, 100, 0)).thenReturn(page);
+        assertThat(useCase.history(vehicleId.toString(), "100", "0")).isEqualTo(page);
+        Mockito.verify(history).list(vehicleId, 100, 0);
+        assertThatThrownBy(() -> useCase.history(vehicleId.toString(), "101", "0"))
+                .isInstanceOf(OperationsError.class)
+                .extracting(error -> ((OperationsError) error).code())
+                .isEqualTo("VALIDATION_ERROR");
+        assertThatThrownBy(() -> useCase.history(vehicleId.toString(), "20", "-1"))
+                .isInstanceOf(OperationsError.class)
+                .extracting(error -> ((OperationsError) error).code())
+                .isEqualTo("VALIDATION_ERROR");
+        assertThatThrownBy(() -> useCase.history("not-a-uuid", "20", "0"))
+                .isInstanceOf(OperationsError.class);
+    }
+
+    @Test
+    void historyVehiclePickerRequiresBoundedSearchAndReturnsOnlyMinimalReferences() {
+        var history = Mockito.mock(VehicleServiceHistoryRepository.class);
+        var useCase = new ManageVehicles(repository, history, Mockito.mock(ExecutionPorts.EvidenceStorage.class));
+        var reference = new VehicleServiceHistory.VehicleReference(UUID.randomUUID(), "ABC-123", "Toyota", "Yaris", 2022);
+        Mockito.when(history.findVehicles("ABC", 20, 0)).thenReturn(new Page<>(List.of(reference), 1, 20, 0));
+        assertThat(useCase.historyVehicles(" ABC ", null, null).items()).containsExactly(reference);
+        Mockito.verify(history).findVehicles("ABC", 20, 0);
+        assertThatThrownBy(() -> useCase.historyVehicles("A", null, null)).isInstanceOf(OperationsError.class);
+    }
+
+    @Test
+    void scopesHistoricalDetailToBothVehicleAndCompletedOrderIdentifiers() {
+        var history = Mockito.mock(VehicleServiceHistoryRepository.class);
+        var useCase = new ManageVehicles(repository, history, Mockito.mock(ExecutionPorts.EvidenceStorage.class));
+        UUID vehicleId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        var entry = new VehicleServiceHistory.Entry(
+                orderId, "WO-2026-000001", Instant.now(), "mantenimiento", "completed",
+                "Servicio preventivo", "Cambio de filtros", "Mantenimiento", null, List.of(), List.of());
+        Mockito.when(history.get(vehicleId, orderId)).thenReturn(entry);
+        assertThat(useCase.historyEntry(vehicleId.toString(), orderId.toString())).isEqualTo(entry);
+        Mockito.verify(history).get(vehicleId, orderId);
+    }
+
+    @Test
+    void downloadsOnlyOwnerResolvedHistoryEvidenceUsingItsExactPrivateVersion() {
+        var history = Mockito.mock(VehicleServiceHistoryRepository.class);
+        var storage = Mockito.mock(ExecutionPorts.EvidenceStorage.class);
+        var useCase = new ManageVehicles(repository, history, storage);
+        UUID vehicleId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID evidenceId = UUID.randomUUID();
+        Mockito.when(history.evidence(vehicleId, orderId, evidenceId)).thenReturn(java.util.Optional.of(
+                new VehicleServiceHistory.StorageEvidence(evidenceId, "inspection.png", "image/png", 2,
+                        "private/internal/object-key", "immutable-version")));
+        Mockito.when(storage.configured()).thenReturn(true);
+        Mockito.when(storage.read("private/internal/object-key", "immutable-version"))
+                .thenReturn(new byte[] {1, 2});
+
+        var content = useCase.historyEvidence(vehicleId.toString(), orderId.toString(), evidenceId.toString());
+
+        assertThat(content.fileName()).isEqualTo("inspection.png");
+        assertThat(content.contentType()).isEqualTo("image/png");
+        assertThat(content.bytes()).containsExactly(1, 2);
+        Mockito.verify(history).evidence(vehicleId, orderId, evidenceId);
+        Mockito.verify(storage).read("private/internal/object-key", "immutable-version");
+    }
+
+    @Test
+    void doesNotReadStorageForUnrelatedOrUnavailableHistoryEvidence() {
+        var history = Mockito.mock(VehicleServiceHistoryRepository.class);
+        var storage = Mockito.mock(ExecutionPorts.EvidenceStorage.class);
+        var useCase = new ManageVehicles(repository, history, storage);
+        UUID vehicleId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID evidenceId = UUID.randomUUID();
+        Mockito.when(history.evidence(vehicleId, orderId, evidenceId)).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> useCase.historyEvidence(vehicleId.toString(), orderId.toString(), evidenceId.toString()))
+                .isInstanceOf(OperationsError.class)
+                .extracting(error -> ((OperationsError) error).code())
+                .isEqualTo("SERVICE_HISTORY_EVIDENCE_NOT_FOUND");
+        Mockito.verifyNoInteractions(storage);
+
+        Mockito.when(history.evidence(vehicleId, orderId, evidenceId)).thenReturn(java.util.Optional.of(
+                new VehicleServiceHistory.StorageEvidence(evidenceId, "inspection.png", "image/png", 2,
+                        "private/internal/object-key", "immutable-version")));
+        Mockito.when(storage.configured()).thenReturn(false);
+        assertThatThrownBy(() -> useCase.historyEvidence(vehicleId.toString(), orderId.toString(), evidenceId.toString()))
+                .isInstanceOf(OperationsError.class)
+                .extracting(error -> ((OperationsError) error).code())
+                .isEqualTo("EVIDENCE_STORAGE_UNAVAILABLE");
+        Mockito.verify(storage, Mockito.never()).read(Mockito.anyString(), Mockito.any());
     }
 
     private static final class InMemoryVehicles implements VehicleRepository {

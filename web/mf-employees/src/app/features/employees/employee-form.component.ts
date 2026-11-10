@@ -1,4 +1,5 @@
-import { Component, inject, input, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators, type AbstractControl, type ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
@@ -15,6 +16,7 @@ import { NzTagModule } from 'ng-zorro-antd/tag';
 import { EmployeesApi, EmployeesFailure, newOperationId } from './employees-api';
 import type { Employee, EmployeeFieldsInput } from './employees.contract';
 import { SESSION_PORT } from '../../auth/session';
+import { SECURITY_ROLES, EMPLOYEE_ROLES, ASSIGN_ROLE, RETRY_ROLE_SYNC, type Role, type EmployeeRoles, type RoleAssignment } from '../security/security.contract';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -86,6 +88,21 @@ export class EmployeeFormComponent implements OnInit {
   readonly id = input<string>();
   private readonly session = inject(SESSION_PORT, { optional: true });
   readonly canManageMechanic = signal(false);
+  readonly canManageLogin = signal(false);
+  readonly loginRoles = signal<Role[]>([]);
+  readonly loginNotice = signal<string | null>(null);
+  readonly loginReady = signal(false);
+  readonly loginBusy = signal(false);
+  readonly loginForm = inject(FormBuilder).nonNullable.group({
+    enabled: false,
+    username: ['', [Validators.required, Validators.pattern(/^[a-z0-9][a-z0-9._-]{2,63}$/)]],
+    password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(128)]],
+    confirmation: ['', Validators.required],
+    role: ['', Validators.required]
+  });
+  private loginOperation: string | null = null;
+  private roleOperation: string | null = null;
+  private readonly destroyRef = inject(DestroyRef);
   private readonly api = inject(EmployeesApi);
   private readonly router = inject(Router);
   private readonly builder = inject(FormBuilder).nonNullable;
@@ -119,7 +136,15 @@ export class EmployeeFormComponent implements OnInit {
     return !!this.id();
   }
 
+  roleLabel(name: string): string {
+    return ({administrador:'Administrador',jefe_taller:'Jefe de taller',mecanico:'Mecánico',recepcionista:'Recepcionista',responsable_financiero:'Responsable financiero'} as Record<string,string>)[name] ?? name;
+  }
   ngOnInit(): void {
+    this.loginForm.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.loginOperation = null;
+      this.roleOperation = null;
+      this.loginReady.set(false);
+    });
     this.form.controls.mechanicEnabled.disable();
     void this.loadMechanicPermission();
     const id = this.id();
@@ -133,6 +158,11 @@ export class EmployeeFormComponent implements OnInit {
       const data = result.data as { securityCatalog?: { effective: string[] } } | undefined;
       if (!result.errors?.length && data?.securityCatalog?.effective.includes('employees:write')) {
         this.canManageMechanic.set(true); this.form.controls.mechanicEnabled.enable();
+        if (data.securityCatalog.effective.includes('security:write')) {
+          const roles = await this.business<{securityRoles: Role[]}>(SECURITY_ROLES);
+          this.loginRoles.set(roles.securityRoles.filter(role => role.permissions.every(p => data.securityCatalog!.effective.includes(p))));
+          this.canManageLogin.set(true);
+        }
       }
     } catch { /* Labor data remains readable if permission lookup is unavailable. */ }
   }
@@ -154,7 +184,8 @@ export class EmployeeFormComponent implements OnInit {
   }
 
   async submit(): Promise<void> {
-    if (this.saving() || (this.created() && !this.editing)) return;
+    if (this.saving() || this.loginBusy() || (this.created() && !this.editing)) return;
+    if (this.loginForm.controls.enabled.value && !this.validateLogin()) return;
     if (this.form.controls.mechanicEnabled.value && !this.form.controls.specialties.value.some(value => value.trim())) {
       this.error.set('Para habilitar como mecánico, registrá al menos una especialidad.');
       return;
@@ -175,14 +206,14 @@ export class EmployeeFormComponent implements OnInit {
       return;
     }
     const expectedVersion = editing ? this.employee()!.version : 0;
-    const requested = this.form.getRawValue().requested;
-    const signature = JSON.stringify({ editing, expectedVersion: editing ? expectedVersion : null, requested: editing ? null : requested, fields });
+    const requested = this.form.getRawValue().requested || (this.canManageLogin() && this.loginForm.controls.enabled.value);
+    const signature = JSON.stringify({ editing, expectedVersion: editing ? expectedVersion : null, requested, fields });
     if (!this.attempt || this.attempt.signature !== signature) this.attempt = { operationId: newOperationId(), signature };
     const operationId = this.attempt.operationId;
     this.saving.set(true);
     try {
       const result = editing
-        ? await this.api.update({ id: this.id()!, input: { operationId, expectedVersion, ...fields } })
+        ? await this.api.update({ id: this.id()!, input: { operationId, expectedVersion, ...fields, ...(requested ? {access: {requested: true}} : {}) } })
         : await this.api.create({ input: { operationId, ...fields, access: { requested } } });
       this.saved.set(result.employee);
       this.replayed.set(result.replayed);
@@ -190,6 +221,7 @@ export class EmployeeFormComponent implements OnInit {
       this.attempt = null;
       if (editing) this.patch(result.employee);
       else this.created.set(result.employee);
+      if (this.canManageLogin() && this.loginForm.controls.enabled.value) await this.completeLogin();
     } catch (error) {
       this.fail(error);
     } finally {
@@ -197,7 +229,81 @@ export class EmployeeFormComponent implements OnInit {
     }
   }
 
+  private async business<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    if (!this.session) throw new Error('No hay sesión de acceso.');
+    const result = await this.session.requestBusiness(query, variables);
+    if (result.errors?.length) throw new EmployeesFailure(result.errors[0]);
+    if (!result.data) throw new Error('No se pudo confirmar la operación.');
+    return result.data as T;
+  }
+
+  private validateLogin(): boolean {
+    this.loginForm.markAllAsTouched();
+    if (this.loginForm.invalid || this.loginForm.controls.password.value !== this.loginForm.controls.confirmation.value) {
+      this.error.set('Completá usuario (3–64 caracteres: minúsculas, números, punto, guion o guion bajo), rol y contraseña de 8–128 caracteres. Las contraseñas deben coincidir.');
+      return false;
+    }
+    return true;
+  }
+
+  async completeLogin(): Promise<void> {
+    const current = this.employee();
+    if (!current || !this.canManageLogin() || this.loginBusy() || !this.validateLogin()) return;
+    this.loginBusy.set(true);
+    this.loginReady.set(false);
+    this.loginNotice.set(null);
+    this.error.set(null);
+    try {
+      let employee = await this.api.get(current.id);
+      if (!employee.access.requested) {
+        const {firstName,lastName,document,email,phone,jobTitle,startDate,specialties,mechanicEnabled} = employee;
+        await this.api.update({id: employee.id, input: {operationId: newOperationId(), expectedVersion: employee.version,
+          firstName,lastName,document,email,phone,jobTitle,startDate,specialties,mechanicEnabled:mechanicEnabled === true,access:{requested:true}}});
+        employee = await this.api.get(employee.id);
+      }
+      if (employee.access.status !== 'synced') {
+        await this.api.retryAccess({id:employee.id,input:{operationId:newOperationId(),expectedVersion:employee.version}});
+        employee = await this.api.get(employee.id);
+      }
+      this.employee.set(employee);
+      this.saved.set(employee);
+      if (this.editing) this.patch(employee);
+      if (employee.access.status !== 'synced') throw new Error('El empleado está guardado, pero su cuenta no se pudo sincronizar. Reintentá la habilitación de acceso.');
+      const value = this.loginForm.getRawValue();
+      const roles = await this.business<{employeeRoles: EmployeeRoles}>(EMPLOYEE_ROLES, {id:employee.id});
+      const existing = roles.employeeRoles.items.find(item => item.roleName === value.role && item.status === 'active');
+      if (!existing) {
+        this.roleOperation ??= newOperationId();
+        const result = await this.business<{assignRole:{assignment:RoleAssignment}}>(ASSIGN_ROLE,
+          {id:employee.id,input:{operationId:this.roleOperation,roleName:value.role}});
+        if (result.assignRole.assignment.syncStatus !== 'synced') throw new Error('El rol quedó pendiente. Reintentá la habilitación de acceso.');
+      } else if (existing.syncStatus !== 'synced') {
+        const available = await this.business<{securityRoles: Role[]}>(SECURITY_ROLES);
+        const role = available.securityRoles.find(item => item.name === value.role);
+        if (!role) throw new Error('El rol seleccionado ya no está disponible.');
+        await this.business(RETRY_ROLE_SYNC,{name:role.name,input:{operationId:newOperationId(),expectedVersion:role.version}});
+        const refreshed = await this.business<{employeeRoles:EmployeeRoles}>(EMPLOYEE_ROLES,{id:employee.id});
+        if (!refreshed.employeeRoles.items.some(item => item.roleName === value.role && item.status === 'active' && item.syncStatus === 'synced'))
+          throw new Error('No se pudo confirmar el rol. Reintentá la habilitación de acceso.');
+      }
+      this.loginOperation ??= newOperationId();
+      const result = await this.api.configureLogin(employee.id,{operationId:this.loginOperation,username:value.username,password:value.password});
+      this.loginNotice.set('Acceso listo. Usuario: ' + result.username + '. Ya puede iniciar sesión con la contraseña que configuraste.');
+      this.loginForm.controls.password.reset();
+      this.loginForm.controls.confirmation.reset();
+      this.loginForm.controls.enabled.setValue(false);
+      this.loginReady.set(result.ready);
+      this.loginOperation = null;
+      this.roleOperation = null;
+    } catch (error) {
+      this.loginNotice.set('Los datos laborales se conservan. El acceso todavía no está confirmado; corregí el problema y pulsá Habilitar acceso.');
+      if (error instanceof EmployeesFailure) this.fail(error);
+      else this.error.set(error instanceof Error ? error.message : 'No se pudo confirmar el acceso.');
+    } finally { this.loginBusy.set(false); }
+  }
+
   async retryAccess(): Promise<void> {
+    if (this.saving() || this.loginBusy()) return;
     const current = this.employee();
     if (!current) return;
     this.saving.set(true);

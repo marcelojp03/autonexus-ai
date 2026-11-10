@@ -10,6 +10,11 @@ export class BusinessError extends Error {
 }
 
 const MESSAGES: Readonly<Record<string, string>> = Object.freeze({
+  USERNAME_TAKEN: 'Ese nombre de usuario ya está ocupado. Elegí otro.',
+  LOGIN_POLICY_REJECTED: 'El proveedor rechazó el usuario o la contraseña por su política de acceso.',
+  LOGIN_IDENTITY_CONFLICT: 'La identidad vinculada requiere revisión; no se cambió su contraseña.',
+  LOGIN_PROFILE_NOT_READY: 'El empleado debe estar activo y su cuenta sincronizada antes de configurar el acceso.',
+  LOGIN_PROVIDER_UNAVAILABLE: 'No se pudo confirmar la configuración del acceso. Conservá el empleado y reintentá.',
   COLLECTION_CONTEXT_UNAVAILABLE: 'No se puede verificar la obligación de cobro en este momento.',
   OBLIGATION_NOT_FOUND: 'No hay una obligación de cobro disponible para esta orden.',
   ORDER_NOT_FINALIZED: 'La orden todavía no admite cobro.',

@@ -2,14 +2,22 @@ import { BusinessError } from './business-error.js';
 
 /** Only codes published by the operations contract may leave this BFF. */
 const PUBLIC_CODES = new Set([
-  'CU15_DISABLED', 'CONFIRMATION_NOT_FOUND', 'OPERATION_NOT_FOUND',
-  'ORDER_CONFIRMATION_IN_PROGRESS', 'ORDER_ALREADY_CONFIRMED',
-  'ORDER_NOT_CONFIRMABLE', 'CONFIRMATION_TERMINAL',
+  'CU15_DISABLED',
+  'CONFIRMATION_NOT_FOUND',
+  'OPERATION_NOT_FOUND',
+  'ORDER_CONFIRMATION_IN_PROGRESS',
+  'ORDER_ALREADY_CONFIRMED',
+  'ORDER_NOT_CONFIRMABLE',
+  'CONFIRMATION_TERMINAL',
   'VALIDATION_ERROR',
   'CUSTOMER_NOT_FOUND',
   'VEHICLE_NOT_FOUND',
+  'SERVICE_HISTORY_NOT_FOUND',
   'SERVICE_NOT_FOUND',
   'APPOINTMENT_NOT_FOUND',
+  'APPOINTMENT_REQUEST_NOT_FOUND',
+  'APPOINTMENT_REQUEST_NOT_PENDING',
+  'APPOINTMENT_REFERENCE_NOT_FOUND',
   'RECEPTION_NOT_FOUND',
   'ORDER_NOT_FOUND',
   'VEHICLE_ALREADY_IN_RECEPTION',
@@ -71,40 +79,168 @@ export interface OperationsGateway {
   confirmationSaga(id: string, token: string): Promise<unknown>;
   confirmationByOperation(operationId: string, token: string): Promise<unknown>;
   orderConfirmations(orderId: string, token: string): Promise<unknown>;
-  startServiceConfirmation(orderId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  retryServiceConfirmation(id: string, input: OperationsCommand, token: string): Promise<unknown>;
+  startServiceConfirmation(
+    orderId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  retryServiceConfirmation(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
   customers(query: OperationsPageQuery, token: string): Promise<unknown>;
-  execution(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown>;
-  startExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  recordAdvance(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  requestEvidence(assignmentId: string, advanceId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  confirmEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  retryEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  evidenceDownload(kind: 'me' | 'team', assignmentId: string, evidenceId: string, token: string): Promise<unknown>;
-  verification(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown>;
-  activity(assignmentId: string, itemId: string, input: OperationsCommand, done: boolean, token: string): Promise<unknown>;
-  requestVerification(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  approveExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
-  returnExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown>;
+  execution(
+    kind: 'me' | 'team',
+    assignmentId: string,
+    token: string,
+  ): Promise<unknown>;
+  startExecution(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  recordAdvance(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  requestEvidence(
+    assignmentId: string,
+    advanceId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  confirmEvidence(
+    assignmentId: string,
+    evidenceId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  retryEvidence(
+    assignmentId: string,
+    evidenceId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  evidenceDownload(
+    kind: 'me' | 'team',
+    assignmentId: string,
+    evidenceId: string,
+    token: string,
+  ): Promise<unknown>;
+  verification(
+    kind: 'me' | 'team',
+    assignmentId: string,
+    token: string,
+  ): Promise<unknown>;
+  activity(
+    assignmentId: string,
+    itemId: string,
+    input: OperationsCommand,
+    done: boolean,
+    token: string,
+  ): Promise<unknown>;
+  requestVerification(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  approveExecution(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  returnExecution(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
   customer(id: string, token: string): Promise<unknown>;
   createCustomer(input: OperationsCommand, token: string): Promise<unknown>;
-  updateCustomer(id: string, input: OperationsCommand, token: string): Promise<unknown>;
-  deactivateCustomer(id: string, input: OperationsCommand, token: string): Promise<unknown>;
+  updateCustomer(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  deactivateCustomer(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
   vehicles(query: OperationsPageQuery, token: string): Promise<unknown>;
+  vehicleHistoryVehicles(
+    query: OperationsPageQuery,
+    token: string,
+  ): Promise<unknown>;
   vehicle(id: string, token: string): Promise<unknown>;
+  vehicleServiceHistory(
+    vehicleId: string,
+    query: OperationsPageQuery,
+    token: string,
+  ): Promise<unknown>;
+  vehicleServiceHistoryEntry(
+    vehicleId: string,
+    orderId: string,
+    token: string,
+  ): Promise<unknown>;
+  vehicleServiceHistoryEvidence(
+    vehicleId: string,
+    orderId: string,
+    evidenceId: string,
+    token: string,
+  ): Promise<{ bytes: Uint8Array; contentType: string; fileName: string }>;
   createVehicle(input: OperationsCommand, token: string): Promise<unknown>;
-  updateVehicle(id: string, input: OperationsCommand, token: string): Promise<unknown>;
-  deactivateVehicle(id: string, input: OperationsCommand, token: string): Promise<unknown>;
+  updateVehicle(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  deactivateVehicle(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
   services(query: OperationsPageQuery, token: string): Promise<unknown>;
   service(id: string, token: string): Promise<unknown>;
   createService(input: OperationsCommand, token: string): Promise<unknown>;
-  updateService(id: string, input: OperationsCommand, token: string): Promise<unknown>;
-  deactivateService(id: string, input: OperationsCommand, token: string): Promise<unknown>;
+  updateService(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  deactivateService(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
   appointments(query: OperationsPageQuery, token: string): Promise<unknown>;
+  appointmentRequests(
+    query: OperationsPageQuery,
+    token: string,
+  ): Promise<unknown>;
+  approveAppointmentRequest(
+    operationId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  rejectAppointmentRequest(
+    operationId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
   appointment(id: string, token: string): Promise<unknown>;
   createAppointment(input: OperationsCommand, token: string): Promise<unknown>;
-  rescheduleAppointment(id: string, input: OperationsCommand, token: string): Promise<unknown>;
-  cancelAppointment(id: string, input: OperationsCommand, token: string): Promise<unknown>;
+  rescheduleAppointment(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
+  cancelAppointment(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown>;
   receptions(query: OperationsPageQuery, token: string): Promise<unknown>;
   reception(id: string, token: string): Promise<unknown>;
   createReception(input: OperationsCommand, token: string): Promise<unknown>;
@@ -117,29 +253,64 @@ export class HttpOperationsGateway implements OperationsGateway {
   confirmationSaga(id: string, token: string): Promise<unknown> {
     return this.request('/confirmations/' + encodeURIComponent(id), token);
   }
-  confirmationByOperation(operationId: string, token: string): Promise<unknown> {
-    return this.request('/confirmations/operations/' + encodeURIComponent(operationId), token);
+  confirmationByOperation(
+    operationId: string,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      '/confirmations/operations/' + encodeURIComponent(operationId),
+      token,
+    );
   }
   orderConfirmations(orderId: string, token: string): Promise<unknown> {
-    return this.request('/orders/' + encodeURIComponent(orderId) + '/confirmations', token);
+    return this.request(
+      '/orders/' + encodeURIComponent(orderId) + '/confirmations',
+      token,
+    );
   }
-  startServiceConfirmation(orderId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/orders/' + encodeURIComponent(orderId) + '/confirmations', token, { method: 'POST', body: JSON.stringify(input) }, [200, 202]);
+  startServiceConfirmation(
+    orderId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      '/orders/' + encodeURIComponent(orderId) + '/confirmations',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [200, 202],
+    );
   }
-  retryServiceConfirmation(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/confirmations/' + encodeURIComponent(id) + '/retry', token, { method: 'POST', body: JSON.stringify(input) }, [200, 202]);
+  retryServiceConfirmation(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      '/confirmations/' + encodeURIComponent(id) + '/retry',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [200, 202],
+    );
   }
   constructor(
     private readonly baseUrl: string,
     private readonly transport: typeof fetch = fetch,
   ) {}
 
-  private async request(path: string, token: string, init: RequestInit = {}, allowed = [200, 201]): Promise<unknown> {
+  private async request(
+    path: string,
+    token: string,
+    init: RequestInit = {},
+    allowed = [200, 201],
+  ): Promise<unknown> {
     let response: Response;
     try {
       response = await this.transport(this.baseUrl + path, {
         ...init,
-        headers: { Authorization: `Bearer ${token}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        },
         redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
@@ -148,16 +319,110 @@ export class HttpOperationsGateway implements OperationsGateway {
     }
     const body = await this.payload(response);
     if (allowed.includes(response.status)) return body;
-    if (response.status === 401) throw new BusinessError(401, 'UNAUTHENTICATED');
+    if (response.status === 401)
+      throw new BusinessError(401, 'UNAUTHENTICATED');
     if (response.status === 403) throw new BusinessError(403, 'FORBIDDEN');
-    const candidate = body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' ? body.code : undefined;
-    const code = candidate && PUBLIC_CODES.has(candidate) ? candidate : undefined;
-    if (response.status === 503) throw new BusinessError(503, code ?? 'PERSISTENCE_UNAVAILABLE');
-    const statusCode = response.status === 400 || response.status === 404 || response.status === 409 ? response.status : 503;
+    const candidate =
+      body &&
+      typeof body === 'object' &&
+      'code' in body &&
+      typeof body.code === 'string'
+        ? body.code
+        : undefined;
+    const code =
+      candidate && PUBLIC_CODES.has(candidate) ? candidate : undefined;
+    if (response.status === 503)
+      throw new BusinessError(503, code ?? 'PERSISTENCE_UNAVAILABLE');
+    const statusCode =
+      response.status === 400 ||
+      response.status === 404 ||
+      response.status === 409
+        ? response.status
+        : 503;
     throw new BusinessError(
       statusCode,
-      code ?? (statusCode === 404 ? 'NOT_FOUND' : statusCode === 409 ? 'VERSION_CONFLICT' : statusCode === 400 ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE'),
+      code ??
+        (statusCode === 404
+          ? 'NOT_FOUND'
+          : statusCode === 409
+            ? 'VERSION_CONFLICT'
+            : statusCode === 400
+              ? 'VALIDATION_ERROR'
+              : 'SERVICE_UNAVAILABLE'),
     );
+  }
+
+  async vehicleServiceHistoryEvidence(
+    vehicleId: string,
+    orderId: string,
+    evidenceId: string,
+    token: string,
+  ): Promise<{ bytes: Uint8Array; contentType: string; fileName: string }> {
+    const path = `/vehicles/${encodeURIComponent(vehicleId)}/service-history/${encodeURIComponent(orderId)}/evidence/${encodeURIComponent(evidenceId)}`;
+    let response: Response;
+    try {
+      response = await this.transport(this.baseUrl + path, {
+        headers: { Authorization: `Bearer ${token}` },
+        redirect: 'error',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch {
+      throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    }
+    if (response.status === 401)
+      throw new BusinessError(401, 'UNAUTHENTICATED');
+    if (response.status === 403) throw new BusinessError(403, 'FORBIDDEN');
+    if (response.status === 404) throw new BusinessError(404, 'NOT_FOUND');
+    if (response.status === 503)
+      throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    const contentType =
+      response.headers.get('content-type')?.split(';', 1)[0]?.toLowerCase() ??
+      '';
+    const rawLength = response.headers.get('content-length');
+    if (rawLength !== null && !/^\d+$/.test(rawLength)) {
+      throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    }
+    const length = rawLength === null ? 0 : Number(rawLength);
+    if (
+      !response.ok ||
+      !['image/jpeg', 'image/png', 'image/webp', 'video/mp4'].includes(
+        contentType,
+      ) ||
+      length > 20 * 1024 * 1024
+    )
+      throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    const reader = response.body?.getReader();
+    if (!reader) throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > 20 * 1024 * 1024) {
+        await reader.cancel();
+        throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(received);
+    let cursor = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, cursor);
+      cursor += chunk.byteLength;
+    }
+    if (
+      !bytes.length ||
+      bytes.length > 20 * 1024 * 1024 ||
+      (length && bytes.length !== length)
+    )
+      throw new BusinessError(503, 'SERVICE_UNAVAILABLE');
+    const disposition = response.headers.get('content-disposition') ?? '';
+    const fileName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
+      ? decodeURIComponent(/filename\*=UTF-8''([^;]+)/i.exec(disposition)![1]!)
+      : 'evidence';
+    return { bytes, contentType, fileName };
   }
 
   private async payload(response: Response): Promise<unknown> {
@@ -171,9 +436,21 @@ export class HttpOperationsGateway implements OperationsGateway {
 
   private suffix(query: OperationsPageQuery): string {
     const parameters = new URLSearchParams();
-    for (const key of ['limit', 'offset', 'status', 'search', 'customerId', 'vehicleId', 'from', 'to', 'active', 'open'] as const) {
+    for (const key of [
+      'limit',
+      'offset',
+      'status',
+      'search',
+      'customerId',
+      'vehicleId',
+      'from',
+      'to',
+      'active',
+      'open',
+    ] as const) {
       const value = query[key];
-      if (value !== undefined && value !== null) parameters.set(key, String(value));
+      if (value !== undefined && value !== null)
+        parameters.set(key, String(value));
     }
     const serialized = parameters.toString();
     return serialized ? `?${serialized}` : '';
@@ -183,56 +460,154 @@ export class HttpOperationsGateway implements OperationsGateway {
     return this.request('/customers' + this.suffix(query), token);
   }
 
-  execution(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown> {
-    return this.request(`/executions/${kind}/${encodeURIComponent(assignmentId)}`, token);
+  execution(
+    kind: 'me' | 'team',
+    assignmentId: string,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${kind}/${encodeURIComponent(assignmentId)}`,
+      token,
+    );
   }
 
-  startExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/start`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  startExecution(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/start`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
-  recordAdvance(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/advances`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  recordAdvance(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/advances`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
-  requestEvidence(assignmentId: string, advanceId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/advances/${encodeURIComponent(advanceId)}/evidences`, token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+  requestEvidence(
+    assignmentId: string,
+    advanceId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/advances/${encodeURIComponent(advanceId)}/evidences`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
-  confirmEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/confirm`, token, { method: 'POST', body: JSON.stringify(input) });
+  confirmEvidence(
+    assignmentId: string,
+    evidenceId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/confirm`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
-  retryEvidence(assignmentId: string, evidenceId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/retry`, token, { method: 'POST', body: JSON.stringify(input) });
+  retryEvidence(
+    assignmentId: string,
+    evidenceId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/retry`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
-  verification(kind: 'me' | 'team', assignmentId: string, token: string): Promise<unknown> {
+  verification(
+    kind: 'me' | 'team',
+    assignmentId: string,
+    token: string,
+  ): Promise<unknown> {
     const prefix = kind === 'team' ? 'verify' : 'review-self';
-    return this.request(`/executions/${prefix}/${encodeURIComponent(assignmentId)}`, token);
+    return this.request(
+      `/executions/${prefix}/${encodeURIComponent(assignmentId)}`,
+      token,
+    );
   }
 
-  activity(assignmentId: string, itemId: string, input: OperationsCommand, done: boolean, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/checklist/${encodeURIComponent(itemId)}/${done ? 'complete' : 'reopen'}`,
-      token, { method: 'POST', body: JSON.stringify(input) });
+  activity(
+    assignmentId: string,
+    itemId: string,
+    input: OperationsCommand,
+    done: boolean,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/checklist/${encodeURIComponent(itemId)}/${done ? 'complete' : 'reopen'}`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
-  requestVerification(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/request-review`,
-      token, { method: 'POST', body: JSON.stringify(input) });
+  requestVerification(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/request-review`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
-  approveExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/approve`,
-      token, { method: 'POST', body: JSON.stringify(input) });
+  approveExecution(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/approve`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
-  returnExecution(assignmentId: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/executions/${encodeURIComponent(assignmentId)}/return`,
-      token, { method: 'POST', body: JSON.stringify(input) });
+  returnExecution(
+    assignmentId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${encodeURIComponent(assignmentId)}/return`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
-  evidenceDownload(kind: 'me' | 'team', assignmentId: string, evidenceId: string, token: string): Promise<unknown> {
-    return this.request(`/executions/${kind}/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/download`, token);
+  evidenceDownload(
+    kind: 'me' | 'team',
+    assignmentId: string,
+    evidenceId: string,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/executions/${kind}/${encodeURIComponent(assignmentId)}/evidences/${encodeURIComponent(evidenceId)}/download`,
+      token,
+    );
   }
 
   customer(id: string, token: string): Promise<unknown> {
@@ -240,15 +615,35 @@ export class HttpOperationsGateway implements OperationsGateway {
   }
 
   createCustomer(input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/customers', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+    return this.request(
+      '/customers',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
-  updateCustomer(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/customers/${encodeURIComponent(id)}`, token, { method: 'PUT', body: JSON.stringify(input) });
+  updateCustomer(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(`/customers/${encodeURIComponent(id)}`, token, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
   }
 
-  deactivateCustomer(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/customers/${encodeURIComponent(id)}/deactivate`, token, { method: 'POST', body: JSON.stringify(input) });
+  deactivateCustomer(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/customers/${encodeURIComponent(id)}/deactivate`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
   vehicles(query: OperationsPageQuery, token: string): Promise<unknown> {
@@ -259,16 +654,68 @@ export class HttpOperationsGateway implements OperationsGateway {
     return this.request(`/vehicles/${encodeURIComponent(id)}`, token);
   }
 
+  vehicleHistoryVehicles(
+    query: OperationsPageQuery,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      '/vehicles/service-history/vehicles' + this.suffix(query),
+      token,
+    );
+  }
+
+  vehicleServiceHistory(
+    vehicleId: string,
+    query: OperationsPageQuery,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/vehicles/${encodeURIComponent(vehicleId)}/service-history${this.suffix(query)}`,
+      token,
+    );
+  }
+
+  vehicleServiceHistoryEntry(
+    vehicleId: string,
+    orderId: string,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/vehicles/${encodeURIComponent(vehicleId)}/service-history/${encodeURIComponent(orderId)}`,
+      token,
+    );
+  }
+
   createVehicle(input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/vehicles', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+    return this.request(
+      '/vehicles',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
-  updateVehicle(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/vehicles/${encodeURIComponent(id)}`, token, { method: 'PUT', body: JSON.stringify(input) });
+  updateVehicle(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(`/vehicles/${encodeURIComponent(id)}`, token, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
   }
 
-  deactivateVehicle(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/vehicles/${encodeURIComponent(id)}/deactivate`, token, { method: 'POST', body: JSON.stringify(input) });
+  deactivateVehicle(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/vehicles/${encodeURIComponent(id)}/deactivate`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
   services(query: OperationsPageQuery, token: string): Promise<unknown> {
@@ -280,19 +727,73 @@ export class HttpOperationsGateway implements OperationsGateway {
   }
 
   createService(input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/services', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+    return this.request(
+      '/services',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
-  updateService(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/services/${encodeURIComponent(id)}`, token, { method: 'PUT', body: JSON.stringify(input) });
+  updateService(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(`/services/${encodeURIComponent(id)}`, token, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
   }
 
-  deactivateService(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/services/${encodeURIComponent(id)}/deactivate`, token, { method: 'POST', body: JSON.stringify(input) });
+  deactivateService(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/services/${encodeURIComponent(id)}/deactivate`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
   appointments(query: OperationsPageQuery, token: string): Promise<unknown> {
     return this.request('/appointments' + this.suffix(query), token);
+  }
+
+  appointmentRequests(
+    query: OperationsPageQuery,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      '/appointment-requests/pending' + this.suffix(query),
+      token,
+    );
+  }
+
+  approveAppointmentRequest(
+    operationId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/appointment-requests/operations/${encodeURIComponent(operationId)}/approve`,
+      token,
+      { method: 'POST', body: JSON.stringify({ startsAt: input['startsAt'] }) },
+    );
+  }
+
+  rejectAppointmentRequest(
+    operationId: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/appointment-requests/operations/${encodeURIComponent(operationId)}/reject`,
+      token,
+      { method: 'POST', body: JSON.stringify({ reason: input['reason'] }) },
+    );
   }
 
   appointment(id: string, token: string): Promise<unknown> {
@@ -300,15 +801,35 @@ export class HttpOperationsGateway implements OperationsGateway {
   }
 
   createAppointment(input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/appointments', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+    return this.request(
+      '/appointments',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
-  rescheduleAppointment(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/appointments/${encodeURIComponent(id)}`, token, { method: 'PUT', body: JSON.stringify(input) });
+  rescheduleAppointment(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(`/appointments/${encodeURIComponent(id)}`, token, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
   }
 
-  cancelAppointment(id: string, input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request(`/appointments/${encodeURIComponent(id)}/cancel`, token, { method: 'POST', body: JSON.stringify(input) });
+  cancelAppointment(
+    id: string,
+    input: OperationsCommand,
+    token: string,
+  ): Promise<unknown> {
+    return this.request(
+      `/appointments/${encodeURIComponent(id)}/cancel`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
   receptions(query: OperationsPageQuery, token: string): Promise<unknown> {
@@ -320,7 +841,12 @@ export class HttpOperationsGateway implements OperationsGateway {
   }
 
   createReception(input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/receptions', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+    return this.request(
+      '/receptions',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 
   orders(query: OperationsPageQuery, token: string): Promise<unknown> {
@@ -332,6 +858,11 @@ export class HttpOperationsGateway implements OperationsGateway {
   }
 
   createWorkOrder(input: OperationsCommand, token: string): Promise<unknown> {
-    return this.request('/orders', token, { method: 'POST', body: JSON.stringify(input) }, [201]);
+    return this.request(
+      '/orders',
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+      [201],
+    );
   }
 }

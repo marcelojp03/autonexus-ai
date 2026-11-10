@@ -6,6 +6,8 @@ import { PostgresMechanicProjection } from './infrastructure/postgres/postgres-m
 import { PostgresCu15Inbox } from './infrastructure/postgres/postgres-cu15-inbox.js';
 import { Cu15Messaging } from './infrastructure/messaging/cu15-messaging.js';
 import { Module } from '@nestjs/common';
+import { ConfigureEmployeeLogin } from './application/configure-employee-login.js';
+import { KeycloakLoginGateway } from './infrastructure/keycloak/keycloak-login-gateway.js';
 import { AuthorizeExecution } from './application/authorize-execution.js';
 import { ExecutionsController } from './infrastructure/http/executions.controller.js';
 import { PostgresExecutionsRepository } from './infrastructure/postgres/postgres-executions-repository.js';
@@ -33,6 +35,10 @@ import { PostgresEmployeeRepository } from './infrastructure/postgres/postgres-e
 import { PostgresReadinessProbe } from './infrastructure/postgres/postgres-readiness-probe.js';
 import { PostgresScheduleRepository } from './infrastructure/postgres/postgres-schedule-repository.js';
 import { PostgresSecurityRepository } from './infrastructure/postgres/postgres-security-repository.js';
+import { ManagePushInstallation } from './application/manage-push-installation.js';
+import { PushInstallationsController } from './infrastructure/http/push-installations.controller.js';
+import { FirebasePushDelivery } from './infrastructure/messaging/firebase-push-delivery.js';
+import { PushNotificationDispatcher } from './infrastructure/messaging/push-notification-dispatcher.js';
 
 @Module({
   imports: [AuthModule],
@@ -46,8 +52,15 @@ import { PostgresSecurityRepository } from './infrastructure/postgres/postgres-s
     EmployeesController,
     StaffingController,
     SecurityController,
+    PushInstallationsController,
   ],
   providers: [
+    { provide: ManagePushInstallation, useFactory: () => new ManagePushInstallation() },
+    { provide: FirebasePushDelivery, useFactory: () => new FirebasePushDelivery() },
+    { provide: PushNotificationDispatcher, inject: [FirebasePushDelivery], useFactory: (delivery: FirebasePushDelivery) => new PushNotificationDispatcher(delivery) },
+    { provide: KeycloakLoginGateway, useFactory: () => new KeycloakLoginGateway() },
+    { provide: ConfigureEmployeeLogin, inject: [PostgresEmployeeRepository, KeycloakLoginGateway, PostgresSecurityRepository],
+      useFactory: (repository: PostgresEmployeeRepository, gateway: KeycloakLoginGateway, security: PostgresSecurityRepository) => new ConfigureEmployeeLogin(repository, gateway, security) },
     {
       provide: PostgresAgendaRepository,
       useFactory: () => new PostgresAgendaRepository(),

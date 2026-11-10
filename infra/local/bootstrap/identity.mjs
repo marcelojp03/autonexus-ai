@@ -31,7 +31,17 @@ export async function provisionIdentity(state, configDir, initialized = false) {
   settings.sslRequired = state.publicOrigin.startsWith('https:') ? 'external' : 'none';
   const existingRealm = await request('/autonexus', 'GET', undefined, [200, 404]);
   if (!existingRealm) await request('', 'POST', settings);
-  else policy(existingRealm, settings, 'REALM_POLICY_DRIFT');
+  else {
+    // Controlled migration from the original auto-generated employee usernames.
+    // Check every other setting before enabling administrative username changes.
+    if (settings.editUsernameAllowed === true && existingRealm.editUsernameAllowed === false) {
+      const {editUsernameAllowed, ...unchanged} = settings;
+      policy(existingRealm, unchanged, 'REALM_POLICY_DRIFT');
+      await api('', 'PUT', {editUsernameAllowed: true});
+      existingRealm.editUsernameAllowed = true;
+    }
+    policy(existingRealm, settings, 'REALM_POLICY_DRIFT');
+  }
   for (const role of roles.realm) {
     const existing = await api('/roles/' + role.name, 'GET', undefined, [200, 404]);
     if (!existing) await api('/roles', 'POST', role);

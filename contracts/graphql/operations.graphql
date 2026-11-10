@@ -1,11 +1,32 @@
-"""Operations contract (CU06, CU07, CU09, CU10). Extends the employees schema executed by
-integration/bff; every root field declares the permission required by the CU02 catalog."""
-
-enum CustomerStatus { active inactive }
-enum VehicleStatus { active inactive }
-enum FuelType { gasolina diesel gas electrico hibrido }
-enum ServiceCategory { mantenimiento reparacion diagnostico otros }
-enum AppointmentStatus { scheduled cancelled }
+"""
+Operations contract (CU06, CU07, CU08, CU09, CU10). Extends the employees schema executed by
+integration/bff; every root field declares the permission required by the CU02 catalog.
+"""
+enum CustomerStatus {
+  active
+  inactive
+}
+enum VehicleStatus {
+  active
+  inactive
+}
+enum FuelType {
+  gasolina
+  diesel
+  gas
+  electrico
+  hibrido
+}
+enum ServiceCategory {
+  mantenimiento
+  reparacion
+  diagnostico
+  otros
+}
+enum AppointmentStatus {
+  scheduled
+  cancelled
+}
 
 type Customer {
   id: UUID!
@@ -20,7 +41,12 @@ type Customer {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
-type CustomerPage { items: [Customer!]! total: Int! limit: Int! offset: Int! }
+type CustomerPage {
+  items: [Customer!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
 
 type Vehicle {
   id: UUID!
@@ -37,7 +63,12 @@ type Vehicle {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
-type VehiclePage { items: [Vehicle!]! total: Int! limit: Int! offset: Int! }
+type VehiclePage {
+  items: [Vehicle!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
 
 type Service {
   id: UUID!
@@ -51,9 +82,16 @@ type Service {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
-type ServicePage { items: [Service!]! total: Int! limit: Int! offset: Int! }
+type ServicePage {
+  items: [Service!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
 
-"""A reserved slot for a vehicle and a service. It is not a work order nor a mechanic assignment."""
+"""
+A reserved slot for a vehicle and a service. It is not a work order nor a mechanic assignment.
+"""
 type Appointment {
   id: UUID!
   customerId: UUID!
@@ -71,12 +109,62 @@ type Appointment {
   createdAt: DateTime!
   updatedAt: DateTime!
 }
-type AppointmentPage { items: [Appointment!]! total: Int! limit: Int! offset: Int! }
+type AppointmentPage {
+  items: [Appointment!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+enum AppointmentRequestStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+type AppointmentRequest {
+  id: UUID!
+  operationId: UUID!
+  clientId: String!
+  customerId: UUID!
+  vehicleId: UUID!
+  serviceId: UUID!
+  requestedStartsAt: DateTime!
+  timeZone: String!
+  notes: String
+  status: AppointmentRequestStatus!
+  createdAt: DateTime!
+  reviewedAt: DateTime
+  reviewerSubject: String
+  reviewReason: String
+  appointmentId: UUID
+  version: Int!
+}
+type AppointmentRequestPage {
+  items: [AppointmentRequest!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
 
-type CustomerResult { customer: Customer! replayed: Boolean! }
-type VehicleResult { vehicle: Vehicle! replayed: Boolean! }
-type ServiceResult { service: Service! replayed: Boolean! }
-type AppointmentResult { appointment: Appointment! replayed: Boolean! }
+type CustomerResult {
+  customer: Customer!
+  replayed: Boolean!
+}
+type VehicleResult {
+  vehicle: Vehicle!
+  replayed: Boolean!
+}
+type ServiceResult {
+  service: Service!
+  replayed: Boolean!
+}
+type AppointmentResult {
+  appointment: Appointment!
+  replayed: Boolean!
+}
+type AppointmentRequestResult {
+  request: AppointmentRequest!
+  replayed: Boolean!
+}
 
 input CreateCustomerInput {
   operationId: UUID!
@@ -154,20 +242,51 @@ input CancelAppointmentInput {
   expectedVersion: Int!
   reason: String!
 }
+input ApproveAppointmentRequestInput {
+  startsAt: DateTime!
+}
+input RejectAppointmentRequestInput {
+  reason: String!
+}
 input OperationsCommandInput {
   operationId: UUID!
   expectedVersion: Int!
 }
 
 extend type Query {
-  customers(limit: Int, offset: Int, status: CustomerStatus, search: String): CustomerPage!
+  customers(
+    limit: Int
+    offset: Int
+    status: CustomerStatus
+    search: String
+  ): CustomerPage!
   customer(id: UUID!): Customer!
-  vehicles(limit: Int, offset: Int, status: VehicleStatus, customerId: UUID, search: String): VehiclePage!
+  vehicles(
+    limit: Int
+    offset: Int
+    status: VehicleStatus
+    customerId: UUID
+    search: String
+  ): VehiclePage!
   vehicle(id: UUID!): Vehicle!
-  services(limit: Int, offset: Int, active: Boolean, search: String): ServicePage!
+  services(
+    limit: Int
+    offset: Int
+    active: Boolean
+    search: String
+  ): ServicePage!
   service(id: UUID!): Service!
-  appointments(limit: Int, offset: Int, from: DateTime, to: DateTime, status: AppointmentStatus, customerId: UUID, vehicleId: UUID): AppointmentPage!
+  appointments(
+    limit: Int
+    offset: Int
+    from: DateTime
+    to: DateTime
+    status: AppointmentStatus
+    customerId: UUID
+    vehicleId: UUID
+  ): AppointmentPage!
   appointment(id: UUID!): Appointment!
+  appointmentRequests(limit: Int, offset: Int): AppointmentRequestPage!
 }
 
 extend type Mutation {
@@ -181,11 +300,27 @@ extend type Mutation {
   updateService(id: UUID!, input: UpdateServiceInput!): ServiceResult!
   deactivateService(id: UUID!, input: OperationsCommandInput!): ServiceResult!
   createAppointment(input: CreateAppointmentInput!): AppointmentResult!
-  rescheduleAppointment(id: UUID!, input: RescheduleAppointmentInput!): AppointmentResult!
-  cancelAppointment(id: UUID!, input: CancelAppointmentInput!): AppointmentResult!
+  rescheduleAppointment(
+    id: UUID!
+    input: RescheduleAppointmentInput!
+  ): AppointmentResult!
+  cancelAppointment(
+    id: UUID!
+    input: CancelAppointmentInput!
+  ): AppointmentResult!
+  approveAppointmentRequest(
+    operationId: UUID!
+    input: ApproveAppointmentRequestInput!
+  ): AppointmentRequestResult!
+  rejectAppointmentRequest(
+    operationId: UUID!
+    input: RejectAppointmentRequestInput!
+  ): AppointmentRequestResult!
 }
 
-"""CU11 reception and visual inspection. Not a work order."""
+"""
+CU11 reception and visual inspection. Not a work order.
+"""
 type Reception {
   id: UUID!
   vehicleId: UUID!
@@ -201,10 +336,28 @@ type Reception {
   receivedAt: DateTime!
   version: Int!
 }
-type ReceptionPage { items: [Reception!]! total: Int! limit: Int! offset: Int! }
+type ReceptionPage {
+  items: [Reception!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
 
-enum OrderPriority { baja normal alta urgente }
-enum WorkOrderStatus { pending_quote quote_requested quote_approved cancelled confirmation_pending confirmed completed }
+enum OrderPriority {
+  baja
+  normal
+  alta
+  urgente
+}
+enum WorkOrderStatus {
+  pending_quote
+  quote_requested
+  quote_approved
+  cancelled
+  confirmation_pending
+  confirmed
+  completed
+}
 
 type WorkOrderItem {
   serviceId: UUID!
@@ -213,7 +366,9 @@ type WorkOrderItem {
   estimatedMinutes: Int!
   referenceRate: Float!
 }
-"""CU12 work order. It starts pending quotation and never assigns a mechanic."""
+"""
+CU12 work order. It starts pending quotation and never assigns a mechanic.
+"""
 type WorkOrder {
   id: UUID!
   number: String!
@@ -231,10 +386,66 @@ type WorkOrder {
   updatedAt: DateTime!
   items: [WorkOrderItem!]!
 }
-type WorkOrderPage { items: [WorkOrder!]! total: Int! limit: Int! offset: Int! }
+type WorkOrderPage {
+  items: [WorkOrder!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+type RecordedService {
+  id: UUID!
+  recordedName: String!
+  quantity: Int!
+  minutes: Int!
+}
+type ServiceHistoryEvidence {
+  id: UUID!
+  fileName: String!
+  contentType: String!
+  sizeBytes: Int!
+  createdAt: DateTime!
+}
+type VehicleServiceHistoryEntry {
+  orderId: UUID!
+  orderNumber: String!
+  servicedAt: DateTime!
+  type: String!
+  status: WorkOrderStatus!
+  description: String!
+  observations: String!
+  receptionReason: String!
+  symptoms: String
+  services: [RecordedService!]!
+  evidences: [ServiceHistoryEvidence!]!
+}
+type VehicleServiceHistoryPage {
+  items: [VehicleServiceHistoryEntry!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
+type VehicleHistoryVehicle {
+  id: UUID!
+  plate: String!
+  make: String!
+  model: String!
+  year: Int!
+}
+type VehicleHistoryVehiclePage {
+  items: [VehicleHistoryVehicle!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
+}
 
-type ReceptionResult { reception: Reception! replayed: Boolean! }
-type WorkOrderResult { order: WorkOrder! replayed: Boolean! }
+type ReceptionResult {
+  reception: Reception!
+  replayed: Boolean!
+}
+type WorkOrderResult {
+  order: WorkOrder!
+  replayed: Boolean!
+}
 
 input CreateReceptionInput {
   operationId: UUID!
@@ -245,7 +456,10 @@ input CreateReceptionInput {
   symptoms: String
   visibleConditions: String
 }
-input RequestedServiceInput { serviceId: UUID! quantity: Int }
+input RequestedServiceInput {
+  serviceId: UUID!
+  quantity: Int
+}
 input CreateWorkOrderInput {
   operationId: UUID!
   receptionId: UUID!
@@ -256,9 +470,34 @@ input CreateWorkOrderInput {
 }
 
 extend type Query {
-  receptions(limit: Int, offset: Int, vehicleId: UUID, open: Boolean): ReceptionPage!
+  vehicleHistoryVehicles(
+    search: String!
+    limit: Int
+    offset: Int
+  ): VehicleHistoryVehiclePage!
+  vehicleServiceHistory(
+    vehicleId: UUID!
+    limit: Int
+    offset: Int
+  ): VehicleServiceHistoryPage!
+  vehicleServiceHistoryEntry(
+    vehicleId: UUID!
+    orderId: UUID!
+  ): VehicleServiceHistoryEntry!
+  receptions(
+    limit: Int
+    offset: Int
+    vehicleId: UUID
+    open: Boolean
+  ): ReceptionPage!
   reception(id: UUID!): Reception!
-  orders(limit: Int, offset: Int, status: WorkOrderStatus, customerId: UUID, vehicleId: UUID): WorkOrderPage!
+  orders(
+    limit: Int
+    offset: Int
+    status: WorkOrderStatus
+    customerId: UUID
+    vehicleId: UUID
+  ): WorkOrderPage!
   order(id: UUID!): WorkOrder!
 }
 

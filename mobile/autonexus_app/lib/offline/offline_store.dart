@@ -10,11 +10,13 @@ library;
 
 import 'dart:io';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'offline_models.dart';
+import 'vehicle_history.dart';
 import '../session/pending_authorization.dart';
 
 typedef PhotoFileWriter = Future<void> Function(File file, List<int> bytes);
@@ -27,7 +29,9 @@ class OfflineStore {
   final Database _database;
   final Directory _photos;
 
-  static const int schemaVersion = 7;
+  static const int schemaVersion = 8;
+  static const int maxHistoryEntries = 100;
+  static const int maxHistoryBytes = 50 * 1024 * 1024;
 
   /// Opens the store. `directory` lets tests use an in-memory database and a temp photo folder.
   static Future<OfflineStore> open({
@@ -98,6 +102,7 @@ class OfflineStore {
         await db.execute(
           'CREATE TABLE staged_photos(subject TEXT NOT NULL, assignment_id TEXT NOT NULL, photo_path TEXT NOT NULL, sha256 TEXT NOT NULL, bytes INTEGER NOT NULL, content_type TEXT NOT NULL, PRIMARY KEY(subject, assignment_id))',
         );
+        await _createVehicleHistoryTables(db);
       },
       onUpgrade: (db, from, to) async {
         // Version 2 remembers which subject owns the local copy so the app can reopen the prepared
@@ -138,6 +143,7 @@ class OfflineStore {
             'CREATE TABLE sync_requests(operation_id TEXT NOT NULL PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES queue(operation_id) ON DELETE CASCADE, envelope TEXT NOT NULL)',
           );
         }
+        if (from < 8) await _createVehicleHistoryTables(db);
         if (from < 5) {
           await db.execute(
             'ALTER TABLE queue ADD COLUMN owner_advance_id TEXT',
@@ -196,6 +202,240 @@ class OfflineStore {
   Future<void> close() => _database.close();
 
   Directory get photoDirectory => _photos;
+
+  static Future<void> _createVehicleHistoryTables(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS vehicle_histories(
+        subject TEXT NOT NULL,
+        vehicle_id TEXT NOT NULL,
+        vehicle_json TEXT NOT NULL,
+        fetched_at TEXT NOT NULL,
+        truncated INTEGER NOT NULL CHECK(truncated IN (0,1)),
+        entries_json TEXT NOT NULL,
+        PRIMARY KEY(subject, vehicle_id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS vehicle_history_evidence(
+        subject TEXT NOT NULL,
+        vehicle_id TEXT NOT NULL,
+        order_id TEXT NOT NULL,
+        evidence_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
+        created_at TEXT NOT NULL,
+        local_path TEXT NOT NULL,
+        PRIMARY KEY(subject, vehicle_id, order_id, evidence_id),
+        FOREIGN KEY(subject, vehicle_id) REFERENCES vehicle_histories(subject, vehicle_id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS vehicle_history_subject ON vehicle_histories(subject, fetched_at DESC)',
+    );
+  }
+
+  Future<List<VehicleHistoryVehicle>> vehicleHistoryVehicles(
+    String subject,
+  ) async {
+    if (subject.trim().isEmpty) throw ArgumentError.value(subject, 'subject');
+    final rows = await _database.query(
+      'vehicle_histories',
+      columns: ['vehicle_json'],
+      where: 'subject = ?',
+      whereArgs: [subject],
+      orderBy: 'fetched_at DESC',
+    );
+    return rows
+        .map(
+          (row) => VehicleHistoryVehicle.fromJson(
+            jsonDecode(row['vehicle_json']! as String) as Map<String, dynamic>,
+          ),
+        )
+        .toList();
+  }
+
+  Future<VehicleHistorySnapshot?> vehicleHistory(
+    String subject,
+    String vehicleId,
+  ) async {
+    if (subject.trim().isEmpty || vehicleId.trim().isEmpty)
+      throw ArgumentError('Vehicle history scope is required.');
+    final rows = await _database.query(
+      'vehicle_histories',
+      where: 'subject = ? AND vehicle_id = ?',
+      whereArgs: [subject, vehicleId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final evidenceRows = await _database.query(
+      'vehicle_history_evidence',
+      columns: ['evidence_id', 'local_path'],
+      where: 'subject = ? AND vehicle_id = ?',
+      whereArgs: [subject, vehicleId],
+    );
+    final paths = {
+      for (final row in evidenceRows)
+        row['evidence_id']! as String: row['local_path']! as String,
+    };
+    for (final path in paths.values) {
+      if (!await File(path).exists())
+        throw const FileSystemException(
+          'Una evidencia offline ya no está disponible.',
+        );
+    }
+    final entries = jsonDecode(rows.single['entries_json']! as String) as List;
+    final vehicle =
+        jsonDecode(rows.single['vehicle_json']! as String)
+            as Map<String, dynamic>;
+    return VehicleHistorySnapshot.fromJson({
+      'subject': subject,
+      'vehicle': vehicle,
+      'fetchedAt': rows.single['fetched_at'],
+      'truncated': rows.single['truncated'] == 1,
+      'entries': entries,
+    }, evidencePaths: paths);
+  }
+
+  /// Writes files first, then atomically switches the SQLite snapshot. The previous snapshot and
+  /// its files remain intact unless the complete replacement transaction commits.
+  Future<void> replaceVehicleHistory(
+    VehicleHistorySnapshot snapshot,
+    Map<String, DownloadedHistoryEvidence> downloaded,
+  ) async {
+    if (snapshot.subject.trim().isEmpty ||
+        snapshot.vehicle.id.isEmpty ||
+        snapshot.entries.length > maxHistoryEntries) {
+      throw const FormatException('Copia de historial inválida.');
+    }
+    var totalBytes = 0;
+    final requiredEvidence = <VehicleHistoryEvidence>[];
+    for (final entry in snapshot.entries) {
+      if (entry.status != 'completed')
+        throw const FormatException(
+          'Solo se guardan intervenciones completadas.',
+        );
+      requiredEvidence.addAll(entry.evidences);
+    }
+    if (requiredEvidence.length != downloaded.length ||
+        requiredEvidence.map((item) => item.id).toSet().length !=
+            requiredEvidence.length) {
+      throw const FormatException('La descarga de evidencias está incompleta.');
+    }
+    for (final evidence in requiredEvidence) {
+      final file = downloaded[evidence.id];
+      if (file == null ||
+          file.contentType != evidence.contentType ||
+          file.bytes.length != evidence.sizeBytes ||
+          !historyEvidenceTypes.contains(file.contentType) ||
+          file.bytes.isEmpty ||
+          file.bytes.length > 20 * 1024 * 1024) {
+        throw const FormatException(
+          'Una evidencia descargada no coincide con el registro autorizado.',
+        );
+      }
+      totalBytes += file.bytes.length;
+      if (totalBytes > maxHistoryBytes)
+        throw const FileSystemException('La copia offline supera 50 MiB.');
+    }
+
+    final staged = <String, String>{};
+    final createdFiles = <File>[];
+    var committed = false;
+    try {
+      var index = 0;
+      for (final evidence in requiredEvidence) {
+        final download = downloaded[evidence.id]!;
+        final extension = switch (download.contentType) {
+          'image/jpeg' => 'jpg',
+          'image/png' => 'png',
+          'image/webp' => 'webp',
+          'video/mp4' => 'mp4',
+          _ => throw const FormatException('Tipo de evidencia inválido.'),
+        };
+        final nonce =
+            '${DateTime.now().microsecondsSinceEpoch}-${math.Random.secure().nextInt(1 << 32)}-$index';
+        index++;
+        final temporary = File('${_photos.path}/history-$nonce.part');
+        final destination = File('${_photos.path}/history-$nonce.$extension');
+        createdFiles.add(temporary);
+        await _writePhoto(temporary, download.bytes);
+        if (await temporary.length() != evidence.sizeBytes)
+          throw const FileSystemException(
+            'La evidencia local quedó incompleta.',
+          );
+        final committedFile = await temporary.rename(destination.path);
+        createdFiles.remove(temporary);
+        createdFiles.add(committedFile);
+        staged[evidence.id] = committedFile.path;
+      }
+
+      final oldRows = await _database.query(
+        'vehicle_history_evidence',
+        columns: ['local_path'],
+        where: 'subject = ? AND vehicle_id = ?',
+        whereArgs: [snapshot.subject, snapshot.vehicle.id],
+      );
+      final oldPaths = oldRows
+          .map((row) => row['local_path']! as String)
+          .toList();
+      await _database.transaction((txn) async {
+        await txn.delete(
+          'vehicle_history_evidence',
+          where: 'subject = ? AND vehicle_id = ?',
+          whereArgs: [snapshot.subject, snapshot.vehicle.id],
+        );
+        await txn.delete(
+          'vehicle_histories',
+          where: 'subject = ? AND vehicle_id = ?',
+          whereArgs: [snapshot.subject, snapshot.vehicle.id],
+        );
+        await txn.insert('vehicle_histories', {
+          'subject': snapshot.subject,
+          'vehicle_id': snapshot.vehicle.id,
+          'vehicle_json': jsonEncode(snapshot.vehicle.toJson()),
+          'fetched_at': snapshot.fetchedAt.toUtc().toIso8601String(),
+          'truncated': snapshot.truncated ? 1 : 0,
+          'entries_json': jsonEncode(
+            snapshot.entries.map((entry) => entry.toJson()).toList(),
+          ),
+        });
+        for (final entry in snapshot.entries) {
+          for (final evidence in entry.evidences) {
+            await txn.insert('vehicle_history_evidence', {
+              'subject': snapshot.subject,
+              'vehicle_id': snapshot.vehicle.id,
+              'order_id': entry.orderId,
+              'evidence_id': evidence.id,
+              'file_name': evidence.fileName,
+              'content_type': evidence.contentType,
+              'size_bytes': evidence.sizeBytes,
+              'created_at': evidence.createdAt.toUtc().toIso8601String(),
+              'local_path': staged[evidence.id]!,
+            });
+          }
+        }
+      });
+      committed = true;
+      for (final path in oldPaths) {
+        final file = File(path);
+        try {
+          if (await file.exists()) await file.delete();
+        } catch (_) {
+          // The committed replacement is authoritative; a failed cleanup is only an orphaned old file.
+        }
+      }
+    } catch (_) {
+      if (!committed) {
+        for (final file in createdFiles) {
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+        }
+      }
+      rethrow;
+    }
+  }
 
   // -- works prepared while online -------------------------------------------------------------
   Future<void> saveWork(PreparedWork work) async {
@@ -564,5 +804,27 @@ class OfflineStore {
       where: 'subject = ?',
       whereArgs: [subject],
     );
+    final historyFiles = await _database.query(
+      'vehicle_history_evidence',
+      columns: ['local_path'],
+      where: 'subject = ?',
+      whereArgs: [subject],
+    );
+    await _database.transaction((txn) async {
+      await txn.delete(
+        'vehicle_history_evidence',
+        where: 'subject = ?',
+        whereArgs: [subject],
+      );
+      await txn.delete(
+        'vehicle_histories',
+        where: 'subject = ?',
+        whereArgs: [subject],
+      );
+    });
+    for (final row in historyFiles) {
+      final file = File(row['local_path']! as String);
+      if (await file.exists()) await file.delete();
+    }
   }
 }

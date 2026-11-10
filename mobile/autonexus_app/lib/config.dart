@@ -25,6 +25,8 @@ class AppConfig {
       dotenv.get('AUTONEXUS_OWNER_URL', fallback: 'http://127.0.0.1:8081');
   static String get syncUrl =>
       dotenv.get('AUTONEXUS_SYNC_URL', fallback: 'http://127.0.0.1:3005');
+  static String get employeesUrl =>
+      dotenv.get('AUTONEXUS_EMPLOYEES_URL', fallback: 'http://127.0.0.1:3002');
 
   static int get preparationDays =>
       int.tryParse(dotenv.get('AUTONEXUS_PREPARATION_DAYS', fallback: '7')) ??

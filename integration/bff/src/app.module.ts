@@ -8,16 +8,25 @@ import { HttpAgendaGateway } from './application/agenda-gateway.js';
 import { HttpIntelligenceGateway } from './application/intelligence-gateway.js';
 import { HttpSyncGateway } from './application/sync-gateway.js';
 import { HttpAssistantGateway } from './application/assistant-gateway.js';
+import { HttpMcpClientsGateway } from './application/mcp-clients-gateway.js';
 import { AccessTokenVerifier } from './infrastructure/auth/token-verifier.js';
 import { AdministratorGuard } from './infrastructure/auth/administrator.guard.js';
-import { bffEnvironment, type BffConfiguration } from './infrastructure/config/environment.js';
+import {
+  bffEnvironment,
+  type BffConfiguration,
+} from './infrastructure/config/environment.js';
 import { GraphqlController } from './infrastructure/http/graphql.controller.js';
 import { FinanceFilesController } from './infrastructure/http/finance-files.controller.js';
+import { VehicleHistoryFilesController } from './infrastructure/http/vehicle-history-files.controller.js';
 
 const configuration = (): BffConfiguration => bffEnvironment();
 
 @Module({
-  controllers: [GraphqlController, FinanceFilesController],
+  controllers: [
+    GraphqlController,
+    FinanceFilesController,
+    VehicleHistoryFilesController,
+  ],
   providers: [
     { provide: 'BFF_CONFIGURATION', useFactory: configuration },
     {
@@ -29,48 +38,95 @@ const configuration = (): BffConfiguration => bffEnvironment();
     {
       provide: HttpEmployeesGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpEmployeesGateway(config.employeesUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpEmployeesGateway(config.employeesUrl),
     },
     {
       provide: HttpOperationsGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpOperationsGateway(config.operationsUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpOperationsGateway(config.operationsUrl),
     },
     {
       provide: HttpFinanceGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpFinanceGateway(config.financeUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpFinanceGateway(config.financeUrl),
     },
     {
       provide: HttpLedgerGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpLedgerGateway(config.financeUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpLedgerGateway(config.financeUrl),
+    },
+    {
+      provide: HttpMcpClientsGateway,
+      inject: ['BFF_CONFIGURATION'],
+      useFactory: (config: BffConfiguration) =>
+        new HttpMcpClientsGateway(config.mcpAdminUrl, config.mcpAdminToken),
     },
     {
       provide: BusinessGraphql,
-      inject: [HttpEmployeesGateway, HttpOperationsGateway, HttpFinanceGateway, 'BFF_CONFIGURATION', HttpAgendaGateway, HttpIntelligenceGateway, HttpSyncGateway, HttpAssistantGateway, HttpLedgerGateway],
-      useFactory: (employees: HttpEmployeesGateway, operations: HttpOperationsGateway, finance: HttpFinanceGateway, config: BffConfiguration, agenda: HttpAgendaGateway, intelligence: HttpIntelligenceGateway, sync: HttpSyncGateway, assistant: HttpAssistantGateway, ledger: HttpLedgerGateway) =>
-        new BusinessGraphql(employees, operations, finance, config.schemaPaths, agenda, intelligence, sync, assistant, ledger),
+      inject: [
+        HttpEmployeesGateway,
+        HttpOperationsGateway,
+        HttpFinanceGateway,
+        'BFF_CONFIGURATION',
+        HttpAgendaGateway,
+        HttpIntelligenceGateway,
+        HttpSyncGateway,
+        HttpAssistantGateway,
+        HttpLedgerGateway,
+        HttpMcpClientsGateway,
+      ],
+      useFactory: (
+        employees: HttpEmployeesGateway,
+        operations: HttpOperationsGateway,
+        finance: HttpFinanceGateway,
+        config: BffConfiguration,
+        agenda: HttpAgendaGateway,
+        intelligence: HttpIntelligenceGateway,
+        sync: HttpSyncGateway,
+        assistant: HttpAssistantGateway,
+        ledger: HttpLedgerGateway,
+        mcpClients: HttpMcpClientsGateway,
+      ) =>
+        new BusinessGraphql(
+          employees,
+          operations,
+          finance,
+          config.schemaPaths,
+          agenda,
+          intelligence,
+          sync,
+          assistant,
+          ledger,
+          mcpClients,
+        ),
     },
     {
       provide: HttpSyncGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpSyncGateway(config.syncUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpSyncGateway(config.syncUrl),
     },
     {
       provide: HttpIntelligenceGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpIntelligenceGateway(config.intelligenceUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpIntelligenceGateway(config.intelligenceUrl),
     },
     {
       provide: HttpAssistantGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpAssistantGateway(config.assistantUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpAssistantGateway(config.assistantUrl),
     },
     {
       provide: HttpAgendaGateway,
       inject: ['BFF_CONFIGURATION'],
-      useFactory: (config: BffConfiguration) => new HttpAgendaGateway(config.operationsUrl, config.employeesUrl),
+      useFactory: (config: BffConfiguration) =>
+        new HttpAgendaGateway(config.operationsUrl, config.employeesUrl),
     },
   ],
 })

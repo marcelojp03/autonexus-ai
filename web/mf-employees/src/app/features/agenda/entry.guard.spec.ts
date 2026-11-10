@@ -9,6 +9,8 @@ afterEach(() => TestBed.resetTestingModule());
 test.each([
   [['employees:read', 'agenda:read:self'], '/list'],
   [['agenda:read:self'], '/agenda'],
+  [['agenda:read:self', 'agenda:read:team'], '/agenda/team'],
+  [[], '/assistant'],
   [['agenda:read:team'], '/agenda/team']
 ])('entry uses effective permissions %j', async (effective, expected) => {
   const requestBusiness = vi.fn().mockResolvedValue({ data: { securityCatalog: { effective } } });

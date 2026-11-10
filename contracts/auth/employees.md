@@ -12,6 +12,22 @@ Contrato temprano de S2.2–S2.5 de la especificación aprobada `docs/compose/sp
 
 ## Shapes REST normativos
 
+Ampliación local de acceso (2026-11-10): `POST /employees/:id/access/login` y
+`configureEmployeeLogin` GraphQL requieren **employees:write y security:write**. Reciben
+`{operationId,username,password}`: usuario de 3–64 caracteres (`[a-z0-9][a-z0-9._-]*`),
+contraseña de 8–128 sin controles, sujeta además a la política Keycloak. La contraseña es
+permanente (`temporary=false`), solo viaja al IdP y nunca entra en comandos laborales,
+historiales, respuestas, logs ni hashes de idempotencia. La auditoría separada conserva
+operación, empleado, actor, usuario, estado/código y fechas. Un replay confirmado no vuelve
+a establecer contraseña; una nueva intención requiere nuevo operationId. Un timeout no
+prueba rechazo del IdP: se reintenta explícitamente. El empleado debe estar activo, con
+identidad sincronizada y atributo employeeId/subject verificados; se rechaza apropiación
+de usuarios ajenos y cambio de credenciales de empleados con permisos superiores al actor.
+El cambio de usuario conserva subject/employeeId y no se deshace al sincronizar datos laborales.
+La asignación de rol usa CU02 aparte; `ready` confirma credencial, no sustituye autorización.
+La web encadena guardado laboral, sincronización, asignación de rol y credencial, con resultado
+parcial explícito y reintento sin volver a registrar. No requiere nueva infraestructura ni consola IdP pública.
+
 Campos editables completos `F` = `{firstName,lastName,document,email,phone,jobTitle,startDate,specialties}`; `specialties` es siempre array de strings, incluso vacío.
 
 | Método/ruta | Entrada | Salida exitosa |
