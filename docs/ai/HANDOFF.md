@@ -1,5 +1,21 @@
 # Cierre y continuidad de sesión
 
+## Preparación EC2 de Gabriel — 2026-11-10
+
+Usuario autorizó instalar prerrequisitos, ya completados y comprobados por SSH:
+Docker29.9.3/Compose5.7.0/Buildx0.38.1, Nginx1.24.0, Certbot2.9.0 y utilidades.
+Hello-world, HTTP200 local/externo, nginx -t y Docker sin sudo tras reconectar PASS.
+Ver `infra/ec2/README.md`, script y decisión040. Entrega de estos cinco archivos
+autorizada en `work/gabriel`, sobre el commit anterior ae5e8b5.
+
+Todavía no se descargó ni desplegó la app en EC2. Dominios app/api de DuckDNS
+no resolvían a la instancia al comprobarlos; pedir al compañero actualización DNS.
+No hay certificado ni rol S3 configurado aquí. No copiar claves S3 locales al servidor.
+La copia PEM y known_hosts están ignorados en output/local, sin modificar el original
+de Downloads. Mantener fuera de Git; no imprimir sus contenidos.
+
+---
+
 ## Entrega personal de Gabriel — 2026-11-10
 
 El usuario solicita guardar y subir los cambios locales a `work/gabriel`, creada

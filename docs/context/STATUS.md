@@ -1,5 +1,19 @@
 # Estado comprobado
 
+## Prerrequisitos instalados en EC2 de Gabriel (2026-11-10)
+
+Instalación autorizada por SSH en Ubuntu 24.04.5 amd64/t3.large: Docker29.9.3,
+Compose5.7.0, Buildx0.38.1, containerd2.4.2, Nginx1.24.0, Certbot2.9.0/plugin,
+Git/curl/jq/unzip. Script `infra/ec2/prepare-host.sh` ejecutado exit0; versiones y
+alcance en README, decisión040. Docker/Nginx activos y habilitados; timer Certbot
+habilitado. hello-world PASS, nginx -t PASS, HTTP200 local y desde Internet, Docker
+sin sudo tras reconectar PASS; dpkg --audit limpio. Disco ~26GiB disponibles.
+
+Esto prepara el host, no despliega AutoNexus. DNS app/api todavía resolvía a otras IP
+en esta comprobación; certificados no emitidos. Página pública actual: Nginx por defecto.
+Pendientes: DNS, HTTPS/proxy, descarga de rama, imágenes, configuración pública/Keycloak,
+volúmenes/rol S3 y aceptación real. Sin cambios cloud IAM/CORS ni secretos publicados.
+
 ## Entrega de Gabriel en rama personal (2026-11-10)
 
 Entrega solicitada para `work/gabriel`, creada desde `main`/`9315c9a`: contratos,
