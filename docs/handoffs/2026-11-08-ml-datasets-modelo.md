@@ -19,7 +19,10 @@ entrenamiento (que siguen fuera) y los intermedios.
 ```sh
 cd ml/artifacts/automotive-damage-mobilenetv2-v1/20261101T-with-negatives
 sha256sum -c SHA256SUMS
-```
+`
+
+.gitattributes marca la carpeta con -text: Git no convierte sus fines de línea al hacer checkout,
+así que estos hashes valen igual en Linux, macOS y Windows. Una conversión de EOL los invalidaría.``
 
 **No hay Git LFS**: son ~9,6 MB, entran en un clon normal. El dataset **no** se versiona.
 
