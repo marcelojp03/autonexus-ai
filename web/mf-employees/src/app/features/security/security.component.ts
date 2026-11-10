@@ -1,4 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzButtonModule } from 'ng-zorro-antd/button';
@@ -21,7 +22,7 @@ import {
   type Role,
   type RoleAssignment,
   type SecurityCatalog,
-  type SecurityPermission,
+  type SecurityPermission
 } from './security.contract';
 
 const FAILURE_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -38,24 +39,63 @@ const FAILURE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   VERSION_CONFLICT: 'Otra persona modificó el registro; recargá y reintentá.',
   VALIDATION_ERROR: 'Revisá los datos ingresados.',
   SERVICE_UNAVAILABLE: 'El servicio no está disponible en este momento.',
-  PERSISTENCE_UNAVAILABLE: 'El servicio no está disponible en este momento.',
+  PERSISTENCE_UNAVAILABLE: 'El servicio no está disponible en este momento.'
 });
 
 @Component({
   selector: 'anx-security',
   imports: [
-    FormsModule, NzAlertModule, NzButtonModule, NzCheckboxModule, NzEmptyModule, NzInputModule,
-    NzPageHeaderModule, NzPopconfirmModule, NzSelectModule, NzTableModule, NzTagModule,
+    FormsModule,
+    RouterLink,
+    NzAlertModule,
+    NzButtonModule,
+    NzCheckboxModule,
+    NzEmptyModule,
+    NzInputModule,
+    NzPageHeaderModule,
+    NzPopconfirmModule,
+    NzSelectModule,
+    NzTableModule,
+    NzTagModule
   ],
   templateUrl: './security.component.html',
-  styles: [`
-    .panel { margin-bottom: 16px; }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
-    .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: rgba(0,0,0,.65); }
-    .matrix { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin: 8px 0 4px; }
-    .actions { display: flex; gap: 4px; flex-wrap: wrap; }
-    .tags { display: flex; gap: 4px; flex-wrap: wrap; }
-  `]
+  styles: [
+    `
+      .panel {
+        margin-bottom: 16px;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-end;
+        margin-bottom: 16px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.65);
+      }
+      .matrix {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 8px;
+        margin: 8px 0 4px;
+      }
+      .actions {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+      .tags {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+    `
+  ]
 })
 export class SecurityComponent implements OnInit {
   private readonly api = inject(SecurityApi);
@@ -90,9 +130,12 @@ export class SecurityComponent implements OnInit {
     }
     return [...groups.entries()].map(([module, items]) => ({ module, items }));
   });
-  readonly activeAssignments = computed<RoleAssignment[]>(() => (this.employeeRoles()?.items ?? []).filter(item => item.status === 'active'));
+  readonly activeAssignments = computed<RoleAssignment[]>(() =>
+    (this.employeeRoles()?.items ?? []).filter(item => item.status === 'active')
+  );
   readonly canReadSecurity = computed<boolean>(() => (this.catalog()?.effective ?? []).includes('security:read'));
   readonly canWriteSecurity = computed<boolean>(() => (this.catalog()?.effective ?? []).includes('security:write'));
+  readonly canManageMcp = computed<boolean>(() => (this.catalog()?.effective ?? []).includes('mcp-clients:manage'));
 
   async ngOnInit(): Promise<void> {
     await this.reload();
@@ -143,7 +186,8 @@ export class SecurityComponent implements OnInit {
 
   togglePermission(id: string, checked: boolean): void {
     const current = new Set(this.draftPermissions());
-    if (checked) current.add(id); else current.delete(id);
+    if (checked) current.add(id);
+    else current.delete(id);
     this.draftPermissions.set([...current]);
   }
 
@@ -165,9 +209,11 @@ export class SecurityComponent implements OnInit {
       const role = existing
         ? await this.api.updateRole(existing.name, existing.version, this.draftDescription, permissions)
         : await this.api.createRole(this.draftName.trim(), this.draftDescription, permissions);
-      this.notice.set(role.syncStatus === 'synced'
-        ? `Rol ${role.name} guardado y sincronizado con el proveedor de identidad.`
-        : `Rol ${role.name} guardado; la sincronización con el proveedor falló y puede reintentarse.`);
+      this.notice.set(
+        role.syncStatus === 'synced'
+          ? `Rol ${role.name} guardado y sincronizado con el proveedor de identidad.`
+          : `Rol ${role.name} guardado; la sincronización con el proveedor falló y puede reintentarse.`
+      );
       this.cancelEdit();
       await this.reload();
     } catch (failure) {
@@ -183,9 +229,11 @@ export class SecurityComponent implements OnInit {
     this.error.set(null);
     try {
       const updated = await this.api.retryRoleSync(role.name, role.version);
-      this.notice.set(updated.syncStatus === 'synced'
-        ? `Rol ${updated.name} reconciliado con el proveedor de identidad.`
-        : 'La sincronización volvió a fallar; revisá el estado del proveedor de identidad.');
+      this.notice.set(
+        updated.syncStatus === 'synced'
+          ? `Rol ${updated.name} reconciliado con el proveedor de identidad.`
+          : 'La sincronización volvió a fallar; revisá el estado del proveedor de identidad.'
+      );
       await this.reload();
     } catch (failure) {
       this.handle(failure);
@@ -230,9 +278,11 @@ export class SecurityComponent implements OnInit {
     this.error.set(null);
     try {
       const assignment = await this.api.assignRole(employee.id, roleName);
-      this.notice.set(assignment.syncStatus === 'synced'
-        ? `Rol ${assignment.roleName} asignado y aplicado en el proveedor de identidad.`
-        : `Rol ${assignment.roleName} asignado; la sincronización con el proveedor falló.`);
+      this.notice.set(
+        assignment.syncStatus === 'synced'
+          ? `Rol ${assignment.roleName} asignado y aplicado en el proveedor de identidad.`
+          : `Rol ${assignment.roleName} asignado; la sincronización con el proveedor falló.`
+      );
       await this.selectEmployee(employee.id);
       await this.reload();
     } catch (failure) {
@@ -249,9 +299,11 @@ export class SecurityComponent implements OnInit {
     this.error.set(null);
     try {
       const revoked = await this.api.revokeRole(employee.id, assignment.roleName, assignment.version);
-      this.notice.set(revoked.syncStatus === 'synced'
-        ? `Rol ${revoked.roleName} retirado; el cambio aplica desde la próxima petición.`
-        : `Rol ${revoked.roleName} retirado localmente; la sincronización con el proveedor falló.`);
+      this.notice.set(
+        revoked.syncStatus === 'synced'
+          ? `Rol ${revoked.roleName} retirado; el cambio aplica desde la próxima petición.`
+          : `Rol ${revoked.roleName} retirado localmente; la sincronización con el proveedor falló.`
+      );
       await this.selectEmployee(employee.id);
       await this.reload();
     } catch (failure) {
@@ -270,7 +322,7 @@ export class SecurityComponent implements OnInit {
   }
 
   syncDetail(role: Role | RoleAssignment): string {
-    return role.syncErrorCode ? SYNC_ERROR_LABELS[role.syncErrorCode] ?? role.syncErrorCode : '';
+    return role.syncErrorCode ? (SYNC_ERROR_LABELS[role.syncErrorCode] ?? role.syncErrorCode) : '';
   }
 
   fullName(employee: AssignableEmployee): string {

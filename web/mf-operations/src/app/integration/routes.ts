@@ -7,7 +7,7 @@ import { operationsRoutes } from '../features/operations/routes';
   selector: 'anx-integrated-not-found',
   imports: [RouterLink],
   template:
-    '<h2>Vista no disponible</h2><p>Esta primera integración solo incluye vistas demo.</p><a routerLink="/widgets">Volver a componentes demo</a>'
+    '<h2>Vista no disponible</h2><p>Revisá la dirección o elegí una sección del menú.</p><a routerLink="/appointments">Volver a citas</a>'
 })
 class IntegratedNotFound {}
 

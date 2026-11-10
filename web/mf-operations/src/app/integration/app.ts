@@ -1,18 +1,14 @@
 import { Component, ViewEncapsulation } from '@angular/core';
 import { SessionView } from '../auth/session';
-import { SessionControls } from '../auth/session-controls';
 import { inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'anx-operations-root',
-  imports: [RouterOutlet, SessionControls],
+  imports: [RouterOutlet],
   encapsulation: ViewEncapsulation.ShadowDom,
   template: `<link rel="stylesheet" href="/mfs/operations/styles.css" />
     <section class="workspace" aria-label="Operaciones">
-      <h1>Operaciones</h1>
-      <p class="description">Componentes de demostración de NG-ALAIN. Sin datos ni operaciones del taller.</p>
-      <anx-session-controls />
       @if (session.allowed()) { <router-outlet /> }
     </section>`,
   styles: [
@@ -28,7 +24,13 @@ import { RouterOutlet } from '@angular/router';
           sans-serif;
       }
     .workspace {
-      padding: 24px;
+      padding: clamp(18px, 3vw, 32px);
+      max-width: 1440px;
+      margin: 24px auto;
+      background: #fff;
+      border: 1px solid #e1e8ef;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px #18344906;
     }
     /* The template title assumes LayoutBasic padding; this host owns its spacing. */
     .workspace .alain-default__content-title {
@@ -47,6 +49,8 @@ import { RouterOutlet } from '@angular/router';
       @media (max-width: 640px) {
         .workspace {
           padding: 16px;
+          margin: 12px;
+          border-radius: 12px;
         }
       }
     `

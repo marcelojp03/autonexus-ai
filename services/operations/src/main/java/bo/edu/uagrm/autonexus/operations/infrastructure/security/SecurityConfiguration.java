@@ -22,7 +22,7 @@ import org.springframework.web.cors.*;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
     private static final List<String> BUSINESS_PATHS = List.of(
-            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/receptions/**", "/orders/**", "/confirmations/**", "/agenda/**", "/executions/**", "/automations/**");
+            "/customers/**", "/vehicles/**", "/services/**", "/appointments/**", "/appointment-requests/**", "/receptions/**", "/orders/**", "/confirmations/**", "/agenda/**", "/executions/**", "/automations/**");
 
     @Bean
     JwtDecoder jwtDecoder(@Value("${OIDC_ISSUER_URI:http://127.0.0.1:8180/realms/autonexus}") String issuer,
@@ -98,6 +98,8 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.PUT, "/customers/*").hasAuthority("customers:write")
                 .requestMatchers(HttpMethod.POST, "/customers/*/deactivate").hasAuthority("customers:write")
                 // CU07 vehicles
+                .requestMatchers(HttpMethod.GET, "/vehicles/service-history/vehicles").hasAuthority("vehicle-history:read")
+                .requestMatchers(HttpMethod.GET, "/vehicles/*/service-history/**").hasAuthority("vehicle-history:read")
                 .requestMatchers(HttpMethod.GET, "/vehicles", "/vehicles/*").hasAuthority("vehicles:read")
                 .requestMatchers(HttpMethod.POST, "/vehicles").hasAuthority("vehicles:write")
                 .requestMatchers(HttpMethod.PUT, "/vehicles/*").hasAuthority("vehicles:write")
@@ -113,6 +115,11 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.POST, "/appointments").hasAuthority("appointments:write")
                 .requestMatchers(HttpMethod.PUT, "/appointments/*").hasAuthority("appointments:write")
                 .requestMatchers(HttpMethod.POST, "/appointments/*/cancel").hasAuthority("appointments:write")
+                // CU30 requests remain proposals until a staff member approves them.
+                .requestMatchers(HttpMethod.GET, "/appointment-requests/pending").hasAuthority("appointments:write")
+                .requestMatchers(HttpMethod.POST, "/appointment-requests", "/appointment-requests/operations/*/approve",
+                        "/appointment-requests/operations/*/reject").hasAuthority("appointments:write")
+                .requestMatchers(HttpMethod.GET, "/appointment-requests/operations/*").hasAuthority("appointments:write")
                 // CU11 receptions
                 .requestMatchers(HttpMethod.GET, "/receptions", "/receptions/*").hasAuthority("receptions:read")
                 .requestMatchers(HttpMethod.POST, "/receptions").hasAuthority("receptions:write")

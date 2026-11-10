@@ -1,0 +1,14 @@
+{
+  "status": "experimental",
+  "note": "Capacidad visual NO validada para el uso previsto: sobre una muestra con licencia de planos abiertos, 6 de 10 vehículos sin daño visible y 5 de 10 imágenes fuera de dominio quedaron marcados. El servicio funciona; el resultado no debe usarse como señal de revisión hasta pasar los criterios de aceptación.",
+  "acceptance": {
+    "falseAlarmRateUndamagedCloseUp": "<= 0.20 sobre >= 60 imágenes revisadas de vehículo sin daño en plano comparable al de entrenamiento",
+    "falseAlarmRateOutOfDomain": "<= 0.10 sobre >= 60 imágenes fuera de dominio revisadas",
+    "recallPerLabel": ">= 0.70 por etiqueta con >= 40 positivos revisados",
+    "independentTest": "conjunto reservado antes de cualquier ajuste, con positivos, negativos y fuera de dominio revisados a mano"
+  },
+  "measured": {
+    "heldOutNegativeSample": { "carsWideShots": "6/10 flagged", "outOfDomain": "5/10 flagged", "caveat": "planos abiertos, no comparables al encuadre del set de entrenamiento; muestra pequeña" },
+    "positiveTest": { "macroF1": 0.6846, "cleanTestSamples": 1694, "caveat": "evaluación filtrada retrospectivamente; no es una prueba final independiente" }
+  }
+}

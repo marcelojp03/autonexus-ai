@@ -139,7 +139,7 @@
         <label nz-checkbox formControlName="mechanicEnabled" id="employee-mechanic-enabled">Habilitar para asignaciones mecánicas</label>
       </nz-form-control>
     </nz-form-item>
-    @if (!editing) {
+    @if (!editing && !canManageLogin()) {
       <nz-form-item class="wide">
         <nz-form-control>
           <label nz-checkbox formControlName="requested" id="access-requested">
@@ -149,8 +149,55 @@
       </nz-form-item>
     }
   </div>
+  @if (canManageLogin() && employee()?.status !== 'inactive') {
+    <section class="panel" [formGroup]="loginForm" aria-label="Acceso al sistema">
+      <h3>Acceso al sistema</h3>
+      <label nz-checkbox formControlName="enabled" id="login-enabled">Configurar usuario, rol y contraseña permanente</label>
+      @if (loginForm.controls.enabled.value) {
+        <p>El empleado podrá entrar con estos datos. En una cuenta existente, se reemplaza su usuario y contraseña; se conservan sus otros roles.</p>
+        <div class="form-grid">
+          <nz-form-item>
+            <nz-form-label nzRequired nzFor="login-username">Usuario</nz-form-label>
+            <nz-form-control nzExtra="3–64 caracteres: minúsculas, números, punto, guion o guion bajo.">
+              <input nz-input id="login-username" formControlName="username" autocomplete="off" maxlength="64" />
+            </nz-form-control>
+          </nz-form-item>
+          <nz-form-item>
+            <nz-form-label nzRequired nzFor="login-role">Rol de acceso</nz-form-label>
+            <nz-form-control>
+              <nz-select id="login-role" formControlName="role" nzPlaceHolder="Seleccioná un rol">
+                @for (role of loginRoles(); track role.name) {
+                  <nz-option [nzValue]="role.name" [nzLabel]="roleLabel(role.name)" />
+                }
+              </nz-select>
+            </nz-form-control>
+          </nz-form-item>
+          <nz-form-item>
+            <nz-form-label nzRequired nzFor="login-password">Contraseña permanente</nz-form-label>
+            <nz-form-control nzExtra="De 8 a 128 caracteres. No se exigirá cambiarla al ingresar.">
+              <input nz-input id="login-password" type="password" formControlName="password" autocomplete="new-password" maxlength="128" />
+            </nz-form-control>
+          </nz-form-item>
+          <nz-form-item>
+            <nz-form-label nzRequired nzFor="login-confirmation">Repetir contraseña</nz-form-label>
+            <nz-form-control>
+              <input nz-input id="login-confirmation" type="password" formControlName="confirmation" autocomplete="new-password" maxlength="128" />
+            </nz-form-control>
+          </nz-form-item>
+        </div>
+        @if (employee()) {
+          <button nz-button type="button" [disabled]="saving() || loginBusy()" (click)="completeLogin()" id="employee-enable-login">
+            {{ loginBusy() ? 'Configurando acceso…' : 'Habilitar acceso' }}
+          </button>
+        }
+      }
+      @if (loginNotice()) {
+        <nz-alert class="panel" [nzType]="loginReady() ? 'success' : 'warning'" [nzMessage]="loginNotice()!" nzShowIcon id="employee-login-result" />
+      }
+    </section>
+  }
   <div class="footer">
-    <button nz-button nzType="primary" type="submit" [disabled]="saving() || (created() && !editing)" id="employee-submit">
+    <button nz-button nzType="primary" type="submit" [disabled]="saving() || loginBusy() || (created() && !editing)" id="employee-submit">
       {{ saving() ? 'Guardando…' : editing ? 'Guardar cambios' : 'Registrar empleado' }}
     </button>
     <button nz-button type="button" (click)="back()">Cancelar</button>

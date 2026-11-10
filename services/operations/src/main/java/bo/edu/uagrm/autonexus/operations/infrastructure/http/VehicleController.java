@@ -4,8 +4,13 @@ import bo.edu.uagrm.autonexus.operations.application.ManageVehicles;
 import bo.edu.uagrm.autonexus.operations.application.Mutation;
 import bo.edu.uagrm.autonexus.operations.application.Page;
 import bo.edu.uagrm.autonexus.operations.domain.Vehicle;
+import bo.edu.uagrm.autonexus.operations.domain.VehicleServiceHistory;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,6 +42,38 @@ public class VehicleController {
     @GetMapping("/{id}")
     public Vehicle get(@PathVariable String id) {
         return vehicles.get(id);
+    }
+
+    /** CU08 minimal vehicle picker; intentionally excludes customer and owner details. */
+    @GetMapping("/service-history/vehicles")
+    public Page<VehicleServiceHistory.VehicleReference> historyVehicles(
+            @RequestParam String search,
+            @RequestParam(required = false) String limit,
+            @RequestParam(required = false) String offset) {
+        return vehicles.historyVehicles(search, limit, offset);
+    }
+
+    @GetMapping("/{id}/service-history")
+    public Page<VehicleServiceHistory.Entry> history(@PathVariable String id,
+            @RequestParam(required = false) String limit, @RequestParam(required = false) String offset) {
+        return vehicles.history(id, limit, offset);
+    }
+
+    @GetMapping("/{id}/service-history/{orderId}")
+    public VehicleServiceHistory.Entry historyEntry(@PathVariable String id, @PathVariable String orderId) {
+        return vehicles.historyEntry(id, orderId);
+    }
+
+    @GetMapping("/{id}/service-history/{orderId}/evidence/{evidenceId}")
+    public ResponseEntity<byte[]> historyEvidence(@PathVariable String id, @PathVariable String orderId,
+            @PathVariable String evidenceId) {
+        var content = vehicles.historyEvidence(id, orderId, evidenceId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(content.fileName(), java.nio.charset.StandardCharsets.UTF_8).build().toString())
+                .contentType(MediaType.parseMediaType(content.contentType()))
+                .body(content.bytes());
     }
 
     @PostMapping

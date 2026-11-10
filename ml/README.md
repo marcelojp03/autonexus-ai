@@ -1,14 +1,19 @@
 # ml — modelo visual de CU23
 
-Cadena reproducible que produce el artefacto que consume MS04 Inteligencia. Nada de esto se
-versiona: `ml/data/`, `ml/artifacts/` y los ficheros `.npy`/`.npz` están ignorados; lo que se
-versiona es el **manifiesto** y este documento.
+Cadena reproducible que produce el artefacto que consume MS04 Inteligencia. Los datos de
+entrenamiento (`ml/data/`) y los ficheros `.npy`/`.npz` **no** se versionan. El artefacto entregado
+sí: `ml/artifacts/<modelVersion>/<runId>/` con `model.keras`, `manifest.json`, `quality.json` y
+`SHA256SUMS` viaja en el repositorio para que otro integrante trabaje sin regenerarlo. La entrega a
+un compañero —hashes, descarga del dataset con revisión fijada, licencias y límites— está en
+[docs/handoffs/2026-11-08-ml-datasets-modelo.md](../docs/handoffs/2026-11-08-ml-datasets-modelo.md).
 
 ## Tarea y modelo
 
-Clasificación multi-etiqueta de daño visible en fotografías de vehículo, con seis etiquetas
-publicadas por el manifiesto (`crack`, `dent`, `glass_shatter`, `lamp_broken`, `scratch`,
-`tire_flat`). Extractor **MobileNetV2** de Keras Applications con pesos ImageNet (licencia
+Clasificación multi-etiqueta de daño visible en fotografías de vehículo. El dataset declara seis
+clases (`crack`, `dent`, `glass_shatter`, `lamp_broken`, `scratch`, `tire_flat`), pero el artefacto
+entregado publica **cuatro** (`crack`, `dent`, `glass_shatter`, `scratch`): el resto se descartó por
+no tener positivos suficientes en la evaluación. Las etiquetas y umbrales vigentes son los del
+`manifest.json`, no esta lista. Extractor **MobileNetV2** de Keras Applications con pesos ImageNet (licencia
 Apache-2.0) congelado y cabeza lineal propia entrenada sobre las anotaciones del dataset. La salida
 es una **señal para revisión humana**: no mide, no diagnostica y no estima reparaciones.
 

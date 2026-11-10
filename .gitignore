@@ -1,4 +1,7 @@
 # Secretos y datos locales
+/firebase-adminsdk.json
+/google-services.json
+/mobile/autonexus_app/android/app/google-services.json
 .env
 .env.*
 !.env.example
@@ -28,6 +31,13 @@ data/
 datasets/
 ml/artifacts/*
 !ml/artifacts/README.md
+# El artefacto entregado se versiona: es lo que consume Inteligencia y no se puede regenerar sin el
+# dataset externo. Quedan fuera los pesos base descargados y los intermedios de entrenamiento.
+!ml/artifacts/*/
+!ml/artifacts/*/*/
+!ml/artifacts/*/*/manifest.json
+!ml/artifacts/*/*/quality.json
+!ml/artifacts/*/*/model.keras
 
 # Cachés y artefactos de desarrollo/verificación (regenerables)
 .angular/
@@ -80,3 +90,5 @@ services/sync/*.tsbuildinfo
 # CU27 self-hosted generated runtime/model; sources remain in the preparation script.
 /web/shell/public/offline-model/
 /integration/agent/output/
+
+diagram/

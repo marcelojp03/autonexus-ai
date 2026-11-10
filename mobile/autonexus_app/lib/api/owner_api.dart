@@ -7,8 +7,10 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import '../offline/vehicle_history.dart';
 
 class OwnerFailure implements Exception {
   const OwnerFailure(this.status, this.code, this.message);
@@ -25,6 +27,10 @@ class OwnerFailure implements Exception {
     'AGENDA_WORK_NOT_FOUND' ||
     'EXECUTION_ACCESS_DENIED' ||
     'EXECUTION_WORK_NOT_FOUND' => 'Ya no tenés acceso a este trabajo.',
+    'SERVICE_HISTORY_NOT_FOUND' ||
+    'SERVICE_HISTORY_EVIDENCE_NOT_FOUND' ||
+    'VEHICLE_NOT_FOUND' ||
+    'FORBIDDEN' => 'No tenés permiso para consultar ese historial o evidencia.',
     'AGENDA_DEPENDENCY_UNAVAILABLE' ||
     'AGENDA_STATE_UNAVAILABLE' ||
     'PERSISTENCE_UNAVAILABLE' =>
@@ -160,6 +166,126 @@ class OwnerApi {
   Future<ExecutionSnapshot> execution(String token, String assignmentId) async {
     final body = await _get('/executions/me/$assignmentId', token);
     return ExecutionSnapshot.fromJson(body);
+  }
+
+  Future<List<VehicleHistoryVehicle>> findHistoryVehicles(
+    String token,
+    String search,
+  ) async {
+    final term = search.trim();
+    if (term.length < 2 || term.length > 100)
+      throw const FormatException(
+        'Ingresá al menos dos caracteres para buscar.',
+      );
+    final query = Uri(
+      queryParameters: {'search': term, 'limit': '100', 'offset': '0'},
+    ).query;
+    final body = await _get('/vehicles/service-history/vehicles?$query', token);
+    return ((body['items'] as List?) ?? const [])
+        .map(
+          (item) => VehicleHistoryVehicle.fromJson(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<VehicleHistoryPage> vehicleServiceHistory(
+    String token,
+    String vehicleId, {
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final body = await _get(
+      '/vehicles/${Uri.encodeComponent(vehicleId)}/service-history?limit=$limit&offset=$offset',
+      token,
+    );
+    final total = (body['total'] as num?)?.toInt() ?? 0;
+    final items = (body['items'] as List?) ?? const [];
+    return VehicleHistoryPage(
+      entries: items
+          .map(
+            (item) => VehicleServiceHistoryEntry.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      truncated: offset + items.length < total,
+    );
+  }
+
+  Future<VehicleServiceHistoryEntry> vehicleServiceHistoryEntry(
+    String token,
+    String vehicleId,
+    String orderId,
+  ) async {
+    final body = await _get(
+      '/vehicles/${Uri.encodeComponent(vehicleId)}/service-history/${Uri.encodeComponent(orderId)}',
+      token,
+    );
+    return VehicleServiceHistoryEntry.fromJson(body);
+  }
+
+  Future<DownloadedHistoryEvidence> downloadHistoryEvidence(
+    String token,
+    String vehicleId,
+    String orderId,
+    VehicleHistoryEvidence evidence,
+  ) async {
+    final uri = Uri.parse(
+      '$baseUrl/vehicles/${Uri.encodeComponent(vehicleId)}/service-history/${Uri.encodeComponent(orderId)}/evidence/${Uri.encodeComponent(evidence.id)}',
+    );
+    late final http.Response response;
+    try {
+      response = await _client
+          .get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Cache-Control': 'no-store',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+    } catch (error) {
+      throw OwnerFailure(
+        0,
+        'OWNER_UNREACHABLE',
+        'Sin conexión con el servicio: ${error.runtimeType}',
+      );
+    }
+    if (response.statusCode == 401)
+      throw const OwnerFailure(401, 'UNAUTHENTICATED', 'La sesión venció.');
+    if (response.statusCode >= 400) {
+      final body = _decode(response.body);
+      throw OwnerFailure(
+        response.statusCode,
+        (body?['code'] as String?) ?? 'HTTP_${response.statusCode}',
+        (body?['message'] as String?) ?? '',
+      );
+    }
+    final type = response.headers['content-type']
+        ?.split(';')
+        .first
+        .trim()
+        .toLowerCase();
+    final cache = response.headers['cache-control']?.toLowerCase() ?? '';
+    if (type != evidence.contentType ||
+        !historyEvidenceTypes.contains(type) ||
+        !cache.contains('no-store') ||
+        response.bodyBytes.length != evidence.sizeBytes ||
+        response.bodyBytes.isEmpty ||
+        response.bodyBytes.length > 20 * 1024 * 1024) {
+      throw const OwnerFailure(
+        502,
+        'HISTORY_EVIDENCE_INVALID',
+        'La evidencia no coincide con el historial autorizado.',
+      );
+    }
+    return DownloadedHistoryEvidence(
+      fileName: evidence.fileName,
+      contentType: type!,
+      bytes: Uint8List.fromList(response.bodyBytes),
+    );
   }
 
   /// `YYYY-MM-DD` of the device's civil date; never serialised through UTC.

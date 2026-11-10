@@ -1,5 +1,14 @@
 # MS02 Empleados
 
+## Configuración de acceso desde CU03 (incremento local)
+
+`POST /employees/:id/access/login` requiere employees:write + security:write y una identidad
+activa, sincronizada y propia. Valida usuario único y contraseña permanente; rechaza cambios
+sobre empleados con permisos superiores al actor. Delega `temporary=false` a Keycloak,
+conservando subject/employeeId. Migración aditiva `CreateLoginCommands1794312000000`:
+auditoría e idempotencia por metadatos, nunca contraseña ni hash de contraseña. Ver contratos
+REST/GraphQL y `contracts/auth/employees.md`. La asignación de roles sigue en CU02.
+
 ## CU05 — backend de agenda online (implementación local)
 
 Contrato: `contracts/rest/agenda.md` desde la raíz. Lecturas humanas dedicadas:

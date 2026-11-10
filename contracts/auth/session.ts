@@ -54,10 +54,18 @@ export interface SessionPort {
     options?: { readonly timeoutMs?: number }): Promise<BusinessResult>;
   /** Transfers evidence bytes to an already authorized URL; attaches no token and decides nothing. */
   uploadEvidence(target: EvidenceUploadTarget, body: Blob | ArrayBuffer): Promise<EvidenceUploadOutcome>;
+  /** Downloads a bounded allowlisted business file through the BFF without exposing the RAM-only token. */
+  downloadBusinessFile?(path: string): Promise<{ readonly blob: Blob; readonly fileName: string }>;
+}
+export interface OfflineHistoryPort {
+  read(subject: string, vehicleId: string): Promise<unknown | undefined>;
+  vehicles(subject: string): Promise<unknown[]>;
+  replace(subject: string, vehicleId: string, snapshot: unknown): Promise<void>;
 }
 export interface IntegratedProps {
   domElement: HTMLElement;
   basePath: '/employees' | '/operations' | '/finance' | '/intelligence';
   assetBase: '/mfs/employees/' | '/mfs/operations/' | '/mfs/finance/' | '/mfs/intelligence/';
   session: SessionPort;
+  readonly offlineHistory?: OfflineHistoryPort;
 }

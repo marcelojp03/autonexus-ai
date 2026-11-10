@@ -1,16 +1,18 @@
 # CU29 — primer contrato MCP de consulta
 
-Diseño del incremento en `docs/compose/spec/mcp-read-n8n.md`. No es CU30 ni el CRUD CU31.
-Proceso independiente, transporte Streamable HTTP y herramientas de solo lectura.
+Diseño base CU29 en `docs/compose/spec/mcp-read-n8n.md`; se amplía con CU30 y la administración
+de clientes CU31. Proceso independiente, transporte Streamable HTTP en `/mcp`.
 
-| Herramienta | REST de Operaciones | Alcance OAuth MCP | Permiso propietario |
-| --- | --- | --- | --- |
-| `autonexus_list_orders` | GET /orders | mcp:orders:read | orders:read |
-| `autonexus_get_order` | GET /orders/{id} | mcp:orders:read | orders:read |
-| `autonexus_list_my_agenda` | GET /agenda/me | mcp:agenda:read:self | agenda:read:self |
-| `autonexus_list_team_agenda` | GET /agenda/team | mcp:agenda:read:team | agenda:read:team |
-| `autonexus_get_my_execution` | GET /executions/me/{assignmentId} | mcp:executions:read:self | executions:read:self |
-| `autonexus_get_team_execution` | GET /executions/team/{assignmentId} | mcp:executions:read:team | executions:read:team |
+| Herramienta                         | REST de Operaciones                                | Alcance OAuth MCP             | Permiso propietario  |
+| ----------------------------------- | -------------------------------------------------- | ----------------------------- | -------------------- |
+| `autonexus_list_orders`             | GET /orders                                        | mcp:orders:read               | orders:read          |
+| `autonexus_get_order`               | GET /orders/{id}                                   | mcp:orders:read               | orders:read          |
+| `autonexus_list_my_agenda`          | GET /agenda/me                                     | mcp:agenda:read:self          | agenda:read:self     |
+| `autonexus_list_team_agenda`        | GET /agenda/team                                   | mcp:agenda:read:team          | agenda:read:team     |
+| `autonexus_get_my_execution`        | GET /executions/me/{assignmentId}                  | mcp:executions:read:self      | executions:read:self |
+| `autonexus_get_team_execution`      | GET /executions/team/{assignmentId}                | mcp:executions:read:team      | executions:read:team |
+| `autonexus_request_appointment`     | POST /appointment-requests                         | mcp:appointments:request      | appointments:write   |
+| `autonexus_get_appointment_request` | GET /appointment-requests/operations/{operationId} | mcp:appointments:request:read | appointments:write   |
 
 Los alcances MCP no son nuevas entradas del catálogo de permisos empresariales. Cliente activo,
 allowlist de herramientas y scope exacto no sustituyen la autorización del propietario. Agenda/
@@ -41,6 +43,29 @@ versión; avances id/sequence/minutesWorked/occurredAt/recordedAt/version y cont
 Se excluyen cliente/contactos/documentos, vehículo/matrícula, notas/descripciones, importes/
 cotizaciones, objetos/nombres de archivo, imágenes y URLs. Sin passthrough de DTO propietario.
 Notas o resultados no conceden autoridad ni se interpretan como instrucciones.
+
+## CU30 — solicitud pendiente, nunca reserva
+
+`autonexus_request_appointment` acepta claves cerradas `operationId`, customerId, vehicleId,
+serviceId, startsAt con offset, timeZone IANA y notes opcional acotada. Requiere client scope,
+permiso efectivo `appointments:write` del empleado delegado, y una firma MCP→Operaciones que
+vincula clientId, subject y operationId. El propietario valida referencias/relación cliente-
+vehículo y registra `PENDING_REVIEW` con replay de mismo payload; otro payload para el mismo ID
+conflicta. La reconciliación firma la lectura y restringe el resultado al mismo clientId y subject
+que originaron la solicitud. La fila pendiente no reserva el horario. Si la llamada queda incierta, se consulta
+`autonexus_get_appointment_request` con el mismo operationId antes de reintentar.
+
+La cola del personal permite rechazar con motivo o aprobar con horario confirmado. La aprobación
+revalida cliente/vehículo/servicio y disponibilidad en la transacción propietaria, creando una
+sola cita mediante operationId derivado estable. La API de MCP no expone confirmación directa.
+
+## CU31 — registro externo
+
+`mcp-clients:manage` habilita la pantalla Empleados → Seguridad → Integraciones MCP y cada
+operación GraphQL del BFF; solo el rol inicial administrador lo recibe. BFF usa un token privado
+de servicio para CRUD del registro MCP. El registro acepta solo clientId, nombre, estado y scopes
+de la allowlist, con escritura atómica, auditoría de metadata y una sola instancia por archivo.
+No se registran secretos OAuth ni tokens.
 
 401 de autenticación MCP y403 de alcance usan challenges OAuth. Herramienta desconocida y
 argumentos inválidos usan el SDK. Denegación/404/dependencia propietaria se devuelven saneadas

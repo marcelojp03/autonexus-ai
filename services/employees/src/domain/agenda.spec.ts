@@ -31,8 +31,8 @@ describe('CU05 closed inputs and permissions', () => {
       assignmentCheckInput({ scope: 'self', assignmentIds: [] }).assignmentIds,
     ).toEqual([]);
   });
-  it('seeds 31 permissions without granting mechanic general CRUD', () => {
-    expect(PERMISSIONS).toHaveLength(31);
+  it('seeds the closed permission catalog without granting mechanic general CRUD', () => {
+    expect(PERMISSIONS).toHaveLength(37);
     for (const name of ['administrador', 'jefe_taller']) {
       expect(INITIAL_ROLES.find((r) => r.name === name)?.permissions).toEqual(
         expect.arrayContaining(['agenda:read:self', 'agenda:read:team']),
@@ -40,6 +40,15 @@ describe('CU05 closed inputs and permissions', () => {
     }
     expect(
       INITIAL_ROLES.find((r) => r.name === 'mecanico')?.permissions,
-    ).toEqual(['receptions:read', 'receptions:write', 'agenda:read:self', 'executions:read:self', 'executions:write', 'intelligence:analyze', 'intelligence:read']);
+    ).toEqual([
+      'receptions:read',
+      'receptions:write',
+      'vehicle-history:read',
+      'agenda:read:self',
+      'executions:read:self',
+      'executions:write',
+      'intelligence:analyze',
+      'intelligence:read',
+    ]);
   });
 });

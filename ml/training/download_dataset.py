@@ -6,6 +6,9 @@ manifest produced here, and the license/provenance captured with it, are reprodu
 
 Dataset: tugberkkalay/autodamageiq-vehicle-damage-dataset (CC BY 4.0), YOLO detection
 annotations over CarDD + VehiDE + human-in-the-loop labeled images.
+
+The revision is pinned by default to the snapshot the delivered model was trained on, so a
+colleague reproduces the same images instead of whatever the Hub serves that day.
 """
 from __future__ import annotations
 
@@ -18,11 +21,18 @@ REPO_ID = "tugberkkalay/autodamageiq-vehicle-damage-dataset"
 REPO_TYPE = "dataset"
 LICENSE = "CC-BY-4.0"
 ALLOW_PATTERNS = ["data.yaml", "images/*", "labels/*", "README.md"]
+# Snapshot used by modelVersion automotive-damage-mobilenetv2-v1 / runId 20261101T-with-negatives.
+PINNED_REVISION = "b5abbf54bdf7c8817a4e20b6ab39c8f1fe98a0e5"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default="/work/data", help="local data root")
+    parser.add_argument(
+        "--revision",
+        default=PINNED_REVISION,
+        help="Hub revision to snapshot; default is the revision the delivered model was trained on",
+    )
     args = parser.parse_args()
 
     from huggingface_hub import HfApi, snapshot_download
@@ -31,7 +41,7 @@ def main() -> int:
     target = root / "raw" / REPO_ID.replace("/", "__")
     target.mkdir(parents=True, exist_ok=True)
 
-    info = HfApi().dataset_info(REPO_ID)
+    info = HfApi().dataset_info(REPO_ID, revision=args.revision)
     revision = info.sha
     manifest_path = root / "dataset.json"
     if manifest_path.exists():
@@ -43,6 +53,7 @@ def main() -> int:
     path = snapshot_download(
         repo_id=REPO_ID,
         repo_type=REPO_TYPE,
+        revision=revision,
         local_dir=str(target),
         allow_patterns=ALLOW_PATTERNS,
         max_workers=32,

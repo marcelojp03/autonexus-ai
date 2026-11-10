@@ -169,6 +169,86 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/VehicleResult' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /vehicles/{id}/service-history:
+    get:
+      operationId: listVehicleServiceHistory
+      description: Read-only completed interventions from Operations-owned records; stable verifiedAt/id descending order. Does not expose S3 object keys.
+      x-permission: vehicle-history:read
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Paginated completed interventions; an empty page still validates that the vehicle exists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleServiceHistoryPage' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vehicles/service-history/vehicles:
+    get:
+      operationId: findVehicleHistoryVehicles
+      description: Minimal registered-vehicle picker for CU08 only; search is required and no owner/customer fields are returned.
+      x-permission: vehicle-history:read
+      parameters:
+        - { name: search, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Minimal vehicle references for CU08
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleHistoryVehiclePage' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /vehicles/{id}/service-history/{orderId}:
+    get:
+      operationId: getVehicleServiceHistoryEntry
+      x-permission: vehicle-history:read
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: One completed intervention with recorded service snapshots; no evidence keys or bucket metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VehicleServiceHistoryEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /vehicles/{id}/service-history/{orderId}/evidence/{evidenceId}:
+    get:
+      operationId: downloadVehicleServiceHistoryEvidence
+      description: Streams private evidence bytes after rechecking vehicle, completed order, completed execution and available evidence ownership. Never returns a signed URL or object key; response is private and no-store.
+      x-permission: vehicle-history:read
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: evidenceId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Authorized private evidence bytes
+          headers:
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            video/mp4: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503':
+          description: Private evidence storage unavailable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessError' }
   /services:
     get:
       operationId: listServices
@@ -336,6 +416,99 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AppointmentResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /appointment-requests:
+    post:
+      operationId: createAppointmentRequest
+      description: Creates an auditable proposal only; it does not reserve capacity or create an appointment.
+      x-permission: appointments:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAppointmentRequestInput' }
+      responses:
+        '201':
+          description: Pending request or idempotent replay
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentRequestResult' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /appointment-requests/pending:
+    get:
+      operationId: listPendingAppointmentRequests
+      x-permission: appointments:write
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Pending proposals; none reserve availability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentRequestPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /appointment-requests/operations/{operationId}:
+    parameters:
+      - { name: operationId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getAppointmentRequestByOperation
+      x-permission: appointments:write
+      responses:
+        '200':
+          description: Reconciliation record for an original operationId
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /appointment-requests/operations/{operationId}/approve:
+    parameters:
+      - { name: operationId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: approveAppointmentRequest
+      x-permission: appointments:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startsAt]
+              additionalProperties: false
+              properties:
+                startsAt: { type: string, format: date-time, description: Staff-confirmed time with an explicit offset. }
+      responses:
+        '200':
+          description: Revalidated request and associated appointment; replay returns the same result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentRequestResult' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /appointment-requests/operations/{operationId}/reject:
+    parameters:
+      - { name: operationId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: rejectAppointmentRequest
+      x-permission: appointments:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 300 }
+      responses:
+        '200':
+          description: Rejected request with required staff reason
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentRequestResult' }
         '409': { $ref: '#/components/responses/Conflict' }
   "/receptions":
     "get":
@@ -1052,6 +1225,67 @@ components:
           "$ref": "#/components/schemas/WorkOrder"
         "replayed":
           "type": "boolean"
+    "VehicleServiceHistoryPage":
+      "type": "object"
+      "required": ["items","total","limit","offset"]
+      "properties":
+        "items": { "type": "array", "items": { "$ref": "#/components/schemas/VehicleServiceHistoryEntry" } }
+        "total": { "type": "integer", "minimum": 0 }
+        "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+        "offset": { "type": "integer", "minimum": 0 }
+    "VehicleServiceHistoryEntry":
+      "type": "object"
+      "required": ["orderId","orderNumber","servicedAt","type","status","description","observations","receptionReason","symptoms","services","evidences"]
+      "properties":
+        "orderId": { "type": "string", "format": "uuid" }
+        "orderNumber": { "type": "string" }
+        "servicedAt": { "type": "string", "format": "date-time" }
+        "type": { "type": "string", "enum": ["mantenimiento","reparacion","diagnostico","otros"] }
+        "status": { "type": "string", "enum": ["completed"] }
+        "description": { "type": "string" }
+        "observations": { "type": "string" }
+        "receptionReason": { "type": "string" }
+        "symptoms": { "type": ["string","null"] }
+        "services":
+          "type": "array"
+          "items":
+            "type": "object"
+            "required": ["id","recordedName","quantity","minutes"]
+            "properties":
+              "id": { "type": "string", "format": "uuid" }
+              "recordedName": { "type": "string" }
+              "quantity": { "type": "integer", "minimum": 1 }
+              "minutes": { "type": "integer", "minimum": 15 }
+        "evidences":
+          "type": "array"
+          "items":
+            "type": "object"
+            "required": ["id","fileName","contentType","sizeBytes","createdAt"]
+            "properties":
+              "id": { "type": "string", "format": "uuid" }
+              "fileName": { "type": "string" }
+              "contentType": { "type": "string", "enum": ["image/jpeg","image/png","image/webp","video/mp4"] }
+              "sizeBytes": { "type": "integer", "minimum": 1, "maximum": 20971520 }
+              "createdAt": { "type": "string", "format": "date-time" }
+    "VehicleHistoryVehiclePage":
+      "type": "object"
+      "required": ["items","total","limit","offset"]
+      "properties":
+        "items":
+          "type": "array"
+          "items": { "$ref": "#/components/schemas/VehicleHistoryVehicle" }
+        "total": { "type": "integer", "minimum": 0 }
+        "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+        "offset": { "type": "integer", "minimum": 0 }
+    "VehicleHistoryVehicle":
+      "type": "object"
+      "required": ["id","plate","make","model","year"]
+      "properties":
+        "id": { "type": "string", "format": "uuid" }
+        "plate": { "type": "string" }
+        "make": { "type": "string" }
+        "model": { "type": "string" }
+        "year": { "type": "integer" }
     "StartServiceConfirmationInput":
       "type": "object"
       "required": ["operationId","expectedVersion","quoteId","quoteVersion","employeeId","employeeVersion","requiredSpecialty","startsAt","endsAt"]
@@ -1337,6 +1571,54 @@ components:
         total: { type: integer }
         limit: { type: integer }
         offset: { type: integer }
+    AppointmentRequest:
+      type: object
+      required: [id, operationId, clientId, requesterSubject, customerId, vehicleId, serviceId, requestedStartsAt, timeZone, status, createdAt, reviewedAt, reviewerSubject, reviewReason, appointmentId, version]
+      properties:
+        id: { type: string, format: uuid }
+        operationId: { type: string, format: uuid }
+        clientId: { type: string, maxLength: 200 }
+        requesterSubject: { type: string, maxLength: 128 }
+        customerId: { type: string, format: uuid }
+        vehicleId: { type: string, format: uuid }
+        serviceId: { type: string, format: uuid }
+        requestedStartsAt: { type: string, format: date-time }
+        timeZone: { type: string, maxLength: 64 }
+        notes: { type: [string, 'null'], maxLength: 500 }
+        status: { type: string, enum: [PENDING_REVIEW, APPROVED, REJECTED] }
+        createdAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        reviewerSubject: { type: [string, 'null'], maxLength: 128 }
+        reviewReason: { type: [string, 'null'], maxLength: 300 }
+        appointmentId: { type: [string, 'null'], format: uuid }
+        version: { type: integer, minimum: 1 }
+    AppointmentRequestPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AppointmentRequest' } }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+    AppointmentRequestResult:
+      type: object
+      required: [request, replayed]
+      properties:
+        request: { $ref: '#/components/schemas/AppointmentRequest' }
+        replayed: { type: boolean }
+    CreateAppointmentRequestInput:
+      type: object
+      required: [operationId, clientId, customerId, vehicleId, serviceId, startsAt, timeZone]
+      additionalProperties: false
+      properties:
+        operationId: { type: string, format: uuid }
+        clientId: { type: string, minLength: 1, maxLength: 200, pattern: '^[A-Za-z0-9._:-]+$' }
+        customerId: { type: string, format: uuid }
+        vehicleId: { type: string, format: uuid }
+        serviceId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        timeZone: { type: string, minLength: 1, maxLength: 64 }
+        notes: { type: string, maxLength: 500 }
     CreateCustomerInput:
       type: object
       required: [operationId, firstName, lastName, document, phone]

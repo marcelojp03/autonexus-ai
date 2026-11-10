@@ -1,5 +1,12 @@
 # BFF
 
+## Acceso de empleados desde el alta
+
+`configureEmployeeLogin` del SDL Empleados reenvía usuario/contraseña al endpoint propietario
+de acceso, con el bearer humano y **ambos** permisos employees:write y security:write.
+No guarda ni devuelve contraseñas. La llamada al IdP permanece en MS02. Presupuesto del
+gateway para esta operación: 35 s; las demás llamadas de Empleados conservan 10 s.
+
 ## CU19/CU20 — ledger propietario
 
 El duodécimo SDL es `contracts/graphql/financial-ledger.graphql`. Override

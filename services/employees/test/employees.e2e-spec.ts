@@ -22,6 +22,7 @@ describe('CU03 HTTP authorization (synthetic RSA; explicit fake repository)', ()
     ['put', '/employees/11111111-1111-4111-8111-111111111111'],
     ['post', '/employees/11111111-1111-4111-8111-111111111111/deactivate'],
     ['post', '/employees/11111111-1111-4111-8111-111111111111/access/retry'],
+    ['post', '/employees/11111111-1111-4111-8111-111111111111/access/login'],
   ] as const;
   const list = vi.fn(async () => ({
     items: [],

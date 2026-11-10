@@ -36,8 +36,8 @@ public class JdbcWorkOrderRepository extends OperationsStore implements WorkOrde
     }
 
     private List<WorkOrder.Item> items(JdbcClient client, UUID orderId) {
-        return client.sql("SELECT i.service_id, s.name AS service_name, i.quantity, i.estimated_minutes, i.reference_rate "
-                        + "FROM operations.work_order_items i JOIN operations.service_catalog s ON s.id = i.service_id "
+        return client.sql("SELECT i.service_id, i.service_name, i.quantity, i.estimated_minutes, i.reference_rate "
+                        + "FROM operations.work_order_items i "
                         + "WHERE i.order_id = ? ORDER BY i.position")
                 .param(orderId)
                 .query((rs, index) -> new WorkOrder.Item(rs.getObject("service_id", UUID.class), rs.getString("service_name"),
@@ -179,8 +179,9 @@ public class JdbcWorkOrderRepository extends OperationsStore implements WorkOrde
             int[] price = prices.get(requested.serviceId());
             BigDecimal reference = new BigDecimal(price[1]).movePointLeft(2);
             jdbc.sql("INSERT INTO operations.work_order_items(id, order_id, service_id, quantity, estimated_minutes, "
-                            + "reference_rate, position) VALUES(?,?,?,?,?,?,?)")
-                    .params(UUID.randomUUID(), id, requested.serviceId(), requested.quantity(), price[0], reference, position++)
+                            + "reference_rate, position, service_name, service_category) "
+                            + "SELECT ?,?,?,?,?,?,?,name,category FROM operations.service_catalog WHERE id=?")
+                    .params(UUID.randomUUID(), id, requested.serviceId(), requested.quantity(), price[0], reference, position++, requested.serviceId())
                     .update();
         }
         jdbc.sql("UPDATE operations.vehicle_receptions SET has_order = true, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?")

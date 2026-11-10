@@ -128,4 +128,15 @@ public final class S3EvidenceStorage implements EvidenceStorage {
             throw unavailable();
         }
     }
+
+    @Override
+    public byte[] read(String objectKey, String versionId) {
+        try {
+            GetObjectRequest request = GetObjectRequest.builder().bucket(bucket).key(objectKey)
+                    .versionId(versionId == null ? null : versionId).build();
+            return client.getObjectAsBytes(request).asByteArray();
+        } catch (RuntimeException failure) {
+            throw unavailable();
+        }
+    }
 }

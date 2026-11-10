@@ -12,10 +12,12 @@ Contrato aprobado en `docs/compose/spec/cu02-security.md` y ampliado en `docs/co
 | `schedules:write` | Horarios | write | Turnos, descansos y ausencias (CU04) |
 | `security:read` | Seguridad | read | Catálogo, roles, asignaciones e historial de seguridad (CU02) |
 | `security:write` | Seguridad | write | Crear y modificar roles, asignar, retirar y reintentar sincronización (CU02) |
+| `mcp-clients:manage` | Integraciones MCP | manage | Registrar, limitar, suspender y revocar clientes externos MCP (CU31); reservado al rol inicial administrador |
 | `customers:read` | Clientes | read | Consultar clientes del taller (CU06) |
 | `customers:write` | Clientes | write | Registrar, actualizar y desactivar clientes (CU06) |
 | `vehicles:read` | Vehículos | read | Consultar vehículos y su propietario (CU07) |
 | `vehicles:write` | Vehículos | write | Registrar, actualizar y desactivar vehículos (CU07) |
+| `vehicle-history:read` | Historial vehicular | read | Consultar intervenciones completadas y evidencias autorizadas (CU08) |
 | `catalog:read` | Catálogo | read | Consultar el catálogo de servicios (CU09) |
 | `catalog:write` | Catálogo | write | Crear, actualizar y desactivar servicios (CU09) |
 | `appointments:read` | Citas | read | Consultar citas y la agenda del taller (CU10) |
@@ -48,10 +50,10 @@ Reglas: identificador modulo:operacion y, para CU05, modulo:operacion:alcance, e
 
 | Rol | Permisos | Motivo |
 | --- | --- | --- |
-| `administrador` | los treinta y cinco del catálogo CU19/CU20 | Autoridad completa; CU05/CU16/CU23 requieren vínculo laboral activo por registro |
-| `jefe_taller` | schedules:read/write, customers:read, vehicles:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team, executions:read:self/team, executions:verify, intelligence:read | Planificación, catálogo, órdenes, decisión financiera, confirmación CU15, verificación CU17 y consulta de análisis CU23 |
-| `recepcionista` | customers:read/write, vehicles:read/write, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes y decisión del cliente; no elabora cotizaciones |
-| `mecanico` | receptions:read/write, agenda:read:self, executions:read:self/write, intelligence:analyze/read | Recepción CU11, agenda propia CU05, ejecución de sus trabajos CU16 y análisis visual de sus evidencias CU23; sin CRUD general ni agenda del equipo |
+| `administrador` | todos los permisos del catálogo cerrado | Autoridad completa; CU05/CU08/CU16/CU23 requieren vínculo laboral activo por registro |
+| `jefe_taller` | schedules:read/write, customers:read, vehicles:read, vehicle-history:read, catalog:read/write, appointments:read/write, receptions:read, orders:read/write, quotes:read/decide, confirmations:read/write, agenda:read:self/team, executions:read:self/team, executions:verify, intelligence:read | Planificación, catálogo, órdenes, CU08, confirmación CU15, verificación CU17 y consulta de análisis CU23 |
+| `recepcionista` | customers:read/write, vehicles:read/write, vehicle-history:read, catalog:read, appointments:read/write, receptions:read/write, orders:read/write, quotes:read/decide | Recepción, órdenes, CU08 y decisión del cliente; no elabora cotizaciones |
+| `mecanico` | receptions:read/write, vehicle-history:read, agenda:read:self, executions:read:self/write, intelligence:analyze/read | Recepción CU11, historial CU08, agenda propia CU05, ejecución de sus trabajos CU16 y análisis visual de sus evidencias CU23; sin CRUD general ni agenda del equipo |
 | `responsable_financiero` | orders:read, quotes:read/write/decide, payments:read/write, expenses:read/write | Cotizaciones y decisiones CU13/CU14; aprobar no confirma el servicio |
 
 Los roles iniciales son `system=true`: no se renombran y no se borran. Sus permisos sí pueden editarse, con las restricciones de último administrador. Un rol nuevo requiere nombre `^[a-z][a-z0-9_]{2,63}$`, distinto de cualquier otro, y al menos un permiso del catálogo.
@@ -77,7 +79,7 @@ El paso 3 es lo que hace que retirar una asignación tenga efecto en la siguient
 ## Política por operación
 
 - REST de Empleados: `employees:*`, `schedules:*`, `security:*`.
-- REST de Operaciones: customers:*, vehicles:*, catalog:*, appointments:*, receptions:*, orders:*; Finanzas usa quotes:read/write/decide. /technical/session y /technical/admin conservan la política y el cuerpo de CU01.
+- REST de Operaciones: customers:*, vehicles:* (CU07), `vehicle-history:read` (CU08), catalog:*, appointments:*, receptions:*, orders:*; Finanzas usa quotes:read/write/decide. `/technical/session` y `/technical/admin` conservan la política y el cuerpo de CU01.
 - BFF GraphQL: el permiso declarado por campo; `securityCatalog` no exige permiso porque solo devuelve el catálogo y los permisos del propio portador.
 
 ## Ampliación CU15 implementada
@@ -94,6 +96,15 @@ El campo aprobado mechanicEnabled describe habilitación laboral en Empleados, n
 - **Nunca sin administrador**: con `pg_advisory_xact_lock` sobre `security:administrators`, se cuentan dentro de la misma transacción las asignaciones vigentes a empleados activos con identidad resoluble cuyos roles otorgan `security:write`. Retirar la última o reducir el último rol que lo otorga responde `LAST_ADMINISTRATOR` (409). Dos peticiones concurrentes no pueden dejar la plataforma sin administrador; la contención de locks responde `409 CONCURRENT_OPERATION`.
 - **Idempotencia**: `operationId` obligatorio con huella actor+acción+destino+contenido+versión; replay sin efectos; contenido distinto `IDEMPOTENCY_CONFLICT`.
 - **Auditoría**: `security_history` solo se inserta: no existe endpoint de modificación ni de borrado y el servicio no ejecuta UPDATE/DELETE sobre ella. Sin tokens, secretos ni cuerpos del IdP. La inmutabilidad se garantiza en la aplicación.
+
+## CU31 — administración MCP
+
+`mcp-clients:manage` se otorga al rol inicial `administrador` por migración y no puede incorporarse
+a roles personalizados, aunque quien los edite posea el permiso. El Shell solo muestra la entrada
+con `securityCatalog.effective`; BFF vuelve a autorizar cada operación por el permiso efectivo.
+Los cambios del registro se envían al proceso MCP por un token de servicio privado; sin ambas
+configuraciones (`MCP_ADMIN_URL` y `MCP_ADMIN_TOKEN`) la integración falla cerrada. El registro
+pertenece a MCP, nunca a bases de Empleados u Operaciones.
 
 ## Ventana de vigencia
 

@@ -1,5 +1,11 @@
 # MF02 Operaciones
 
+## Presentación integrada (2026-11-10)
+
+El contenedor integrado deja de repetir el panel técnico de sesión y la descripción del template
+en cada vista. La sesión sigue en el Shell; las pantallas conservan sus títulos y autorizaciones.
+El fallback de una ruta inexistente vuelve a Citas, sin recomendar páginas demo. Decisión036.
+
 ## T21 — recepción y órdenes (2026-10-28)
 
 Se suman /operations/receptions y /operations/orders al Shell y /#/receptions, /#/orders al arranque independiente. CU11 registra vehículo/propietario, cita opcional, kilometraje, motivo, síntomas y condiciones visibles; lista versión y si tiene orden. CU12 crea desde recepción, con descripción, prioridad, notas y servicios/cantidades; muestra número, estado, versión, tarifas y duraciones copiadas. No confirma el servicio ni asigna mecánico. IA, fotografías/S3 y offline siguen pendientes.

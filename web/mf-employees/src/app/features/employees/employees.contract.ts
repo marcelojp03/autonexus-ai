@@ -120,3 +120,7 @@ export const RETRY_ACCESS = `
     retryEmployeeAccess(id: $id, input: $input) { replayed employee { ${EMPLOYEE} } }
   }
 `;
+
+export const CONFIGURE_LOGIN = `mutation ConfigureEmployeeLogin($id: UUID!, $input: EmployeeLoginInput!) {
+  configureEmployeeLogin(id: $id, input: $input) { username ready replayed }
+}`;

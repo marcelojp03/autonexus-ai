@@ -124,5 +124,7 @@ public final class ExecutionPorts {
         void delete(String objectKey);
 
         String download(String objectKey, String versionId, Duration ttl);
+
+        byte[] read(String objectKey, String versionId);
     }
 }

@@ -54,11 +54,30 @@ export interface Appointment {
   cancelReason: string | null;
   version: number;
 }
+export interface AppointmentRequest {
+  id: string;
+  operationId: string;
+  clientId: string;
+  customerId: string;
+  vehicleId: string;
+  serviceId: string;
+  requestedStartsAt: string;
+  timeZone: string;
+  notes: string | null;
+  status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewerSubject: string | null;
+  reviewReason: string | null;
+  appointmentId: string | null;
+  version: number;
+}
 
 const CUSTOMER = 'id firstName lastName document phone email address status version';
 const VEHICLE = 'id customerId customerName plate make model year fuelType color status version';
 const SERVICE = 'id name description category estimatedMinutes referenceRate active version';
-const APPOINTMENT = 'id customerId customerName vehicleId vehiclePlate serviceId serviceName startsAt endsAt status notes cancelReason version';
+const APPOINTMENT =
+  'id customerId customerName vehicleId vehiclePlate serviceId serviceName startsAt endsAt status notes cancelReason version';
 
 export const CUSTOMERS = `query Customers($limit: Int, $offset: Int, $status: CustomerStatus, $search: String) {
   customers(limit: $limit, offset: $offset, status: $status, search: $search) { items { ${CUSTOMER} } total limit offset }
@@ -87,19 +106,24 @@ export const APPOINTMENTS = `query Appointments($limit: Int, $offset: Int, $from
 export const CREATE_APPOINTMENT = `mutation CreateAppointment($input: CreateAppointmentInput!) { createAppointment(input: $input) { appointment { ${APPOINTMENT} } replayed } }`;
 export const RESCHEDULE_APPOINTMENT = `mutation RescheduleAppointment($id: UUID!, $input: RescheduleAppointmentInput!) { rescheduleAppointment(id: $id, input: $input) { appointment { ${APPOINTMENT} } replayed } }`;
 export const CANCEL_APPOINTMENT = `mutation CancelAppointment($id: UUID!, $input: CancelAppointmentInput!) { cancelAppointment(id: $id, input: $input) { appointment { ${APPOINTMENT} } replayed } }`;
+const APPOINTMENT_REQUEST =
+  'id operationId clientId customerId vehicleId serviceId requestedStartsAt timeZone notes status createdAt reviewedAt reviewerSubject reviewReason appointmentId version';
+export const APPOINTMENT_REQUESTS = `query AppointmentRequests($limit: Int, $offset: Int) { appointmentRequests(limit: $limit, offset: $offset) { items { ${APPOINTMENT_REQUEST} } total limit offset } }`;
+export const APPROVE_APPOINTMENT_REQUEST = `mutation ApproveAppointmentRequest($operationId: UUID!, $input: ApproveAppointmentRequestInput!) { approveAppointmentRequest(operationId: $operationId, input: $input) { request { ${APPOINTMENT_REQUEST} } replayed } }`;
+export const REJECT_APPOINTMENT_REQUEST = `mutation RejectAppointmentRequest($operationId: UUID!, $input: RejectAppointmentRequestInput!) { rejectAppointmentRequest(operationId: $operationId, input: $input) { request { ${APPOINTMENT_REQUEST} } replayed } }`;
 
 export const FUEL_TYPES: ReadonlyArray<{ value: Vehicle['fuelType']; label: string }> = Object.freeze([
   { value: 'gasolina', label: 'Gasolina' },
   { value: 'diesel', label: 'Diésel' },
   { value: 'gas', label: 'Gas' },
   { value: 'electrico', label: 'Eléctrico' },
-  { value: 'hibrido', label: 'Híbrido' },
+  { value: 'hibrido', label: 'Híbrido' }
 ]);
 export const CATEGORIES: ReadonlyArray<{ value: ServiceItem['category']; label: string }> = Object.freeze([
   { value: 'mantenimiento', label: 'Mantenimiento' },
   { value: 'reparacion', label: 'Reparación' },
   { value: 'diagnostico', label: 'Diagnóstico' },
-  { value: 'otros', label: 'Otros' },
+  { value: 'otros', label: 'Otros' }
 ]);
 
 /** Workshop zone: America/La_Paz, UTC-4 without daylight saving. */
@@ -119,20 +143,41 @@ export const localDate = (value: string): string => toLocalInput(value).slice(0,
 export const localTime = (value: string): string => toLocalInput(value).slice(11, 16);
 
 export interface Reception {
-  id: string; vehicleId: string; vehiclePlate: string; customerId: string; customerName: string;
-  appointmentId: string | null; mileage: number; reason: string; symptoms: string | null;
-  visibleConditions: string | null; hasOrder: boolean; receivedAt: string; version: number;
+  id: string;
+  vehicleId: string;
+  vehiclePlate: string;
+  customerId: string;
+  customerName: string;
+  appointmentId: string | null;
+  mileage: number;
+  reason: string;
+  symptoms: string | null;
+  visibleConditions: string | null;
+  hasOrder: boolean;
+  receivedAt: string;
+  version: number;
 }
 export interface WorkOrder {
-  id: string; number: string; receptionId: string; vehicleId: string; vehiclePlate: string;
-  customerId: string; customerName: string; description: string;
-  priority: 'baja' | 'normal' | 'alta' | 'urgente'; notes: string | null;
+  id: string;
+  number: string;
+  receptionId: string;
+  vehicleId: string;
+  vehiclePlate: string;
+  customerId: string;
+  customerName: string;
+  description: string;
+  priority: 'baja' | 'normal' | 'alta' | 'urgente';
+  notes: string | null;
   status: 'pending_quote' | 'quote_requested' | 'quote_approved' | 'confirmation_pending' | 'confirmed' | 'cancelled';
-  version: number; createdAt: string; updatedAt: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
   items: { serviceId: string; serviceName: string; quantity: number; estimatedMinutes: number; referenceRate: number }[];
 }
-const RECEPTION = 'id vehicleId vehiclePlate customerId customerName appointmentId mileage reason symptoms visibleConditions hasOrder receivedAt version';
-const ORDER = 'id number receptionId vehicleId vehiclePlate customerId customerName description priority notes status version createdAt updatedAt items { serviceId serviceName quantity estimatedMinutes referenceRate }';
+const RECEPTION =
+  'id vehicleId vehiclePlate customerId customerName appointmentId mileage reason symptoms visibleConditions hasOrder receivedAt version';
+const ORDER =
+  'id number receptionId vehicleId vehiclePlate customerId customerName description priority notes status version createdAt updatedAt items { serviceId serviceName quantity estimatedMinutes referenceRate }';
 export const RECEPTIONS = `query Receptions($limit: Int, $offset: Int, $vehicleId: UUID, $open: Boolean) { receptions(limit: $limit, offset: $offset, vehicleId: $vehicleId, open: $open) { items { ${RECEPTION} } total limit offset } }`;
 export const RECEPTION_DETAIL = `query Reception($id: UUID!) { reception(id: $id) { ${RECEPTION} } }`;
 export const CREATE_RECEPTION = `mutation CreateReception($input: CreateReceptionInput!) { createReception(input: $input) { reception { ${RECEPTION} } replayed } }`;

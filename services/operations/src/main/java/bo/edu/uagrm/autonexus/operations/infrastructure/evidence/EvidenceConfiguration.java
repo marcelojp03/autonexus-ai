@@ -47,5 +47,8 @@ public class EvidenceConfiguration {
 
         @Override
         public String download(String objectKey, String versionId, Duration ttl) { throw unavailable(); }
+
+        @Override
+        public byte[] read(String objectKey, String versionId) { throw unavailable(); }
     }
 }

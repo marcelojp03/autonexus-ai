@@ -1,0 +1,342 @@
+{
+  "modelVersion": "automotive-damage-mobilenetv2-v1",
+  "runId": "20261101T-with-negatives",
+  "artifact": {
+    "file": "model.keras",
+    "sha256": "bac84606346eca0043bfb3d7c2b162a97764c6bf2fa217d81f821a6d7c9bffe9",
+    "bytes": 9642245
+  },
+  "preprocessingFingerprint": "8e1557df3dcdd725088da336d732849196cbac46804776849c62abc58bcf32f8",
+  "task": "automotive-surface-damage-multilabel",
+  "labels": [
+    "crack",
+    "dent",
+    "glass_shatter",
+    "scratch"
+  ],
+  "thresholds": {
+    "crack": 0.25,
+    "dent": 0.35,
+    "glass_shatter": 0.4,
+    "scratch": 0.5
+  },
+  "preprocessing": {
+    "inputSize": [
+      224,
+      224
+    ],
+    "colorMode": "RGB",
+    "resize": "tf.image.resize bilinear, antialias=True (identical in training and in the service)",
+    "scale": "keras.applications.mobilenet_v2.preprocess_input ([-1, 1])",
+    "decoder": "tf.io.decode_image (JPEG/PNG)"
+  },
+  "architecture": {
+    "base": "MobileNetV2 (include_top=False, pooling=avg, alpha=1.0)",
+    "baseWeights": "imagenet",
+    "baseWeightsUrl": "https://storage.googleapis.com/tensorflow/keras-applications/mobilenet_v2/mobilenet_v2_weights_tf_dim_ordering_tf_kernels_1.0_224_no_top.h5",
+    "baseWeightsSha256": "f8aff69536bd77a692c594f559c798c19bf7f3f36668fc9fa00b21c6aab4797c",
+    "head": "Dropout(0.2) -> Dense(4, sigmoid)",
+    "trainableParameters": 5124
+  },
+  "runtime": {
+    "expectedFile": "model.keras",
+    "framework": "tensorflow-cpu 2.16.2 / keras",
+    "entrypoint": "keras.models.load_model"
+  },
+  "dataset": {
+    "name": "tugberkkalay/autodamageiq-vehicle-damage-dataset",
+    "url": "https://huggingface.co/datasets/tugberkkalay/autodamageiq-vehicle-damage-dataset",
+    "license": "CC-BY-4.0",
+    "revision": "b5abbf54bdf7c8817a4e20b6ab39c8f1fe98a0e5",
+    "upstreamSources": [
+      "CarDD",
+      "VehiDE",
+      "human-in-the-loop GPT-4o labels"
+    ],
+    "provenanceNote": "Aggregated third-party dataset. The CC BY 4.0 declaration, class list and counts are taken from the dataset card; per-image vehicle identity is not published, so a vehicle-disjoint split cannot be guaranteed. Part of the images and annotations use different numeric bases, so only stems present on both sides were paired (see pairs.json).",
+    "pairing": "only stems present in both images/ and labels/ (ml/training/collect_pairs.mjs)",
+    "splits": {
+      "train": {
+        "images": 7962,
+        "positives": {
+          "crack": 1032,
+          "dent": 3650,
+          "glass_shatter": 1061,
+          "scratch": 5202
+        }
+      },
+      "validation": {
+        "images": 1098,
+        "positives": {
+          "crack": 145,
+          "dent": 458,
+          "glass_shatter": 157,
+          "scratch": 713
+        }
+      },
+      "test": {
+        "images": 2093,
+        "positives": {
+          "crack": 318,
+          "dent": 1033,
+          "glass_shatter": 329,
+          "scratch": 1383
+        }
+      }
+    },
+    "labelsDroppedForInsufficientTestSupport": {
+      "lamp_broken": 0,
+      "tire_flat": 0
+    }
+  },
+  "training": {
+    "seed": 20261101,
+    "epochs": 40,
+    "epochsRun": 38,
+    "batchSize": 32,
+    "optimizer": "Adam(1e-3)",
+    "loss": "per-label weighted binary crossentropy",
+    "classWeight": {
+      "crack": 6.715,
+      "dent": 1.181,
+      "glass_shatter": 6.504,
+      "scratch": 1.0
+    },
+    "thresholdSelection": "per-label F1 maximisation on the validation split",
+    "frozenBase": true,
+    "minimumTestSupport": 40
+  },
+  "metrics": {
+    "test": {
+      "samples": 2093,
+      "perLabel": {
+        "crack": {
+          "threshold": 0.25,
+          "support": 318,
+          "precision": 0.4073,
+          "recall": 0.456,
+          "f1": 0.4303,
+          "rocAuc": 0.7791,
+          "averagePrecision": 0.4524,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                1564,
+                211
+              ],
+              [
+                173,
+                145
+              ]
+            ]
+          }
+        },
+        "dent": {
+          "threshold": 0.35,
+          "support": 1033,
+          "precision": 0.6783,
+          "recall": 0.8248,
+          "f1": 0.7444,
+          "rocAuc": 0.8048,
+          "averagePrecision": 0.7802,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                656,
+                404
+              ],
+              [
+                181,
+                852
+              ]
+            ]
+          }
+        },
+        "glass_shatter": {
+          "threshold": 0.4,
+          "support": 329,
+          "precision": 0.8041,
+          "recall": 0.7112,
+          "f1": 0.7548,
+          "rocAuc": 0.9507,
+          "averagePrecision": 0.8254,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                1707,
+                57
+              ],
+              [
+                95,
+                234
+              ]
+            ]
+          }
+        },
+        "scratch": {
+          "threshold": 0.5,
+          "support": 1383,
+          "precision": 0.7737,
+          "recall": 0.8554,
+          "f1": 0.8125,
+          "rocAuc": 0.7794,
+          "averagePrecision": 0.8586,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                364,
+                346
+              ],
+              [
+                200,
+                1183
+              ]
+            ]
+          }
+        }
+      },
+      "macro": {
+        "precision": 0.6659,
+        "recall": 0.7118,
+        "f1": 0.6855
+      },
+      "exactMatchRatio": 0.4142,
+      "anyDamageF1": 0.9884
+    },
+    "validation": {
+      "samples": 1098,
+      "perLabel": {
+        "crack": {
+          "threshold": 0.25,
+          "support": 145,
+          "precision": 0.3681,
+          "recall": 0.4621,
+          "f1": 0.4098,
+          "rocAuc": 0.7634,
+          "averagePrecision": 0.3689,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                838,
+                115
+              ],
+              [
+                78,
+                67
+              ]
+            ]
+          }
+        },
+        "dent": {
+          "threshold": 0.35,
+          "support": 458,
+          "precision": 0.6025,
+          "recall": 0.8275,
+          "f1": 0.6973,
+          "rocAuc": 0.8007,
+          "averagePrecision": 0.7254,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                390,
+                250
+              ],
+              [
+                79,
+                379
+              ]
+            ]
+          }
+        },
+        "glass_shatter": {
+          "threshold": 0.4,
+          "support": 157,
+          "precision": 0.7958,
+          "recall": 0.7197,
+          "f1": 0.7559,
+          "rocAuc": 0.9471,
+          "averagePrecision": 0.8176,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                912,
+                29
+              ],
+              [
+                44,
+                113
+              ]
+            ]
+          }
+        },
+        "scratch": {
+          "threshold": 0.5,
+          "support": 713,
+          "precision": 0.7644,
+          "recall": 0.8738,
+          "f1": 0.8154,
+          "rocAuc": 0.7874,
+          "averagePrecision": 0.8636,
+          "confusionMatrix": {
+            "labels": [
+              "absent",
+              "present"
+            ],
+            "matrix": [
+              [
+                193,
+                192
+              ],
+              [
+                90,
+                623
+              ]
+            ]
+          }
+        }
+      },
+      "macro": {
+        "precision": 0.6327,
+        "recall": 0.7208,
+        "f1": 0.6696
+      },
+      "exactMatchRatio": 0.4126,
+      "anyDamageF1": 0.9809
+    }
+  },
+  "trainedAt": "2026-11-02T12:46:19+00:00",
+  "limits": [
+    "Image-level signal derived from detection annotations; it is not a measurement, a diagnosis or a repair estimate.",
+    "Labels are inherited from an aggregated third-party dataset (CarDD, VehiDE, HITL GPT-4o); per-image vehicle identity is unknown, so the test split is not guaranteed vehicle-disjoint.",
+    "No labels were annotated by this project; the model only recognises the labels listed here.",
+    "Labels without enough positives in the evaluation split were dropped and are listed in dataset.labelsDroppedForInsufficientTestSupport."
+  ]
+}

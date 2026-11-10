@@ -8,6 +8,7 @@ import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { AccessError, MCP_SCOPES, requireScope } from '../dist/domain/access.js';
 import { loadConfig } from '../dist/infrastructure/config.js';
 import { FileClientRegistry } from '../dist/infrastructure/client-registry.js';
+import { readPrivateJson } from '../dist/infrastructure/client-registry.js';
 import { AccessTokenVerifier, API_AUDIENCES } from '../dist/infrastructure/access-token-verifier.js';
 import { KeycloakTokenExchange } from '../dist/application/token-exchange.js';
 
@@ -139,6 +140,25 @@ test('unit: registry reload immediately suspends a previously valid client', asy
   await verifier.verify(token);
   await writeRegistry([client({ enabled: false })]);
   await assert.rejects(verifier.verify(token), safeError(403, 'client_forbidden'));
+});
+test('unit: registry CRUD is serialized, atomic, allowlist-only and never stores OAuth secrets', async () => {
+  const entry = { clientId: 'chatgpt-static-client', displayName: 'ChatGPT workshop app', enabled: true,
+    scopes: ['mcp', 'mcp:appointments:request'] };
+  const outcomes = await Promise.allSettled([registry.create(entry), registry.create(entry)]);
+  assert.equal(outcomes.filter(item => item.status === 'fulfilled').length, 1);
+  assert.equal(outcomes.filter(item => item.status === 'rejected').length, 1);
+  assert.deepEqual((await registry.list()).find(item => item.clientId === entry.clientId), entry);
+  assert.equal((await registry.list()).length, 2);
+  await assert.rejects(registry.upsert({ ...entry, scopes: ['mcp', 'admin'] }));
+  await registry.update({ ...entry, displayName: 'ChatGPT limited app', scopes: ['mcp', 'mcp:appointments:request:read'] });
+  await registry.setEnabled(entry.clientId, false);
+  await assert.rejects(registry.authorize(entry.clientId, ['mcp']), safeError(403, 'client_forbidden'));
+  await registry.setEnabled(entry.clientId, true);
+  await registry.authorize(entry.clientId, ['mcp:appointments:request:read']);
+  await registry.revoke(entry.clientId);
+  await assert.rejects(registry.authorize(entry.clientId, ['mcp']), safeError(403, 'client_forbidden'));
+  const stored = JSON.stringify(await readPrivateJson(config.clientRegistryFile));
+  for (const secret of ['clientSecret', 'client_secret', 'access_token', 'refresh_token']) assert.ok(!stored.includes(secret));
 });
 test('unit: ordinary OIDC profile and email scopes do not grant MCP authority', async () => {
   const actor = await verifier.verify(await signed({ scope: 'openid profile email mcp' }));

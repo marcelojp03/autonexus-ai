@@ -12,6 +12,7 @@ CU15: [Saga y comandos aprobados de los participantes](saga.md), con vínculo fi
 - [assistant.md](assistant.md): CU25 interno, primera lectura de resumen financiero con la sesión y permisos vigentes; no modifica el reporte operativo ni entrega CU26 financiero.
 - [employees.openapi.yaml](employees.openapi.yaml): contrato temprano CU03 S2.2–S2.5 aprobado para alinear implementación; todos los endpoints requieren administrador. Incluye entradas completas, paginación, snapshots, concurrencia, idempotencia y acceso IdP separado.
 - [Autorización y semántica CU03](../auth/employees.md): reglas normativas complementarias y códigos de error. Contrato publicado no equivale a implementación/integración verificada.
+- [Registro de instalaciones push Android](push-installations.md): FID autenticado y avisos limitados a CU15; no acredita entrega FCM real.
 
 REST empresarial no se conecta directamente a la web. El consumidor web es `integration/bff` por GraphQL: valida/delega y compone lecturas autorizadas, sin base de negocio ni coordinación distribuida. Operaciones coordina CU15 y llama las APIs privadas de sus participantes. Los consumidores conservan operationId/expectedVersion y no convierten 202, timeout, 5xx o GET404 desconocido en confirmación/rechazo. Ver también «Consumidor web (CU03)».
 

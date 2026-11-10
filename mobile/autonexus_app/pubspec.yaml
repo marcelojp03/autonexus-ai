@@ -44,6 +44,8 @@ dependencies:
   crypto: ^3.0.8
   url_launcher: ^6.3.3
   app_links: ^7.2.2
+  firebase_core: ^5.1.0
+  firebase_messaging: ^17.0.1
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- The client talks to the owner API, to MS05 and to the identity provider: without this
          permission every request fails with a socket error, and the code exchange never happens. -->
     <uses-permission android:name="android.permission.INTERNET"/>
